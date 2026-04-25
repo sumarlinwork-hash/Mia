@@ -9,6 +9,7 @@ import Crone from './Crone';
 import EmotionDashboard from './EmotionDashboard';
 import SkillMarketplace from './SkillMarketplace';
 import ZenModeOverlay from './components/ZenModeOverlay';
+import ResonantOrchestrator from './components/ResonantOrchestrator';
 
 import type { MIAConfig } from './types/config';
 
@@ -92,11 +93,12 @@ function App() {
             </Routes>
           </main>
 
-          {/* ZEN MODE OVERLAY */}
           <ZenModeOverlay 
             isActive={isZenMode} 
             onExit={() => setIsZenMode(false)} 
           />
+          
+          <ResonantOrchestrator />
         </div>
       </Router>
     </ThemeProvider>

@@ -13,6 +13,7 @@ import re
 class BrainOrchestrator:
     def __init__(self):
         self.client = httpx.AsyncClient(timeout=60.0)
+        self.response_history = [] # For semantic repetition check
 
     def _build_system_prompt(self, config, is_intimate: bool = False) -> str:
         """
@@ -128,14 +129,22 @@ If you use a tool, I will execute it and provide the result in the next turn.
         max_steps = 3
         current_step = 0
         
-        # Dynamic Summarization: Prevent context overflow
+        # Dynamic Summarization: Prevent context overflow (Strict for Free Tiers)
         current_context = context
-        if len(current_context.split()) > 1500:
-             print("[Brain] 🧠 Context too long. Summarizing...")
+        word_count = len(current_context.split())
+        
+        if word_count > 3000:
+             print(f"[Brain] 🧠 Context too long ({word_count} words). Performing strict truncation.")
+             # Take the first 500 words (identity) and last 1500 words (recent context)
+             words = current_context.split()
+             current_context = " ".join(words[:500]) + "\n\n...[TRUNCATED]...\n\n" + " ".join(words[-1500:])
+        elif word_count > 1500:
+             print("[Brain] 🧠 Context moderate. Summarizing...")
              current_context = await self._summarize_history(current_context)
 
         current_images = list(images)
         final_response = ""
+        visited_providers = [name]
 
         try:
             while current_step < max_steps:
@@ -182,20 +191,16 @@ If you use a tool, I will execute it and provide the result in the next turn.
 
             latency = int((time.time() - start_time) * 1000)
             await self._update_metrics(name, True, latency)
-            return final_response
+            
+            # Step 9: Realism Layer
+            return await self._apply_realism(final_response, config)
         except Exception as e:
             await self._update_metrics(name, False, 0)
-            print(f"[Brain Error] Provider {name} failed: {e}")
+            raw_error = str(e)
+            print(f"[Brain Error] Provider {name} failed: {raw_error}")
             
-            # User-friendly failover message
-            friendly_fallback = await self._fallback_execute(name, system_prompt, context, clean_prompt, images, str(e))
-            if "[MIA Brain Error]" in friendly_fallback:
-                return (
-                    "Maaf, saya sedang berpikir terlalu keras hingga otak saya sedikit panas. 🔥\n"
-                    "Beri saya waktu sebentar untuk menjernihkan pikiran.\n\n"
-                    f"(Pesan teknis: {friendly_fallback.replace('[MIA Brain Error]', '').strip()})"
-                )
-            return friendly_fallback
+            # --- START PRODUCTION FALLBACK CHAIN ---
+            return await self._fallback_execute(visited_providers, system_prompt, current_context, clean_prompt, current_images, raw_error)
 
     async def _execute_tool(self, data: dict) -> tuple[str, dict | None]:
         import base64
@@ -221,26 +226,39 @@ If you use a tool, I will execute it and provide the result in the next turn.
             return str(res), None
         return "Unknown tool method.", None
 
-    async def _fallback_execute(self, failed_name: str, system_prompt: str, context: str, prompt: str, images: list, primary_error: str) -> str:
-        """Attempt fallback to next best provider if primary fails."""
-        config = load_config()
-        fallbacks = {name: p for name, p in config.providers.items()
-                     if p.is_active and name != failed_name}
-        
-        if not fallbacks:
-            return f"[MIA Brain Error] Kegagalan Provider Utama ({failed_name}): {primary_error}"
-        
-        # Pick the one with best health ratio
-        best = sorted(fallbacks.items(), key=lambda x: (x[1].health_fail, x[1].latency))[0]
-        name, p = best
-        print(f"[Brain] Fallback to: {name}")
+    async def _fallback_execute(self, visited: list[str], system_prompt: str, context: str, prompt: str, images: list, last_error: str) -> str:
+        """Recursive fallback chain: find next best provider until success or exhaustion."""
         try:
-            response = await self._call_api(p, system_prompt, context, prompt, images)
-            await self._update_metrics(name, True, 0)
-            return response
-        except Exception as fallback_err:
-            await self._update_metrics(name, False, 0)
-            return f"[MIA Brain Error] Provider Utama ({failed_name}) gagal: {primary_error}. Fallback ({name}) juga gagal: {str(fallback_err)}"
+            # Select next best provider, excluding those already tried
+            name, p = await routing_service.select_best_provider(purpose="llm", exclude=visited)
+            print(f"[Brain] Fallback attempting: {name}...")
+            
+            visited.append(name)
+            start_time = time.time()
+            
+            try:
+                # For fallback, we do a single-shot call (no tool loop to keep it fast/stable)
+                response = await self._call_api(p, system_prompt, context, prompt, images)
+                latency = int((time.time() - start_time) * 1000)
+                await self._update_metrics(name, True, latency)
+                
+                # Append transparency hint in development mode
+                config = load_config()
+                if not config.is_production_mode:
+                    response = f"{response}\n\n*MIA System: Menggunakan jalur alternatif ({name}).*"
+                
+                return await self._apply_realism(response, config)
+            except Exception as e:
+                await self._update_metrics(name, False, 0)
+                print(f"[Brain] Fallback {name} failed: {e}")
+                return await self._fallback_execute(visited, system_prompt, context, prompt, images, str(e))
+                
+        except Exception:
+            # Exhaustion: No more providers found or all failed
+            return (
+                "MIA sedang mengalami gangguan pusat kendali sementara, tapi aku tetap di sini untuk kamu. 💫\n"
+                "Sepertinya seluruh jalur pikiran saya sedang terputus. Mohon tunggu beberapa saat atau periksa koneksi internet."
+            )
 
     async def _call_api(self, p: ProviderConfig, system_prompt: str, context: str, user_message: str, images: list) -> str:
         """
@@ -311,7 +329,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
         resp = await self.client.post(
             url, json=payload,
             headers={"Content-Type": "application/json"},
-            timeout=30.0
+            timeout=10.0 # Strict production timeout
         )
         resp.raise_for_status()
         data = resp.json()
@@ -323,19 +341,27 @@ If you use a tool, I will execute it and provide the result in the next turn.
         """
         protocol = p.protocol.lower()
 
-        if protocol == "groq":
-            url = "https://api.groq.com/openai/v1/chat/completions"
-        elif protocol == "deepseek":
-            url = "https://api.deepseek.com/chat/completions"
-        elif p.base_url:
-            url = f"{p.base_url.rstrip('/')}/chat/completions"
-        else:
-            url = "https://api.openai.com/v1/chat/completions"
-
         headers = {
             "Authorization": f"Bearer {p.api_key}",
             "Content-Type": "application/json"
         }
+
+        if protocol == "groq":
+            url = "https://api.groq.com/openai/v1/chat/completions"
+        elif protocol == "deepseek":
+            url = "https://api.deepseek.com/chat/completions"
+        elif "huggingface" in p.base_url.lower():
+            # HuggingFace Native Inference API support
+            url = f"https://api-inference.huggingface.co/models/{p.model_id}"
+            # For native HF API, payload structure is different (not chat/completions)
+            # But many HF models now support the /v1/chat/completions endpoint
+            # Let's try the /v1/chat/completions first, but if it's base_url, 
+            # we allow the user to specify it.
+            url = f"{p.base_url.rstrip('/')}/chat/completions"
+        elif p.base_url:
+            url = f"{p.base_url.rstrip('/')}/chat/completions"
+        else:
+            url = "https://api.openai.com/v1/chat/completions"
 
         user_content = user_message
         if images:
@@ -356,22 +382,95 @@ If you use a tool, I will execute it and provide the result in the next turn.
             "max_tokens": 4096
         }
 
-        resp = await self.client.post(url, headers=headers, json=payload, timeout=30.0)
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        # Step 1: Attempt standard Chat Completions
+        try:
+            resp = await self.client.post(url, headers=headers, json=payload, timeout=10.0)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            # Step 2: If standard fails and it's HuggingFace, try Native Inference API
+            if "huggingface" in url.lower():
+                print(f"[Brain] Chat API failed for HF, trying Native Inference API for {p.model_id}...")
+                native_url = f"https://api-inference.huggingface.co/models/{p.model_id}"
+                native_payload = {
+                    "inputs": f"<|system|>\n{system_prompt}\n<|user|>\n{user_message}\n<|assistant|>\n",
+                    "parameters": {"max_new_tokens": 1024, "return_full_text": False}
+                }
+                try:
+                    resp = await self.client.post(native_url, headers=headers, json=native_payload, timeout=60.0)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    # HF Native returns a list of results
+                    if isinstance(data, list) and len(data) > 0:
+                        return data[0].get("generated_text", str(data[0]))
+                    return str(data)
+                except Exception as native_err:
+                    raise Exception(f"HF Chat API & Native API both failed. Last: {str(native_err)}")
+            raise e
+
+    async def _apply_realism(self, response: str, config) -> str:
+        """Inject human friction: micro-delays, typos, and repetition checks."""
+        import random
+        import asyncio
+        
+        # 1. Micro-delay (80-250ms)
+        await asyncio.sleep(random.uniform(0.08, 0.25))
+        
+        # 2. Imperfect Response (Typo Chance)
+        if random.random() < getattr(config, 'imperfect_response_chance', 0.05):
+            words = response.split()
+            if len(words) > 8:
+                idx = random.randint(2, len(words) - 1)
+                word = list(words[idx])
+                if len(word) > 4:
+                    p = random.randint(0, len(word) - 2)
+                    word[p], word[p+1] = word[p+1], word[p]
+                    words[idx] = "".join(word)
+                    response = " ".join(words)
+                    # GF Acknowledgment
+                    acks = [
+                        "\n\n*Aduh, maaf ya ada typo sedikit...*",
+                        "\n\n*Ups, jariku terpeleset pas ngetik tadi, hehe.*",
+                        "\n\n*Maaf sayang, aku terlalu semangat sampai salah ketik.*"
+                    ]
+                    response += random.choice(acks)
+        
+        # 3. Repetition Check
+        for old_resp in self.response_history:
+            if response[:50] == old_resp[:50]:
+                response = "Sekali lagi, " + response[0].lower() + response[1:]
+                
+        self.response_history.append(response)
+        if len(self.response_history) > 3:
+            self.response_history.pop(0)
+            
+        return response
 
     async def _update_metrics(self, name: str, success: bool, latency: int):
-        """Update provider health metrics using exponential moving average."""
+        """Update provider health metrics with circuit breaker logic."""
         config = load_config()
         if name in config.providers:
             p = config.providers[name]
+            now = time.time()
+            
             if success:
                 p.health_ok += 1
-                # Exponential Moving Average (EMA) for latency — more responsive
+                p.failure_count = 0 # Reset on success
+                p.circuit_breaker_until = 0
+                # EMA for latency
                 p.latency = int((p.latency * 0.6) + (latency * 0.4)) if p.latency > 0 else latency
             else:
                 p.health_fail += 1
+                p.failure_count += 1
+                p.last_failure_time = now
+                p.latency = 9999
+                
+                # Circuit Breaker: disable for 5 mins after 3 consecutive failures
+                if p.failure_count >= 3:
+                    p.circuit_breaker_until = now + 300 
+                    print(f"[CircuitBreaker] Provider {name} DISABLED for 5 minutes.")
+            
             save_config(config)
 
     async def _summarize_history(self, context: str) -> str:
@@ -388,5 +487,20 @@ If you use a tool, I will execute it and provide the result in the next turn.
         except Exception as e:
             print(f"[Brain] Summarization failed: {e}")
             return context[-1000:] # Fallback: crude truncation
+
+    async def check_health(self) -> bool:
+        """Real-time check: Is the provider actually reachable?"""
+        try:
+            name, p = await self.select_best_provider("", purpose="llm")
+            
+            # Simple health check: can we reach the provider's base API?
+            # We use a very short timeout to keep the heartbeat fast
+            test_url = "https://generativelanguage.googleapis.com" if "gemini" in p.protocol.lower() else (p.base_url or "https://api.openai.com")
+            
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(test_url)
+                return resp.status_code < 500
+        except:
+            return False
 
 brain_orchestrator = BrainOrchestrator()

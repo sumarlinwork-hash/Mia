@@ -12,7 +12,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-import { useConfig } from './context/ConfigContext';
+import { useConfig } from './hooks/useConfig';
 import type { MIAConfig } from './types/config';
 
 interface WaveformBarProps {
@@ -65,6 +65,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Disconnected");
+  const [brainStatus, setBrainStatus] = useState("Disconnected");
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isTTSMuted, setIsTTSMuted] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -179,16 +180,33 @@ export default function Home() {
 
   // --- 5. SYSTEM & CHAT LOGIC ---
   const sendMessage = useCallback(() => {
-    if (!input.trim() || !ws.current) return;
-    if (input.trim() === '/clear') {
+    const trimmedInput = input.trim();
+    if (!trimmedInput || !ws.current) return;
+
+    if (trimmedInput === '/clear') {
        fetch('http://localhost:8000/api/chat/history', { method: 'DELETE' }); 
        setMessages([]); setInput("");
        addToast("Chat history cleared", "info");
        return;
     }
-    setIsThinking(true); playSFX('send');
-    ws.current.send(input);
-    setInput(""); setShowCommands(false); setShowMentions(false); setShowAttachMenu(false);
+
+    // --- OPTIMISTIC UPDATE: Langsung tampilkan di layar ---
+    const userMsg: Message = {
+      id: Date.now(), // ID sementara untuk UI
+      role: 'You',
+      content: trimmedInput,
+      timestamp: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, userMsg]);
+    
+    setIsThinking(true); 
+    playSFX('send');
+    ws.current.send(trimmedInput);
+    
+    setInput(""); 
+    setShowCommands(false); 
+    setShowMentions(false); 
+    setShowAttachMenu(false);
   }, [input, addToast, playSFX]);
 
   const toggleIntimacy = useCallback(async () => {
@@ -267,13 +285,32 @@ export default function Home() {
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "message" || data.type === "system") {
-        setIsThinking(false); playSFX('receive');
-        const newMessage = { id: data.id, role: data.type === "system" ? "System" : "MIA", content: data.content, audio: data.audio };
+        setIsThinking(false); 
+        playSFX('receive');
+        
+        const isError = data.content.startsWith("[SYSTEM ERROR]");
+        const role = (data.type === "system" || isError) ? "System" : "MIA";
+        const cleanContent = isError ? data.content.replace("[SYSTEM ERROR]", "").trim() : data.content;
+
+        const newMessage = { 
+          id: data.id || Date.now(), 
+          role: role, 
+          content: cleanContent, 
+          audio: data.audio 
+        };
+        
         setMessages(prev => [...prev, newMessage]);
-        if (data.audio && !isTTSMuted) playAudio(data.audio);
+
+        // Only play audio if it's a real MIA message (not a system error/notification)
+        if (data.audio && !isTTSMuted && role === "MIA") {
+          playAudio(data.audio);
+        }
       } else if (data.type === "status") {
         setStatus(`Connected (${data.content})`);
         setIsThinking(data.content === "Thinking...");
+      } else if (data.type === "health") {
+        setStatus(data.backend === "ok" ? "Connected" : "Disconnected");
+        setBrainStatus(data.brain === "ok" ? "Connected" : "Disconnected");
       }
     };
 
@@ -283,8 +320,12 @@ export default function Home() {
     };
     window.addEventListener('keydown', handleGlobalShortcuts);
     return () => {
-      ws.current?.close(); window.removeEventListener('keydown', handleGlobalShortcuts);
-      clearInterval(intimacyInterval); if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.close();
+      }
+      window.removeEventListener('keydown', handleGlobalShortcuts);
+      clearInterval(intimacyInterval); 
+      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
     };
   }, [isTTSMuted, playAudio, playSFX]);
 
@@ -312,31 +353,34 @@ export default function Home() {
     const val = e.target.value;
     setInput(val);
 
-    // Full-duplex: Stop speaking if user starts typing a message
-    if (val.trim() && isSpeaking) {
-      stopAudio();
-    }
+    if (val.trim() && isSpeaking) stopAudio();
 
+    // PERFORMANCE: Only process command/mention logic if strictly necessary
     const cursor = e.target.selectionStart || 0;
     const beforeCursor = val.slice(0, cursor);
-    const words = beforeCursor.split(' ');
+    
+    // Check if we are currently "inside" a command or mention
+    const words = beforeCursor.split(/\s/);
     const lastWord = words[words.length - 1];
 
-    if (lastWord.startsWith('/')) {
+    if (lastWord.startsWith('/') && lastWord.length > 0) {
       setShowCommands(true);
       setShowMentions(false);
       const query = lastWord.toLowerCase();
-      setFilteredCommands(COMMANDS.filter(c => c.cmd.startsWith(query)));
+      // Only filter if there are actually commands to show
+      const filtered = COMMANDS.filter(c => c.cmd.startsWith(query));
+      setFilteredCommands(filtered);
       setActiveIndex(0);
     } else if (lastWord.startsWith('@')) {
       setShowMentions(true);
       setShowCommands(false);
       const query = lastWord.slice(1).toLowerCase();
-      setFilteredFiles(memoryFiles.filter(f => f.toLowerCase().includes(query)));
+      const filtered = memoryFiles.filter(f => f.toLowerCase().includes(query));
+      setFilteredFiles(filtered);
       setActiveIndex(0);
     } else {
-      setShowCommands(false);
-      setShowMentions(false);
+      if (showCommands) setShowCommands(false);
+      if (showMentions) setShowMentions(false);
     }
   };
 
@@ -558,59 +602,62 @@ export default function Home() {
           </div>
         )}
         
-        {/* Top Status Bar */}
-        <div 
-          className={`flex items-center justify-between mb-6 p-4 rounded-2xl border border-white/10 backdrop-blur-xl shadow-lg shrink-0 transition-all duration-500 ${
-            intimacyActive ? 'border-pink-500/50 shadow-[0_0_40px_rgba(255,100,150,0.2)] bg-black/80' :
-            isSpeaking ? 'border-primary/50 shadow-[0_0_30px_rgba(0,255,204,0.15)]' : ''
-          }`}
-          style={{ backgroundColor: intimacyActive ? undefined : `rgba(10, 10, 10, ${uiOpacity})` }}
-        >
-          <div className="flex items-center gap-3">
+        {/* Floating Top Controls */}
+        <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-20 pointer-events-none">
+          {/* Left: Status & Aura */}
+          <div className="flex items-center gap-4 pointer-events-auto">
             <div 
               className="relative cursor-pointer group/aura"
               onClick={handleTouch}
-              onMouseEnter={() => {
-                // Subtle reactive pulse on hover
-                if (intimacyActive && !isSpeaking) handleTouch();
-              }}
             >
               <Activity className={
-                intimacyActive ? "text-pink-500 animate-heartbeat z-10 relative group-hover/aura:scale-110 transition-transform" :
+                intimacyActive ? "text-pink-500 animate-heartbeat z-10 relative" :
                 status.includes("Connected") ? "text-primary animate-pulse z-10 relative" : "text-error z-10 relative"
-              } />
+              } size={20} />
               {(isSpeaking || (intimacyActive && audioLevel > 5)) && (
                 <div 
                   className={`absolute inset-0 rounded-full blur-md transition-transform duration-75 ${intimacyActive ? 'bg-pink-500/40' : 'bg-primary/40'}`}
                   style={{ transform: `scale(${1 + (audioLevel / 50)})`, opacity: 0.3 + (audioLevel / 150) }}
                 ></div>
               )}
-              {intimacyActive && (
-                <div className="absolute inset-0 bg-pink-500/20 rounded-full blur-xl opacity-0 group-hover/aura:opacity-100 transition-opacity"></div>
-              )}
             </div>
-            <span className="font-mono text-sm tracking-wide text-white/90">
-              {isSpeaking ? (
-                <span className="flex items-center gap-2">
-                  MIA is Speaking
-                   <div className="flex items-end gap-[2px] h-3">
-                     {[1,2,3,4,5].map(i => (
-                       <WaveformBar key={i} level={audioLevel} />
-                     ))}
-                   </div>
-                </span>
-              ) : status}
-            </span>
+            
+            {isSpeaking && (
+              <div className="flex items-center gap-2 bg-black/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Voice Active</span>
+                <div className="flex items-end gap-[2px] h-3">
+                  {[1,2,3,4,5].map(i => (
+                    <WaveformBar key={i} level={audioLevel} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-6 text-white/70">
-            <span onClick={() => setIsTTSMuted(!isTTSMuted)} className="hover:text-primary transition-colors cursor-pointer">
-              {isTTSMuted ? <VolumeX size={22} className="text-white/40" /> : <Volume2 size={22} className="text-primary" />}
-            </span>
-            <Link to="/settings" className="hover:text-primary transition-colors">
-              <Settings2 size={22} />
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-4 pointer-events-auto bg-black/20 backdrop-blur-md p-2 rounded-full border border-white/5">
+            <button 
+              onClick={() => {
+                if (window.confirm("Hapus seluruh riwayat chat?")) {
+                  fetch('http://localhost:8000/api/chat/history', { method: 'DELETE' }); 
+                  setMessages([]); 
+                  addToast("Chat history cleared", "info");
+                }
+              }} 
+              className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-error"
+              title="Clear All Chat"
+            >
+              <Trash2 size={20} />
+            </button>
+            <button onClick={() => setIsTTSMuted(!isTTSMuted)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+              {isTTSMuted ? <VolumeX size={20} className="text-white/40" /> : <Volume2 size={20} className="text-primary" />}
+            </button>
+            <Link to="/settings" className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-primary">
+              <Settings2 size={20} />
             </Link>
           </div>
         </div>
+
 
         {/* Chat Area */}
         <div className="flex-1 overflow-y-auto mb-6 pr-2 space-y-6 custom-scrollbar scroll-smooth">
@@ -624,7 +671,9 @@ export default function Home() {
             </div>
           )}
           
-          {messages.map((msg, idx) => (
+          {messages
+            .filter(msg => !(msg.role === 'System' && msg.content.includes("MIA Core Connected")))
+            .map((msg, idx) => (
             <ChatBubble 
               key={msg.id || idx} 
               msg={msg} 
@@ -647,6 +696,33 @@ export default function Home() {
 
         {/* Input Area */}
         <div className="relative flex flex-col gap-2 shrink-0">
+          {/* Status LEDs - Instrument Panel Style */}
+          <div className="absolute -bottom-5 left-7 flex gap-2.5 z-10 px-1">
+            <div className="flex flex-col items-center gap-0.5">
+              <div 
+                className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
+                  status.includes("Connected") 
+                  ? 'bg-primary shadow-[0_0_10px_rgba(0,255,204,1)] animate-pulse' 
+                  : 'bg-error shadow-[0_0_10px_rgba(255,68,68,1)]'
+                }`}
+                title="Backend Link (LNK)"
+              ></div>
+              <span className="text-[6px] font-black tracking-tighter text-white/20 uppercase">Lnk</span>
+            </div>
+
+            <div className="flex flex-col items-center gap-0.5">
+              <div 
+                className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                  brainStatus === "Connected" 
+                  ? `bg-secondary shadow-[0_0_10px_rgba(255,255,0,1)] ${isThinking ? 'animate-ping' : 'animate-pulse'}` 
+                  : 'bg-error shadow-[0_0_10_rgba(255,68,68,1)]'
+                }`}
+                title="Brain Link (BRN)"
+              ></div>
+              <span className="text-[6px] font-black tracking-tighter text-white/20 uppercase">Brn</span>
+            </div>
+          </div>
+
           {showAttachMenu && (
             <div className="absolute bottom-[110%] left-0 w-64 p-4 grid grid-cols-3 gap-3 bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-50">
               <button onClick={() => document.getElementById('attach-img')?.click()} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
@@ -892,6 +968,23 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
                   <button onClick={() => msg.id && onLike(msg.id, 1)} className={`hover:text-primary transition-colors ${msg.is_liked === 1 ? 'text-primary' : 'text-white/40'}`}><ThumbsUp size={14} /></button>
                   <button onClick={() => msg.id && onLike(msg.id, -1)} className={`hover:text-error transition-colors ${msg.is_liked === -1 ? 'text-error' : 'text-white/40'}`}><ThumbsDown size={14} /></button>
                   <button onClick={() => msg.id && onPin(msg.id)} className={`hover:text-primary transition-colors ${msg.is_pinned ? 'text-primary' : 'text-white/40'}`}><Pin size={14} /></button>
+                  
+                  {/* ARE Feedback: Robotic Response */}
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const res = await fetch('http://localhost:8000/api/chat/feedback/robotic', { method: 'POST' });
+                        const data = await res.json();
+                        alert(`MIA acknowledges this was robotic. Respect Level: ${data.new_respect}%`);
+                      } catch (err) {
+                        console.error("Failed to report robotic response", err);
+                      }
+                    }}
+                    className="text-white/20 hover:text-red-400 transition-colors flex items-center gap-1 group/robot"
+                    title="This response felt robotic"
+                  >
+                    <Zap size={12} className="group-hover/robot:animate-ping" />
+                  </button>
                 </>
               ) : (
                 <>

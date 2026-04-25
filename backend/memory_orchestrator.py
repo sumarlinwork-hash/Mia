@@ -137,5 +137,13 @@ class MemoryOrchestrator:
                 
         return context
 
+    async def clear_memory(self):
+        """Wipe all episodic memories."""
+        try:
+            self.client.delete_collection(name="mia_episodic_memory")
+            self.collection = self.client.get_or_create_collection(name="mia_episodic_memory")
+        except Exception as e:
+            print(f"[Error] Failed to clear memory: {e}")
+
 # Singleton instance
 memory_orchestrator = MemoryOrchestrator()

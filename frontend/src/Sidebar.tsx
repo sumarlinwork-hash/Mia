@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Settings2, Brain, Activity, ChevronLeft, ChevronRight, Heart, Zap, Shield } from 'lucide-react';
-import { useConfig } from './context/ConfigContext';
+import { useConfig } from './hooks/useConfig';
 
 interface SidebarProps {
   onToggleZen: () => void;
@@ -11,6 +11,7 @@ interface SidebarProps {
 export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
   const { config } = useConfig();
   const [collapsed, setCollapsed] = useState(false);
+  const [emotion, setEmotion] = useState({ arousal: 50, happiness: 80, dominance: 60 });
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -24,6 +25,18 @@ export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
     { name: isPro ? "Skill Marketplace" : "Discovery Marketplace", icon: <Zap size={22} />, path: "/skills" },
     { name: "Settings", icon: <Settings2 size={22} />, path: "/settings" },
   ];
+
+  useEffect(() => {
+    const fetchEmotion = () => {
+      fetch('http://localhost:8000/api/emotion')
+        .then(res => res.json())
+        .then(data => setEmotion(data))
+        .catch(() => {});
+    };
+    fetchEmotion();
+    const interval = setInterval(fetchEmotion, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div 
@@ -88,9 +101,9 @@ export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
               <Shield size={10} /> {isPro ? "Intelligence Hub" : "Intimacy Orchestrator"}
             </div>
             <div className="space-y-3">
-              <SidebarStat label={isPro ? "Energy" : "Arousal"} value={50} color="bg-rose-500" />
-              <SidebarStat label={isPro ? "Harmony" : "Happiness"} value={80} color="bg-yellow-400" />
-              <SidebarStat label={isPro ? "Focus" : "Dominance"} value={60} color="bg-purple-500" />
+              <SidebarStat label={isPro ? "Energy" : "Arousal"} value={emotion.arousal} color="bg-rose-500" />
+              <SidebarStat label={isPro ? "Harmony" : "Happiness"} value={emotion.happiness} color="bg-yellow-400" />
+              <SidebarStat label={isPro ? "Focus" : "Dominance"} value={emotion.dominance} color="bg-purple-500" />
             </div>
           </div>
         )}

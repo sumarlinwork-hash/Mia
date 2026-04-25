@@ -22,11 +22,11 @@ const SkillMarketplace: React.FC = () => {
   const [executingSkill, setExecutingSkill] = useState<Skill | null>(null);
   const [toasts, setToasts] = useState<{id: number, msg: string, type: string}[]>([]);
 
-  const addToast = (msg: string, type: string) => {
+  const addToast = useCallback((msg: string, type: string) => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, msg, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-  };
+  }, []);
 
   const fetchSkills = useCallback(() => {
     fetch('http://localhost:8000/api/skills/marketplace')

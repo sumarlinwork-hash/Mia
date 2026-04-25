@@ -1,15 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { MIAConfig } from '../types/config';
-
-interface ConfigContextType {
-  config: MIAConfig | null;
-  loading: boolean;
-  error: string | null;
-  refreshConfig: () => Promise<void>;
-  updateConfig: (newConfig: MIAConfig) => void;
-}
-
-const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
+import { ConfigContext } from './ConfigContextInstance';
 
 export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [config, setConfig] = useState<MIAConfig | null>(null);
@@ -31,12 +22,23 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   useEffect(() => {
-    fetchConfig();
+    let isMounted = true;
+    
+    const load = async () => {
+      await fetchConfig();
+    };
+    
+    if (isMounted) {
+      load();
+    }
     
     // Listen for manual updates from Settings
     const handleUpdate = () => fetchConfig();
     window.addEventListener('configUpdated', handleUpdate);
-    return () => window.removeEventListener('configUpdated', handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('configUpdated', handleUpdate);
+    };
   }, [fetchConfig]);
 
   const updateConfig = (newConfig: MIAConfig) => {
@@ -48,12 +50,4 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       {children}
     </ConfigContext.Provider>
   );
-};
-
-export const useConfig = () => {
-  const context = useContext(ConfigContext);
-  if (context === undefined) {
-    throw new Error('useConfig must be used within a ConfigProvider');
-  }
-  return context;
 };

@@ -71,8 +71,8 @@ echo.
 echo Memulai Antarmuka Visual (Web Hub)
 start "MIA_FRONTEND" /min cmd /c "cd frontend && npm run dev"
 
-echo Menunggu Web Hub siap
-ping 127.0.0.1 -n 6 > nul
+echo Menunggu Web Hub siap (Memberi waktu ekstra untuk sinkronisasi)
+ping 127.0.0.1 -n 10 > nul
 start http://localhost:5173
 
 echo.

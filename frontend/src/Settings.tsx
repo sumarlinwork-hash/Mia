@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ThemeTab from './components/settings/ThemeTab';
-import { useConfig } from './context/ConfigContext';
+import { useConfig } from './hooks/useConfig';
 
 import type { MIAConfig, ProviderConfig } from './types/config';
 import type { Skill } from './SkillMarketplace';
@@ -99,13 +99,21 @@ export default function Settings() {
   };
 
   useEffect(() => {
-    if (config && !originalConfig) {
-      setOriginalConfig(config);
+    let isMounted = true;
+    
+    if (config && !originalConfig && isMounted) {
+      setTimeout(() => {
+        if (isMounted) setOriginalConfig(config);
+      }, 0);
     }
     
     fetch('http://localhost:8000/api/skills/installed')
       .then(res => res.json())
-      .then(data => setSkills(data));
+      .then(data => {
+        if (isMounted) setSkills(data);
+      });
+      
+    return () => { isMounted = false; };
   }, [config, originalConfig]);
 
   const updateConfigLocal = (newConfig: MIAConfig) => {

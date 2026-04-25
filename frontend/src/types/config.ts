@@ -33,4 +33,7 @@ export interface MIAConfig {
   openai_api_key?: string;
   elevenlabs_api_key?: string;
   elevenlabs_voice_id?: string;
+  care_pulse_enabled: boolean;
+  resonant_skin_enabled: boolean;
+  bio_sync_enabled: boolean;
 }

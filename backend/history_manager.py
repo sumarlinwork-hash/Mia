@@ -67,4 +67,9 @@ class HistoryManager:
             conn.execute("UPDATE messages SET is_liked = ? WHERE id = ?", (liked, message_id))
             conn.commit()
 
+    def clear_history(self):
+        with self.get_connection() as conn:
+            conn.execute("DELETE FROM messages")
+            conn.commit()
+
 history_manager = HistoryManager()

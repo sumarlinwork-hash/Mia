@@ -2,9 +2,17 @@ import React, { useState } from 'react';
 import { X, ChevronRight, ChevronLeft, Shield, Sparkles, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface SkillData {
+  name: string;
+  description: string;
+  category: string;
+  permissions: string[];
+  logic: string;
+}
+
 interface SkillWizardProps {
   onClose: () => void;
-  onComplete: (skillData: any) => void;
+  onComplete: (skillData: SkillData) => void;
 }
 
 const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {

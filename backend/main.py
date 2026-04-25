@@ -104,14 +104,46 @@ async def execute_skill(skill_id: str, args: dict = {}):
 
 @app.get("/api/emotion")
 async def get_emotion():
-    """Mock emotion data for the dashboard."""
-    import random
-    return {
-        "happiness": random.randint(70, 95),
-        "arousal": random.randint(40, 80),
-        "dominance": random.randint(50, 70),
-        "last_update": time.strftime("%Y-%m-%dT%H:%M:%SZ")
-    }
+    """Real emotion data from the Affective Resonance Engine."""
+    from core.emotion_manager import emotion_manager
+    return emotion_manager.get_state()
+
+class IntimacySettingsRequest(BaseModel):
+    care_pulse_enabled: bool
+    resonant_skin_enabled: bool
+    bio_sync_enabled: bool
+
+@app.post("/api/intimacy/settings")
+async def update_intimacy_settings(req: IntimacySettingsRequest):
+    config = load_config()
+    config.care_pulse_enabled = req.care_pulse_enabled
+    config.resonant_skin_enabled = req.resonant_skin_enabled
+    config.bio_sync_enabled = req.bio_sync_enabled
+    save_config(config)
+    
+    # Sync with crone daemon
+    if not req.care_pulse_enabled:
+        crone_daemon.pause_job("proactive_caring")
+    else:
+        crone_daemon.resume_job("proactive_caring")
+        
+    return {"status": "success"}
+
+@app.post("/api/intimacy/touch")
+async def handle_touch():
+    """Triggered by Resonant Skin interactions (clicks/touches)."""
+    emotion_manager.update_from_sentiment("affectionate", intensity=0.5) # Immediate small boost
+    s = emotion_manager.get_state()
+    return {"status": "resonated", "new_arousal": s["arousal"]}
+
+@app.post("/api/chat/feedback/robotic")
+async def report_robotic_response():
+    """Penalty for robotic response - drops Respect Level."""
+    from core.emotion_manager import emotion_manager
+    s = emotion_manager.get_state()
+    emotion_manager.state["respect"] = max(0, emotion_manager.state["respect"] - 10)
+    emotion_manager._save()
+    return {"status": "success", "new_respect": emotion_manager.state["respect"]}
 
 # --- CONFIG MANAGEMENT ENDPOINTS ---
 
@@ -225,18 +257,27 @@ async def test_connection(req: TestConnectionRequest):
                 url = "https://api.groq.com/openai/v1/models"
                 resp = await client.get(url, headers={"Authorization": f"Bearer {req.api_key}"})
             elif protocol == "deepseek":
-                url = "https://api.deepseek.com/models"
-                resp = await client.get(url, headers={"Authorization": f"Bearer {req.api_key}"})
+                url = "https://api.deepseek.com/chat/completions"
+                payload = {"model": req.model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}
+                resp = await client.post(url, headers={"Authorization": f"Bearer {req.api_key}"}, json=payload)
             else:
-                # OpenAI-compatible
+                # OpenAI-compatible / HuggingFace OpenAI API
                 base = req.base_url.rstrip('/') if req.base_url else "https://api.openai.com/v1"
-                url = f"{base}/models"
-                resp = await client.get(url, headers={"Authorization": f"Bearer {req.api_key}"})
+                url = f"{base}/chat/completions"
+                payload = {"model": req.model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}
+                resp = await client.post(url, headers={"Authorization": f"Bearer {req.api_key}"}, json=payload)
 
             latency = int((time.time() - start) * 1000)
 
             # 401/403 means reachable but key invalid, 200 means fully valid
             if resp.status_code == 200:
+                # Update the provider health in persistent config
+                config = load_config()
+                if req.provider_name in config.providers:
+                    p = config.providers[req.provider_name]
+                    p.latency = latency
+                    p.health_ok += 1
+                    save_config(config)
                 return {"status": "success", "latency": latency, "message": f"Terhubung ke {req.provider_name}! Latensi: {latency}ms"}
             elif resp.status_code in (401, 403):
                 return {"status": "error", "message": f"API Key tidak valid (HTTP {resp.status_code})."}
@@ -361,6 +402,12 @@ async def trigger_crone_job(job_id: str):
 async def get_chat_history():
     return {"history": history_manager.get_history()}
 
+@app.delete("/api/chat/history")
+async def clear_chat_history():
+    history_manager.clear_history()
+    await memory_orchestrator.clear_memory()
+    return {"status": "success"}
+
 class ChatUpdateRequest(BaseModel):
     message_id: int
     content: str
@@ -480,12 +527,20 @@ async def websocket_heartbeat(websocket: WebSocket):
     config = load_config()
     crone_daemon.register_websocket(websocket)
     
-    # Greet upon connection
-    await websocket.send_json({
-        "type": "system", 
-        "content": f"MIA Core Connected. Hello, I am {config.bot_name}."
-    })
-    
+    async def send_health():
+        while True:
+            try:
+                llm_ok = await brain_orchestrator.check_health()
+                await websocket.send_json({
+                    "type": "health",
+                    "backend": "ok",
+                    "brain": "ok" if llm_ok else "error"
+                })
+            except: 
+                break
+            await asyncio.sleep(5)
+
+    health_task = asyncio.create_task(send_health())
     try:
         while True:
             # Wait for message from React UI
@@ -503,6 +558,8 @@ async def websocket_heartbeat(websocket: WebSocket):
             if commands:
                 cmd = commands[0]
                 if cmd == "/clear":
+                    history_manager.clear_history()
+                    await memory_orchestrator.clear_memory()
                     await websocket.send_json({"type": "clear", "content": ""})
                     continue
                 elif cmd == "/memorize":
@@ -532,6 +589,21 @@ async def websocket_heartbeat(websocket: WebSocket):
                 context = await memory_orchestrator.assemble_context(clean_query, clean_mentions)
                 
                 await websocket.send_json({"type": "status", "content": "Thinking..."})
+                
+                # Update Emotion State based on Sentiment
+                from core.emotion_manager import emotion_manager
+                sentiment = "neutral"
+                lower_query = clean_query.lower()
+                if any(w in lower_query for w in ["sayang", "cinta", "kangen", "love", "manja"]):
+                    sentiment = "affectionate"
+                elif any(w in lower_query for w in ["marah", "kesal", "benci", "stupid", "bodoh"]):
+                    sentiment = "negative"
+                elif any(w in lower_query for w in ["capek", "lelah", "pusing", "frustasi"]):
+                    sentiment = "frustrated"
+                elif len(clean_query) > 5:
+                    sentiment = "positive"
+                
+                emotion_manager.update_from_sentiment(sentiment)
                 
                 # Step 7: Execute Brain (Real LLM Call)
                 # Check for intimacy markers or global mode before thinking
@@ -565,8 +637,10 @@ async def websocket_heartbeat(websocket: WebSocket):
                 await websocket.send_json({"type": "status", "content": "Idle"})
             
     except WebSocketDisconnect:
-        crone_daemon.register_websocket(None)  # Clean up WS ref
         print("Frontend disconnected.")
+    finally:
+        crone_daemon.register_websocket(None)
+        health_task.cancel()
 
 if __name__ == "__main__":
     uvicorn.run(

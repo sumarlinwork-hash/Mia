@@ -45,6 +45,9 @@ class ProviderConfig(BaseModel):
     latency: int = 0
     health_ok: int = 0
     health_fail: int = 0
+    failure_count: int = 0
+    last_failure_time: float = 0
+    circuit_breaker_until: float = 0
 
 
 class AppearanceConfig(BaseModel):
@@ -67,6 +70,16 @@ class MIAConfig(BaseModel):
     openai_api_key: str = ""
     stt_engine: str = "speech_recognition"
     is_professional_mode: bool = False
+    is_production_mode: bool = False
+    
+    # ARE (Affective Resonance Engine) Parameters
+    care_pulse_enabled: bool = True
+    resonant_skin_enabled: bool = True
+    bio_sync_enabled: bool = True
+    respect_decay_rate: float = 0.05
+    reassurance_build_rate: float = 0.1
+    imperfect_response_chance: float = 0.05
+    
     providers: Dict[str, ProviderConfig] = {}
     appearance: AppearanceConfig = AppearanceConfig()
 

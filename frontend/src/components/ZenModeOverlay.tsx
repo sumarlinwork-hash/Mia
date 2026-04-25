@@ -27,16 +27,16 @@ const ZenModeOverlay: React.FC<ZenModeOverlayProps> = ({ isActive, onExit }) => 
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 1 }}
-          className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/20 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/10 backdrop-blur-[0.1px]"
           onClick={onExit}
         >
-          <audio 
-            ref={audioRef} 
-            src="/audio/ambient.mp3" 
-            loop 
+          <audio
+            ref={audioRef}
+            src="/audio/ambient.mp3"
+            loop
           />
-          
-          <motion.div 
+
+          <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.5, duration: 1.5 }}
@@ -47,14 +47,14 @@ const ZenModeOverlay: React.FC<ZenModeOverlayProps> = ({ isActive, onExit }) => 
           </motion.div>
 
           <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-8 px-8 py-4 rounded-full bg-black/40 border border-white/5 backdrop-blur-xl pointer-events-auto">
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
               className="p-2 text-white/40 hover:text-primary transition-colors"
             >
               {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
             </button>
             <div className="h-4 w-px bg-white/10" />
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); onExit(); }}
               className="flex items-center gap-2 text-[10px] font-bold text-white/20 uppercase tracking-widest hover:text-white transition-colors"
             >

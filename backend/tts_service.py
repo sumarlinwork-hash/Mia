@@ -38,13 +38,13 @@ class TTSService:
         temp_filename = os.path.join(tempfile.gettempdir(), f"mia_edge_{uuid.uuid4().hex}.mp3")
         
         # New Normal: Super Energetic & Fast (Gadis Neural Peak)
-        pitch = "+25Hz" 
-        rate = "+20%"
+        pitch = "+40Hz" 
+        rate = "+30%"
         
-        # New Intimate: Calm, deliberate, but not too slow
+        # New Intimate: Calm, but much faster than before
         if is_intimate:
-            pitch = "+5Hz"   # Softer tone
-            rate = "-15%"   # Deliberate pacing
+            pitch = "+15Hz"   # Softer tone
+            rate = "+25%"   # Increased speed (was -15%)
             
         communicate = edge_tts.Communicate(text, self.voice_id_edge, pitch=pitch, rate=rate)
         await communicate.save(temp_filename)

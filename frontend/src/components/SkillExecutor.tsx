@@ -8,11 +8,11 @@ interface SkillExecutorProps {
     input_schema?: Record<string, string>;
   };
   onClose: () => void;
-  onExecute: (inputs: Record<string, any>) => void;
+  onExecute: (inputs: Record<string, string | number | boolean>) => void;
 }
 
 const SkillExecutor: React.FC<SkillExecutorProps> = ({ skill, onClose, onExecute }) => {
-  const [inputs, setInputs] = useState<Record<string, any>>({});
+  const [inputs, setInputs] = useState<Record<string, string | number | boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {

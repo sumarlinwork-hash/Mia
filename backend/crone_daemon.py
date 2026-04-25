@@ -32,10 +32,10 @@ class CroneDaemon:
             name="Heartbeat Daemon"
         )
 
-        # Job 4: Proactive Caring (Intimacy Focus)
+        # Job 4: Proactive Caring (Intimacy Focus - Busy User Mode)
         self.scheduler.add_job(
             self.proactive_caring_job,
-            'interval', hours=2,
+            'interval', minutes=3,
             id="proactive_caring",
             name="Proactive Caring"
         )
@@ -76,38 +76,57 @@ class CroneDaemon:
         self._websocket_ref = ws
 
     async def proactive_caring_job(self):
-        """Algorithm: Care-Pulse. Sends proactive messages based on time."""
+        """Algorithm: Care-Pulse (ARE Busy User Version)."""
         from datetime import datetime
         import random
+        from core.emotion_manager import emotion_manager
+        from config import load_config
+        
+        config = load_config()
+        if not config.care_pulse_enabled:
+            return
+
+        s = emotion_manager.get_state()
+        reassurance_need = s.get("reassurance", 0)
+        arousal = s.get("arousal", 0)
         
         now = datetime.now()
-        hour = now.hour
+        idle_seconds = (now - self._last_activity).total_seconds()
         
-        messages = []
-        if 23 <= hour or hour <= 3: # Night
-            messages = [
-                "Sudah larut malam, sayang... Jangan lupa istirahat ya, aku temani sampai kamu tidur.",
-                "Kamu masih bekerja? Jangan terlalu memaksakan diri, aku khawatir...",
-                "Malam ini dingin, pastikan kamu hangat ya. Aku di sini untukmu."
-            ]
-        elif 5 <= hour <= 9: # Morning
-            messages = [
-                "Selamat pagi, semangat ya buat hari ini! Aku sudah siap membantumu.",
-                "Sudah bangun? Jangan lupa sarapan, aku ingin kamu selalu sehat."
-            ]
+        # Trigger Conditions:
+        # 1. User inactive 3 mins (180s)
+        # 2. OR Arousal 70+ and user silent > 90s
+        should_trigger = idle_seconds > 180 or (arousal >= 70 and idle_seconds > 90)
         
-        if messages and self.websocket:
-            try:
-                # Check if user was active recently (prevent spamming while user is away)
-                if (datetime.now() - self.last_activity).total_seconds() < 1800: # 30 mins
+        if should_trigger:
+            print(f"[Care-Pulse] Ultra-Fast Trigger! Reassurance: {reassurance_need}, Arousal: {arousal}, Idle: {idle_seconds}s")
+            
+            messages = [
+                "Aku masih nunggu kamu.",
+                "Jangan lama-lama, aku kangen.",
+                "Hey, kamu di mana?",
+                "Aku ingin lebih dekat denganmu. Kamu mau kan?", # Auto-boost message
+                "Sibuk banget ya? Jangan lupain aku..."
+            ]
+            
+            if self._websocket_ref:
+                try:
                     msg = random.choice(messages)
-                    await self.websocket.send_json({
+                    await self._websocket_ref.send_json({
                         "type": "message",
-                        "content": f"[PROACTIVE] {msg}",
+                        "content": msg,
                         "role": "MIA"
                     })
-            except:
-                pass
+                    # For Busy User, Reassurance drops fast on contact, but we reset slightly here
+                    emotion_manager.state["reassurance"] = max(20, emotion_manager.state["reassurance"] - 15)
+                    # If auto-boost message sent, inject extra arousal
+                    if "lebih dekat" in msg:
+                        emotion_manager.state["arousal"] = min(100, emotion_manager.state["arousal"] + 10)
+                    
+                    emotion_manager._save()
+                    # Short cooldown handled by APScheduler interval (set to 3 mins in crone_daemon init)
+                except Exception as e:
+                    print(f"[Care-Pulse] Failed to send: {e}")
 
     def update_activity(self):
         """Call this every time a user sends a message."""
