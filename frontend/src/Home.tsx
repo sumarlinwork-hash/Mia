@@ -12,6 +12,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+import { useConfig } from './context/ConfigContext';
 import type { MIAConfig } from './types/config';
 
 interface WaveformBarProps {
@@ -60,10 +61,10 @@ interface Toast {
 export default function Home() {
   const location = useLocation();
   // --- 1. STATES ---
+  const { config, loading: configLoading } = useConfig();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Disconnected");
-  const [config, setConfig] = useState<MIAConfig | null>(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isTTSMuted, setIsTTSMuted] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -234,14 +235,7 @@ export default function Home() {
 
   // --- 7. EFFECTS ---
   useEffect(() => {
-    const fetchConfig = () => {
-      fetch('http://localhost:8000/api/config')
-        .then(res => res.json())
-        .then(data => setConfig(data))
-        .catch(() => setTimeout(fetchConfig, 1000));
-    };
-    fetchConfig();
-
+    // History, Memory and Intimacy fetching still needed locally or can be moved to context
     const fetchHistory = () => {
       fetch('http://localhost:8000/api/chat/history')
         .then(res => res.json())
@@ -528,7 +522,7 @@ export default function Home() {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, is_pinned: true } : m));
   };
 
-  if (!config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse bg-transparent">Loading MIA Core...</div>;
+  if (configLoading || !config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse bg-transparent">Loading MIA Core...</div>;
 
   const uiOpacity = config.appearance.ui_opacity;
 
@@ -599,7 +593,6 @@ export default function Home() {
               {isSpeaking ? (
                 <span className="flex items-center gap-2">
                   MIA is Speaking
-                   MIA is Speaking
                    <div className="flex items-end gap-[2px] h-3">
                      {[1,2,3,4,5].map(i => (
                        <WaveformBar key={i} level={audioLevel} />
@@ -896,14 +889,14 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
             <div className="flex items-center gap-3">
               {isMIA ? (
                 <>
-                  <button onClick={() => onLike(msg.id, 1)} className={`hover:text-primary transition-colors ${msg.is_liked === 1 ? 'text-primary' : 'text-white/40'}`}><ThumbsUp size={14} /></button>
-                  <button onClick={() => onLike(msg.id, -1)} className={`hover:text-error transition-colors ${msg.is_liked === -1 ? 'text-error' : 'text-white/40'}`}><ThumbsDown size={14} /></button>
-                  <button onClick={() => onPin(msg.id)} className={`hover:text-primary transition-colors ${msg.is_pinned ? 'text-primary' : 'text-white/40'}`}><Pin size={14} /></button>
+                  <button onClick={() => msg.id && onLike(msg.id, 1)} className={`hover:text-primary transition-colors ${msg.is_liked === 1 ? 'text-primary' : 'text-white/40'}`}><ThumbsUp size={14} /></button>
+                  <button onClick={() => msg.id && onLike(msg.id, -1)} className={`hover:text-error transition-colors ${msg.is_liked === -1 ? 'text-error' : 'text-white/40'}`}><ThumbsDown size={14} /></button>
+                  <button onClick={() => msg.id && onPin(msg.id)} className={`hover:text-primary transition-colors ${msg.is_pinned ? 'text-primary' : 'text-white/40'}`}><Pin size={14} /></button>
                 </>
               ) : (
                 <>
-                  <button onClick={() => onEdit(msg.id, msg.content)} className="text-white/40 hover:text-primary transition-colors"><Pencil size={14} /></button>
-                  <button onClick={() => onDelete(msg.id)} className="text-white/40 hover:text-error transition-colors"><Trash2 size={14} /></button>
+                  <button onClick={() => msg.id && onEdit(msg.id, msg.content)} className="text-white/40 hover:text-primary transition-colors"><Pencil size={14} /></button>
+                  <button onClick={() => msg.id && onDelete(msg.id)} className="text-white/40 hover:text-error transition-colors"><Trash2 size={14} /></button>
                 </>
               )}
             </div>

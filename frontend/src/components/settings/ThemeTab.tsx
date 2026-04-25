@@ -6,15 +6,15 @@ import type { MIAConfig } from '../../types/config';
 
 interface ThemeTabProps {
   config: MIAConfig;
-  updateConfig: (newConfig: MIAConfig) => void;
+  updateConfigLocal: (newConfig: MIAConfig) => void;
 }
 
-const ThemeTab: React.FC<ThemeTabProps> = ({ config, updateConfig }) => {
+const ThemeTab: React.FC<ThemeTabProps> = ({ config, updateConfigLocal }) => {
   const { hue, setHue } = useTheme();
 
   const handleHueChange = (newHue: ThemeHue) => {
     setHue(newHue);
-    updateConfig({
+    updateConfigLocal({
       ...config,
       appearance: {
         ...config.appearance,

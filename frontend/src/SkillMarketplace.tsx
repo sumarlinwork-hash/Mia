@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Zap, Plus, Book, Music, MessageCircle, Star, CheckCircle, ExternalLink } from 'lucide-react';
+import { Search, Zap, Plus, Book, Music, MessageCircle, CheckCircle, Star } from 'lucide-react';
+import SkillWizard from './components/SkillWizard';
+import SkillExecutor from './components/SkillExecutor';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 
 export interface Skill {
   id: string;
@@ -10,16 +11,24 @@ export interface Skill {
   category?: string;
   created_at?: string;
   is_installed?: boolean;
+  input_schema?: Record<string, string>;
 }
 
 const SkillMarketplace: React.FC = () => {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [showWizard, setShowWizard] = useState(false);
+  const [executingSkill, setExecutingSkill] = useState<Skill | null>(null);
+  const [toasts, setToasts] = useState<{id: number, msg: string, type: string}[]>([]);
+
+  const addToast = (msg: string, type: string) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, msg, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  };
 
   const fetchSkills = useCallback(() => {
-    // Removed sync setLoading to avoid lint error
     fetch('http://localhost:8000/api/skills/marketplace')
       .then(res => res.json())
       .then(data => {
@@ -45,6 +54,16 @@ const SkillMarketplace: React.FC = () => {
       }
     } catch (err) {
       console.error("Installation failed", err);
+    }
+  };
+
+  const handleRun = (skill: Skill) => {
+    // If skill has schema, show executor. Else run direct.
+    if (skill.input_schema && Object.keys(skill.input_schema).length > 0) {
+      setExecutingSkill(skill);
+    } else {
+      addToast(`Running ${skill.name}...`, "info");
+      fetch(`http://localhost:8000/api/skill/execute?skill_id=${skill.id}`, { method: 'POST' });
     }
   };
 
@@ -96,7 +115,7 @@ const SkillMarketplace: React.FC = () => {
         {/* Architect a Skill Card (The Strongest Feature) */}
         <motion.div 
           whileHover={{ scale: 1.02 }}
-          onClick={() => navigate('/', { state: { initialInput: "MIA, saya ingin membuat keahlian baru..." } })}
+          onClick={() => setShowWizard(true)}
           className="p-8 rounded-[2.5rem] bg-gradient-to-br from-primary/30 to-secondary/10 border border-primary/30 shadow-2xl flex flex-col items-center justify-center text-center group cursor-pointer"
         >
           <div className="w-16 h-16 rounded-full bg-primary text-black flex items-center justify-center mb-6 shadow-lg shadow-primary/30 group-hover:rotate-12 transition-transform">
@@ -146,11 +165,10 @@ const SkillMarketplace: React.FC = () => {
               
               {skill.is_installed ? (
                 <button 
-                  onClick={() => navigate('/settings')}
-                  className="flex items-center gap-2 px-5 py-2 rounded-full bg-white/10 text-white/60 font-bold text-xs hover:bg-white/20 transition-all"
+                  onClick={() => handleRun(skill)}
+                  className="flex items-center gap-2 px-6 py-2 rounded-xl bg-primary text-black font-bold hover:scale-105 transition-transform"
                 >
-                  <ExternalLink size={12} />
-                  Configure
+                  <Zap size={16} fill="currentColor" /> Run
                 </button>
               ) : (
                 <button 
@@ -168,6 +186,49 @@ const SkillMarketplace: React.FC = () => {
             <div className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
           </div>
         )}
+      </div>
+
+      {executingSkill && (
+        <SkillExecutor 
+          skill={executingSkill}
+          onClose={() => setExecutingSkill(null)}
+          onExecute={(inputs) => {
+            addToast(`Executing ${executingSkill.name}...`, "info");
+            fetch(`http://localhost:8000/api/skill/execute?skill_id=${executingSkill.id}`, { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(inputs)
+            });
+            setExecutingSkill(null);
+          }}
+        />
+      )}
+
+      {showWizard && (
+        <SkillWizard 
+          onClose={() => setShowWizard(false)}
+          onComplete={(data) => {
+            console.log("Skill built:", data);
+            setShowWizard(false);
+            addToast("Skill sent to Kernel!", "success");
+          }}
+        />
+      )}
+
+      {/* Toast Overlay */}
+      <div className="fixed bottom-8 right-8 z-[200] flex flex-col gap-3">
+        {toasts.map(t => (
+          <motion.div 
+            key={t.id} initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
+            className={`px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-3 backdrop-blur-xl border ${
+              t.type === 'success' ? 'bg-primary/20 border-primary/40 text-primary' : 
+              t.type === 'error' ? 'bg-error/20 border-error/40 text-error' : 
+              'bg-white/10 border-white/20 text-white'
+            }`}
+          >
+            <CheckCircle size={18} /> {t.msg}
+          </motion.div>
+        ))}
       </div>
     </div>
   );

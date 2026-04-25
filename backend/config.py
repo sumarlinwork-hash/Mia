@@ -5,6 +5,32 @@ from typing import Dict, Any, Optional
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 
+VALID_THEME_HUES = {"teal", "violet", "amber", "emerald", "rose"}
+LEGACY_THEME_HUE_MAP = {
+    "170": "teal",
+    "teal": "teal",
+    "cyan": "teal",
+    "violet": "violet",
+    "purple": "violet",
+    "amber": "amber",
+    "orange": "amber",
+    "emerald": "emerald",
+    "green": "emerald",
+    "rose": "rose",
+    "pink": "rose",
+}
+
+
+def normalize_theme_hue(value: Any) -> str:
+    if not isinstance(value, str):
+        return "teal"
+
+    normalized = LEGACY_THEME_HUE_MAP.get(value.strip().lower())
+    if normalized in VALID_THEME_HUES:
+        return normalized
+
+    return "teal"
+
 class ProviderConfig(BaseModel):
     is_premium: bool = False
     is_active: bool = False
@@ -28,10 +54,11 @@ class AppearanceConfig(BaseModel):
     bubble_color_user: str = "rgba(255, 255, 255, 0.1)"
     ui_opacity: float = 0.8 # Range 0.0 - 1.0
     language: str = "id-ID"
+    theme_hue: str = "teal"
 
 class MIAConfig(BaseModel):
     bot_name: str = "MIA"
-    bot_age: str = "18"
+    bot_age: int = 18
     bot_persona: str = "Kamu adalah MIA, AI Personal Assistant wanita berusia 18 tahun."
     max_rpm: int = 15
     tts_engine: str = "edge-tts"
@@ -39,6 +66,7 @@ class MIAConfig(BaseModel):
     elevenlabs_voice_id: str = ""
     openai_api_key: str = ""
     stt_engine: str = "speech_recognition"
+    is_professional_mode: bool = False
     providers: Dict[str, ProviderConfig] = {}
     appearance: AppearanceConfig = AppearanceConfig()
 
@@ -72,6 +100,9 @@ def load_config() -> MIAConfig:
             # Migrate older configs
             if "appearance" not in data:
                 data["appearance"] = AppearanceConfig().dict()
+            data["appearance"]["theme_hue"] = normalize_theme_hue(
+                data["appearance"].get("theme_hue")
+            )
             return MIAConfig(**data)
     except Exception as e:
         print(f"Error loading config: {e}. Using default.")
@@ -85,4 +116,3 @@ def save_config(config: MIAConfig):
         except AttributeError:
             # Pydantic v1 fallback
             f.write(config.json(indent=4))
-

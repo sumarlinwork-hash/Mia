@@ -37,4 +37,27 @@ export const theme = {
   }
 };
 
+export const themeHues = ['teal', 'violet', 'amber', 'emerald', 'rose'] as const;
 export type ThemeHue = 'teal' | 'violet' | 'amber' | 'emerald' | 'rose';
+
+const legacyHueMap: Record<string, ThemeHue> = {
+  '170': 'teal',
+  teal: 'teal',
+  cyan: 'teal',
+  violet: 'violet',
+  purple: 'violet',
+  amber: 'amber',
+  orange: 'amber',
+  emerald: 'emerald',
+  green: 'emerald',
+  rose: 'rose',
+  pink: 'rose',
+};
+
+export function normalizeThemeHue(value: unknown): ThemeHue {
+  if (typeof value !== 'string') {
+    return 'teal';
+  }
+
+  return legacyHueMap[value.trim().toLowerCase()] ?? 'teal';
+}

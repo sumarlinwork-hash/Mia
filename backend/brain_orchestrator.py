@@ -3,6 +3,10 @@ import time
 from config import load_config, save_config, ProviderConfig
 import httpx
 from agent_tools import agent_tools
+from core.routing_service import routing_service
+from core.graph_engine import GraphExecutor, SkillGraph
+from core.emotion_manager import emotion_manager
+from core.cost_manager import cost_manager
 import json
 import re
 
@@ -68,36 +72,9 @@ If you use a tool, I will execute it and provide the result in the next turn.
 
     async def select_best_provider(self, prompt: str, purpose: str = "llm") -> tuple[str, ProviderConfig]:
         """
-        Advanced Provider Selection (Steps 4 & 5):
-        Priority 1 → Default provider
-        Priority 2 → Lowest health_fail rate
-        Priority 3 → Lowest latency (moving average)
+        Advanced Provider Selection using weighted scoring model.
         """
-        config = load_config()
-        all_active = {name: p for name, p in config.providers.items() if p.is_active}
-        
-        # Filter by purpose
-        filtered = {name: p for name, p in all_active.items() if purpose.lower() in p.purpose.lower()}
-        if not filtered:
-            # Fallback to any LLM
-            filtered = {name: p for name, p in all_active.items() if "llm" in p.purpose.lower()}
-        if not filtered:
-            # Last resort: any active
-            filtered = all_active
-        if not filtered:
-            raise Exception("Tidak ada AI Provider yang aktif. Silakan tambahkan provider di Settings.")
-
-        # Priority 1: Default
-        for name, p in filtered.items():
-            if p.is_default:
-                return name, p
-
-        # Priority 2: Sort by fail rate asc, then latency asc
-        sorted_providers = sorted(
-            filtered.items(),
-            key=lambda x: (x[1].health_fail / max(x[1].health_ok + x[1].health_fail, 1), x[1].latency)
-        )
-        return sorted_providers[0]
+        return await routing_service.select_best_provider(purpose=purpose)
 
     def _parse_and_load_images(self, text: str) -> tuple[str, list]:
         import re
@@ -162,7 +139,20 @@ If you use a tool, I will execute it and provide the result in the next turn.
 
         try:
             while current_step < max_steps:
-                response = await self._call_api(p, system_prompt, current_context, clean_prompt, current_images)
+                if not cost_manager.is_allowed():
+                    return "Maaf, kuota harian saya sudah habis. Saya harus berhenti sejenak untuk menghemat biaya."
+
+                # Inject current emotional state into the loop
+                is_pro = config.is_professional_mode
+                emotion_chunk = emotion_manager.get_emotion_prompt_chunk(is_pro=is_pro)
+                behavior_instr = emotion_manager.get_behavior_instruction()
+                
+                full_system_prompt = f"{system_prompt}\n\nCurrent Emotional State: {emotion_chunk}\nInstructions: {behavior_instr}"
+                
+                response = await self._call_api(p, full_system_prompt, current_context, clean_prompt, current_images)
+                # Track cost (Estimated 1k tokens per call for now)
+                cost_manager.track_call(name, 1000)
+                
                 final_response = response
                 
                 # Step 8: Parse Tool Calls
@@ -196,7 +186,16 @@ If you use a tool, I will execute it and provide the result in the next turn.
         except Exception as e:
             await self._update_metrics(name, False, 0)
             print(f"[Brain Error] Provider {name} failed: {e}")
-            return await self._fallback_execute(name, system_prompt, context, clean_prompt, images, str(e))
+            
+            # User-friendly failover message
+            friendly_fallback = await self._fallback_execute(name, system_prompt, context, clean_prompt, images, str(e))
+            if "[MIA Brain Error]" in friendly_fallback:
+                return (
+                    "Maaf, saya sedang berpikir terlalu keras hingga otak saya sedikit panas. 🔥\n"
+                    "Beri saya waktu sebentar untuk menjernihkan pikiran.\n\n"
+                    f"(Pesan teknis: {friendly_fallback.replace('[MIA Brain Error]', '').strip()})"
+                )
+            return friendly_fallback
 
     async def _execute_tool(self, data: dict) -> tuple[str, dict | None]:
         import base64
@@ -245,16 +244,28 @@ If you use a tool, I will execute it and provide the result in the next turn.
 
     async def _call_api(self, p: ProviderConfig, system_prompt: str, context: str, user_message: str, images: list) -> str:
         """
-        Smart Protocol Dispatcher.
+        Smart Protocol Dispatcher with Retry Logic.
         Supports: Gemini API, Groq, OpenAI, DeepSeek, OpenAI-compatible.
         """
         protocol = p.protocol.lower()
         full_user_content = f"{context}\n\nUser: {user_message}" if context.strip() else user_message
-
-        if "gemini" in protocol:
-            return await self._call_gemini(p, system_prompt, full_user_content, images)
-        else:
-            return await self._call_openai_compatible(p, system_prompt, full_user_content, images)
+        
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                if "gemini" in protocol:
+                    return await self._call_gemini(p, system_prompt, full_user_content, images)
+                else:
+                    return await self._call_openai_compatible(p, system_prompt, full_user_content, images)
+            except Exception as e:
+                # Retry on rate limits or transient errors
+                if "429" in str(e) or "503" in str(e) or "500" in str(e):
+                    if attempt < max_retries:
+                        wait_time = (attempt + 1) * 2 # 2s, 4s
+                        print(f"[Brain] {p.protocol} failed (Attempt {attempt+1}). Retrying in {wait_time}s...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                raise e
 
     async def _call_gemini(self, p: ProviderConfig, system_prompt: str, user_message: str, images: list) -> str:
         """

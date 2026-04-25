@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ThemeTab from './components/settings/ThemeTab';
+import { useConfig } from './context/ConfigContext';
 
 import type { MIAConfig, ProviderConfig } from './types/config';
 import type { Skill } from './SkillMarketplace';
@@ -38,7 +39,7 @@ interface Toast {
 }
 
 export default function Settings() {
-  const [config, setConfig] = useState<MIAConfig | null>(null);
+  const { config, loading, updateConfig: setGlobalConfig, refreshConfig } = useConfig();
   const [originalConfig, setOriginalConfig] = useState<MIAConfig | null>(null);
   const [view, setView] = useState<'list' | 'add' | 'edit'>('list');
   const [activeTab, setActiveTab] = useState('intelligence');
@@ -98,27 +99,26 @@ export default function Settings() {
   };
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/config')
-      .then(res => res.json())
-      .then(data => {
-        setConfig(data);
-        setOriginalConfig(data);
-      });
+    if (config && !originalConfig) {
+      setOriginalConfig(config);
+    }
     
     fetch('http://localhost:8000/api/skills/installed')
       .then(res => res.json())
       .then(data => setSkills(data));
-  }, []);
+  }, [config, originalConfig]);
 
-  const updateConfig = (newConfig: MIAConfig) => {
-    setConfig(newConfig);
+  const updateConfigLocal = (newConfig: MIAConfig) => {
+    setGlobalConfig(newConfig);
     setHasChanges(JSON.stringify(newConfig) !== JSON.stringify(originalConfig));
   };
 
   const handleReset = () => {
-    setConfig(originalConfig);
-    setHasChanges(false);
-    addToast("Pengaturan dikembalikan ke awal", "info");
+    if (originalConfig) {
+      updateConfigLocal(originalConfig);
+      setHasChanges(false);
+      addToast("Pengaturan dikembalikan ke awal", "info");
+    }
   };
 
   const handleSave = async (updatedConfig = config) => {
@@ -130,11 +130,10 @@ export default function Settings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedConfig),
       });
-      setConfig({ ...updatedConfig });
+      setGlobalConfig({ ...updatedConfig });
       setOriginalConfig({ ...updatedConfig });
       setHasChanges(false);
       addToast("Konfigurasi disimpan!", "success");
-      window.dispatchEvent(new Event('configUpdated'));
     } catch {
       addToast("Gagal menyimpan config", "error");
     } finally {
@@ -170,26 +169,29 @@ export default function Settings() {
 
 
   const deleteProvider = async (name: string) => {
+    if (!config) return;
     const updatedConfig = { ...config };
     delete updatedConfig.providers[name];
     await handleSave(updatedConfig);
   };
 
   const toggleProvider = async (name: string) => {
+    if (!config) return;
     const updatedConfig = { ...config };
     updatedConfig.providers[name].is_active = !updatedConfig.providers[name].is_active;
     await handleSave(updatedConfig);
   };
 
   const testProvider = async (name: string) => {
+    if (!config) return;
     const updatedProviders = { ...config.providers };
     updatedProviders[name].latency = -1; // Loading state
-    setConfig({ ...config, providers: updatedProviders });
+    setGlobalConfig({ ...config, providers: updatedProviders });
     
     const res = await fetch(`http://localhost:8000/api/providers/test/${encodeURIComponent(name)}`, { method: 'POST' });
     const data = await res.json();
     if (data.status === 'success') {
-      fetch('http://localhost:8000/api/config').then(res => res.json()).then(data => setConfig(data));
+      refreshConfig();
     }
   };
 
@@ -256,7 +258,7 @@ export default function Settings() {
     } catch { addToast("Gagal menyimpan skill", "error"); }
   };
 
-  if (!config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse">Loading System Config...</div>;
+  if (loading || !config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse">Loading System Config...</div>;
 
   return (
     <div className="min-h-screen w-full p-4 sm:p-8 overflow-y-auto custom-scrollbar">
@@ -521,7 +523,7 @@ export default function Settings() {
                 <input 
                   type="range" min="0.1" max="1" step="0.05"
                   value={config.appearance.ui_opacity}
-                  onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, ui_opacity: parseFloat(e.target.value) } })}
+                  onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, ui_opacity: parseFloat(e.target.value) } })}
                   className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
                 />
               </div>
@@ -534,14 +536,14 @@ export default function Settings() {
                       <input 
                         type="color" 
                         value={rgbaToHex(config.appearance.bubble_color_mia)}
-                        onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_mia)) } })}
+                        onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_mia)) } })}
                         className="w-12 h-12 rounded-lg bg-transparent border-none cursor-pointer"
                       />
                       <div className="flex-1">
                         <input 
                           type="range" min="0" max="1" step="0.05"
                           value={getOpacity(config.appearance.bubble_color_mia)}
-                          onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(rgbaToHex(config.appearance.bubble_color_mia), parseFloat(e.target.value)) } })}
+                          onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(rgbaToHex(config.appearance.bubble_color_mia), parseFloat(e.target.value)) } })}
                           className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
                         />
                         <div className="flex justify-between text-[10px] mt-1 text-white/20 font-mono">
@@ -560,14 +562,14 @@ export default function Settings() {
                       <input 
                         type="color" 
                         value={rgbaToHex(config.appearance.bubble_color_user)}
-                        onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_user)) } })}
+                        onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_user)) } })}
                         className="w-12 h-12 rounded-lg bg-transparent border-none cursor-pointer"
                       />
                       <div className="flex-1">
                         <input 
                           type="range" min="0" max="1" step="0.05"
                           value={getOpacity(config.appearance.bubble_color_user)}
-                          onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(rgbaToHex(config.appearance.bubble_color_user), parseFloat(e.target.value)) } })}
+                          onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(rgbaToHex(config.appearance.bubble_color_user), parseFloat(e.target.value)) } })}
                           className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
                         />
                         <div className="flex justify-between text-[10px] mt-1 text-white/20 font-mono">
@@ -591,7 +593,7 @@ export default function Settings() {
                         if (type === 'color' && newUrl.startsWith('/')) {
                           newUrl = '#0a0a0a';
                         }
-                        updateConfig({ ...config, appearance: { ...config.appearance, background_type: type as 'video' | 'image' | 'color', background_url: newUrl } });
+                        updateConfigLocal({ ...config, appearance: { ...config.appearance, background_type: type as 'video' | 'image' | 'color', background_url: newUrl } });
                       }}
                       className={`px-6 py-2 rounded-xl font-bold transition-all ${config.appearance.background_type === type ? 'bg-primary text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
                     >
@@ -610,7 +612,7 @@ export default function Settings() {
                     <input 
                       type="text" 
                       value={config.appearance.background_url}
-                      onChange={e => setConfig({ ...config, appearance: { ...config.appearance, background_url: e.target.value } })}
+                      onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, background_url: e.target.value } })}
                       onBlur={() => handleSave()}
                       className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary font-mono text-xs"
                       placeholder={config.appearance.background_type === 'video' ? "https://example.com/loop.mp4" : "https://example.com/bg.jpg"}
@@ -632,7 +634,7 @@ export default function Settings() {
                         const res = await fetch('http://localhost:8000/api/upload-bg', { method: 'POST', body: formData });
                         const data = await res.json();
                         if (data.status === 'success') {
-                          updateConfig({ 
+                          updateConfigLocal({ 
                             ...config, 
                             appearance: { 
                               ...config.appearance, 
@@ -652,7 +654,7 @@ export default function Settings() {
                   <input 
                     type="color" 
                     value={config.appearance.background_url.startsWith('#') ? config.appearance.background_url : '#0a0a0a'}
-                    onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, background_url: e.target.value } })}
+                    onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, background_url: e.target.value } })}
                     className="w-full h-12 rounded-xl bg-transparent border border-white/10 cursor-pointer"
                   />
                 </div>
@@ -663,7 +665,7 @@ export default function Settings() {
         
         {/* Themes Settings Tab */}
         {activeTab === 'themes' && (
-          <ThemeTab config={config} updateConfig={updateConfig} />
+          <ThemeTab config={config} updateConfigLocal={updateConfigLocal} />
         )}
 
         {activeTab === 'personality' && (
@@ -679,7 +681,7 @@ export default function Settings() {
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">AI Name</label>
                   <input 
                     type="text" value={config.bot_name}
-                    onChange={e => updateConfig({ ...config, bot_name: e.target.value })}
+                    onChange={e => updateConfigLocal({ ...config, bot_name: e.target.value })}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                   />
                 </div>
@@ -687,9 +689,22 @@ export default function Settings() {
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">AI Age</label>
                   <input 
                     type="number" value={config.bot_age}
-                    onChange={e => updateConfig({ ...config, bot_age: parseInt(e.target.value) || 0 })}
+                    onChange={e => updateConfigLocal({ ...config, bot_age: parseInt(e.target.value) || 0 })}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                   />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-6 rounded-2xl bg-white/5 border border-white/10">
+                <div>
+                  <h3 className="font-bold text-white mb-1">Professional Mode</h3>
+                  <p className="text-[10px] text-white/40">Gunakan terminologi produktivitas dan estetika netral (Bukan mode Waifu).</p>
+                </div>
+                <div 
+                  onClick={() => updateConfigLocal({ ...config, is_professional_mode: !config.is_professional_mode })}
+                  className={`w-12 h-6 rounded-full relative cursor-pointer transition-all ${config.is_professional_mode ? 'bg-primary' : 'bg-white/10'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${config.is_professional_mode ? 'left-7' : 'left-1'}`} />
                 </div>
               </div>
 
@@ -697,7 +712,7 @@ export default function Settings() {
                 <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Base System Persona</label>
                 <textarea 
                   value={config.bot_persona}
-                  onChange={e => updateConfig({ ...config, bot_persona: e.target.value })}
+                  onChange={e => updateConfigLocal({ ...config, bot_persona: e.target.value })}
                   rows={6}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary font-sans leading-relaxed"
                   placeholder="Definisikan karakter MIA di sini..."
@@ -712,7 +727,7 @@ export default function Settings() {
                   {['edge-tts', 'elevenlabs', 'openai'].map(engine => (
                     <button
                       key={engine}
-                      onClick={() => updateConfig({ ...config, tts_engine: engine })}
+                      onClick={() => updateConfigLocal({ ...config, tts_engine: engine })}
                       className={`px-6 py-4 rounded-2xl border transition-all text-left group ${
                         config.tts_engine === engine 
                         ? 'bg-primary/20 border-primary text-primary' 
@@ -734,7 +749,7 @@ export default function Settings() {
                         <label className="block text-[10px] font-bold text-white/30 uppercase mb-2">ElevenLabs API Key</label>
                         <input 
                           type="password" value={config.elevenlabs_api_key}
-                          onChange={e => updateConfig({ ...config, elevenlabs_api_key: e.target.value })}
+                          onChange={e => updateConfigLocal({ ...config, elevenlabs_api_key: e.target.value })}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                           placeholder="xi-api-key..."
                         />
@@ -743,7 +758,7 @@ export default function Settings() {
                         <label className="block text-[10px] font-bold text-white/30 uppercase mb-2">Voice ID</label>
                         <input 
                           type="text" value={config.elevenlabs_voice_id}
-                          onChange={e => updateConfig({ ...config, elevenlabs_voice_id: e.target.value })}
+                          onChange={e => updateConfigLocal({ ...config, elevenlabs_voice_id: e.target.value })}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                           placeholder="e.g. 21m00Tcm4TlvDq8ikWAM"
                         />
@@ -757,7 +772,7 @@ export default function Settings() {
                     <label className="block text-[10px] font-bold text-white/30 uppercase mb-2">OpenAI API Key</label>
                     <input 
                       type="password" value={config.openai_api_key}
-                      onChange={e => updateConfig({ ...config, openai_api_key: e.target.value })}
+                      onChange={e => updateConfigLocal({ ...config, openai_api_key: e.target.value })}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                       placeholder="sk-..."
                     />

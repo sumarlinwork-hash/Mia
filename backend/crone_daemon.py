@@ -1,5 +1,8 @@
 import os
+import time
 import asyncio
+from typing import List, Callable, Dict, Optional, Any
+from core.local_runtime import local_event_bus
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from memory_orchestrator import memory_orchestrator
@@ -11,6 +14,8 @@ MEMORY_FILE = os.path.join(IAM_MIA_DIR, "MEMORY.md")
 class CroneDaemon:
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
+        self.websocket = None
+        self.last_activity = time.time()
         os.makedirs(MEMORY_LOG_DIR, exist_ok=True)
         
         # Job 1: Meta-RAG Memory Pruning — runs every day at 03:00 AM
@@ -107,6 +112,7 @@ class CroneDaemon:
     def update_activity(self):
         """Call this every time a user sends a message."""
         self._last_activity = datetime.now()
+        self.last_activity = time.time()
 
     async def log_episodic_memory(self, role: str, content: str):
         """Called by main.py to log daily conversations."""
@@ -272,8 +278,22 @@ class CroneDaemon:
         return False
 
     def start(self):
-        self.scheduler.start()
-        print("[CRONE] Daemon Initialized and Running in Background.")
+        if not self.scheduler.running:
+            self._setup_event_listeners()
+            self.scheduler.start()
+            print("[Crone] Daemon started with Event Listener support.")
+
+    def _setup_event_listeners(self):
+        """Register listeners for specific system events."""
+        asyncio.create_task(local_event_bus.subscribe("low_happiness", self._handle_low_happiness))
+        asyncio.create_task(local_event_bus.subscribe("user_message", self._handle_user_activity))
+
+    async def _handle_low_happiness(self, event):
+        print(f"[Crone] Event Triggered: Low Happiness. Running apology job...")
+        await self.trigger_job("apology_check")
+
+    async def _handle_user_activity(self, event):
+        self.update_activity()
 
 # Singleton instance
 crone_daemon = CroneDaemon()

@@ -26,6 +26,7 @@ export interface MIAConfig {
   bot_name: string;
   bot_age: number;
   bot_persona: string;
+  is_professional_mode: boolean;
   appearance: AppearanceConfig;
   providers: Record<string, ProviderConfig>;
   tts_engine: string;

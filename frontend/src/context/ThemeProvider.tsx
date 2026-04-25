@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { theme, type ThemeHue } from '../design/theme';
+import { normalizeThemeHue, theme, type ThemeHue } from '../design/theme';
 import { ThemeContext } from './ThemeContext';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -11,16 +11,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     fetch('http://localhost:8000/api/config')
       .then(res => res.json())
       .then(data => {
-        if (data?.appearance?.theme_hue) {
-          setHue(data.appearance.theme_hue as ThemeHue);
-        }
+        setHue(normalizeThemeHue(data?.appearance?.theme_hue));
       })
       .catch(() => console.log('Using default theme hue'));
   }, []);
 
   useEffect(() => {
     const root = document.documentElement;
-    const selectedTheme = theme.colors[hue];
+    const selectedTheme = theme.colors[normalizeThemeHue(hue)];
 
     root.style.setProperty('--color-primary', selectedTheme.primary);
     root.style.setProperty('--color-primary-hover', selectedTheme.primaryHover);

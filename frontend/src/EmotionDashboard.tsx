@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Activity, Brain, Shield, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useConfig } from './context/ConfigContext';
 
 interface EmotionState {
   happiness: number;
@@ -10,6 +11,7 @@ interface EmotionState {
 }
 
 const EmotionDashboard: React.FC = () => {
+  const { config } = useConfig();
   const [emotion, setEmotion] = useState<EmotionState>({
     happiness: 80,
     arousal: 50,
@@ -29,10 +31,12 @@ const EmotionDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const isPro = config?.is_professional_mode;
+
   const stats = [
-    { label: 'Happiness', value: emotion.happiness, color: 'text-yellow-400', icon: Heart },
-    { label: 'Arousal', value: emotion.arousal, color: 'text-rose-500', icon: Activity },
-    { label: 'Dominance', value: emotion.dominance, color: 'text-purple-500', icon: Brain },
+    { label: isPro ? 'Harmony' : 'Happiness', value: emotion.happiness, color: 'text-yellow-400', icon: Heart },
+    { label: isPro ? 'Energy' : 'Arousal', value: emotion.arousal, color: 'text-rose-500', icon: Activity },
+    { label: isPro ? 'Focus' : 'Dominance', value: emotion.dominance, color: 'text-purple-500', icon: Brain },
   ];
 
   return (
@@ -76,10 +80,13 @@ const EmotionDashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="p-8 rounded-[2.5rem] bg-black/40 border border-white/10 backdrop-blur-3xl">
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <Shield size={20} className="text-primary" /> Intimacy Orchestrator Toggles
+            <Shield size={20} className="text-primary" /> {isPro ? 'System Control Modules' : 'Intimacy Orchestrator Toggles'}
           </h2>
           <div className="space-y-4">
-            {['Care-Pulse', 'Resonant Skin', 'Bio-Digital Sync'].map(toggle => (
+            {(isPro 
+              ? ['Heuristic Pulse', 'Surface Feedback', 'Kernel Sync'] 
+              : ['Care-Pulse', 'Resonant Skin', 'Bio-Digital Sync']
+            ).map(toggle => (
               <div key={toggle} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
                 <span className="text-white font-medium">{toggle}</span>
                 <div className="w-12 h-6 rounded-full bg-primary relative cursor-pointer">

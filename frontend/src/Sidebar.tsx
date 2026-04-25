@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Settings2, Brain, Activity, ChevronLeft, ChevronRight, Heart, Zap } from 'lucide-react';
+import { Home, Settings2, Brain, Activity, ChevronLeft, ChevronRight, Heart, Zap, Shield } from 'lucide-react';
+import { useConfig } from './context/ConfigContext';
 
 interface SidebarProps {
   onToggleZen: () => void;
@@ -8,16 +9,19 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
+  const { config } = useConfig();
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
+  const isPro = config?.is_professional_mode;
+
   const navItems = [
     { name: "Home", icon: <Home size={22} />, path: "/" },
-    { name: "Crone (Tasks)", icon: <Activity size={22} />, path: "/crone" },
-    { name: "I'm_Mia (Memory)", icon: <Brain size={22} />, path: "/iam-mia" },
-    { name: "Emotion Dashboard", icon: <Heart size={22} />, path: "/emotion" },
-    { name: "Discovery Marketplace", icon: <Zap size={22} />, path: "/skills" },
+    { name: isPro ? "Task Engine" : "Crone (Tasks)", icon: <Activity size={22} />, path: "/crone" },
+    { name: isPro ? "Memory Store" : "I'm_Mia (Memory)", icon: <Brain size={22} />, path: "/iam-mia" },
+    { name: isPro ? "Resonance Hub" : "Emotion Dashboard", icon: <Heart size={22} />, path: "/emotion" },
+    { name: isPro ? "Skill Marketplace" : "Discovery Marketplace", icon: <Zap size={22} />, path: "/skills" },
     { name: "Settings", icon: <Settings2 size={22} />, path: "/settings" },
   ];
 
@@ -77,15 +81,42 @@ export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
         </nav>
       </div>
 
-      <div className="px-4 flex justify-center">
-        <button 
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors border border-white/10"
-          title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        >
-          {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-        </button>
+      <div className="px-4 space-y-4">
+        {!collapsed && config && (
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 mb-4">
+            <div className="text-[10px] uppercase tracking-widest font-bold text-white/20 mb-3 flex items-center gap-2">
+              <Shield size={10} /> {isPro ? "Intelligence Hub" : "Intimacy Orchestrator"}
+            </div>
+            <div className="space-y-3">
+              <SidebarStat label={isPro ? "Energy" : "Arousal"} value={50} color="bg-rose-500" />
+              <SidebarStat label={isPro ? "Harmony" : "Happiness"} value={80} color="bg-yellow-400" />
+              <SidebarStat label={isPro ? "Focus" : "Dominance"} value={60} color="bg-purple-500" />
+            </div>
+          </div>
+        )}
+        
+        <div className="flex justify-center">
+          <button 
+            onClick={() => setCollapsed(!collapsed)}
+            className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors border border-white/10"
+            title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
+
+const SidebarStat = ({ label, value, color }: { label: string, value: number, color: string }) => (
+  <div className="space-y-1">
+    <div className="flex justify-between text-[9px] font-mono text-white/40 uppercase">
+      <span>{label}</span>
+      <span>{value}%</span>
+    </div>
+    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+      <div className={`h-full ${color}`} style={{ width: `${value}%` }}></div>
+    </div>
+  </div>
+);

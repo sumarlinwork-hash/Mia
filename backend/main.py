@@ -20,14 +20,16 @@ from brain_orchestrator import brain_orchestrator
 from tts_service import tts_service
 from stt_service import stt_service
 from skill_manager import skill_manager
+from core.local_runtime import local_event_bus
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
+    local_event_bus.start()
     crone_daemon.start()
     yield
-    # Shutdown logic (if any)
-    pass
+    # Shutdown logic
+    local_event_bus.stop()
 
 app = FastAPI(title="MIA Backend API", lifespan=lifespan)
 intimacy_mode = False  # Global state for Intimacy Mode
@@ -110,6 +112,17 @@ async def get_emotion():
         "dominance": random.randint(50, 70),
         "last_update": time.strftime("%Y-%m-%dT%H:%M:%SZ")
     }
+
+# --- CONFIG MANAGEMENT ENDPOINTS ---
+
+@app.get("/api/config")
+async def get_config():
+    return load_config()
+
+@app.post("/api/config")
+async def update_config(config: MIAConfig):
+    save_config(config)
+    return {"status": "success"}
 
 # --- PROVIDER MANAGEMENT ENDPOINTS ---
 
@@ -556,4 +569,10 @@ async def websocket_heartbeat(websocket: WebSocket):
         print("Frontend disconnected.")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=8000, 
+        reload=True, 
+        reload_excludes=["*.json", "*.md", "*.db", "iam_mia/*", "history/*", "state.db", "memory/*"]
+    )
