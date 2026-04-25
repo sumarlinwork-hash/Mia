@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+httpx
+python-multipart
+websockets
+pyautogui
+pynput
+Pillow
+pydantic
+python-dotenv
+chromadb
+edge-tts
+openai
+elevenlabs
+requests

@@ -29,5 +29,6 @@ apscheduler==3.10.4
 colorama==0.4.6
 python-multipart==0.0.9
 numpy<2.0
+pynput==1.7.6
 
 

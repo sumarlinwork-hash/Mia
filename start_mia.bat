@@ -69,12 +69,15 @@ echo    MIA ONLINE - SISTEM SIAP DIGUNAKAN
 echo ===================================================
 echo.
 echo Memulai Antarmuka Visual (Web Hub)
-start "MIA_FRONTEND" cmd /c "cd frontend && npm run dev"
+start "MIA_FRONTEND" /min cmd /c "cd frontend && npm run dev"
 
 echo Menunggu Web Hub siap
 ping 127.0.0.1 -n 6 > nul
 start http://localhost:5173
 
 echo.
-echo [INFO] Semua sistem telah aktif
+echo [INFO] Semua sistem telah aktif.
+powershell -command "$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys('%% n')"
+echo [SUCCESS] MIA Berjalan di latar belakang.
+timeout /t 2 > nul
 exit

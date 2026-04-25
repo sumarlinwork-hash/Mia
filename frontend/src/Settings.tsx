@@ -1,15 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   ArrowLeft, Save, Plus, Trash2, Pencil, Zap, 
   CheckCircle2, XCircle, Info, RefreshCcw, Star
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import ThemeTab from './components/settings/ThemeTab';
+
+import type { MIAConfig, ProviderConfig } from './types/config';
+import type { Skill } from './SkillMarketplace';
 
 const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Anthropic API", "Groq", "DeepSeek", "Mistral"];
 const PURPOSES = ["Text & Logic (LLM)", "Vision / Multimodal", "Coding Specialist", "Audio / Speech", "Search / RAG"];
 const COSTS = ["GRATIS (Tanpa Cost / Rate Limit Tinggi)", "PAID (Pay-per-token)", "PREMIUM (Enterprise / Private)"];
 
-const PRESETS: any = {
+const PRESETS: Record<string, Partial<ProviderConfig>> = {
   "OpenAI": { model_id: "gpt-4o", protocol: "OpenAI Compatible", base_url: "https://api.openai.com/v1", cost_label: COSTS[1] },
   "Google Gemini": { model_id: "gemini-2.0-flash", protocol: "Gemini API", base_url: "", cost_label: COSTS[0] },
   "Anthropic": { model_id: "claude-3-5-sonnet-20240620", protocol: "OpenAI Compatible", base_url: "https://api.anthropic.com/v1", cost_label: COSTS[1] },
@@ -27,34 +31,47 @@ const PRESETS: any = {
   "Custom Provider": { model_id: "", protocol: "OpenAI Compatible", base_url: "", cost_label: COSTS[0] },
 };
 
+interface Toast {
+  id: number;
+  msg: string;
+  type: 'success' | 'error' | 'info';
+}
+
 export default function Settings() {
-  const [config, setConfig] = useState<any>(null);
-  const [originalConfig, setOriginalConfig] = useState<any>(null);
+  const [config, setConfig] = useState<MIAConfig | null>(null);
+  const [originalConfig, setOriginalConfig] = useState<MIAConfig | null>(null);
   const [view, setView] = useState<'list' | 'add' | 'edit'>('list');
   const [activeTab, setActiveTab] = useState('intelligence');
   const [isSaving, setIsSaving] = useState(false);
   const [editName, setEditName] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [skills, setSkills] = useState<any[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
+  const [skillCode, setSkillCode] = useState("");
 
   
   // Form State
-  const [newProvider, setNewProvider] = useState({
+  const [newProvider, setNewProvider] = useState<ProviderConfig>({
     display_name: '',
     model_id: '',
     api_key: '',
     protocol: PROTOCOLS[0],
     base_url: '',
     purpose: PURPOSES[0],
-    cost_label: COSTS[0]
+    cost_label: COSTS[0],
+    is_active: true,
+    is_default: false,
+    latency: 0,
+    health_ok: 0,
+    health_fail: 0
   });
-  const [toasts, setToasts] = useState<any[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+  const addToast = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, msg, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-  };
+  }, []);
 
   // Color Helpers
   const rgbaToHex = (rgba: string) => {
@@ -88,12 +105,12 @@ export default function Settings() {
         setOriginalConfig(data);
       });
     
-    fetch('http://localhost:8000/api/skills')
+    fetch('http://localhost:8000/api/skills/installed')
       .then(res => res.json())
       .then(data => setSkills(data));
   }, []);
 
-  const updateConfig = (newConfig: any) => {
+  const updateConfig = (newConfig: MIAConfig) => {
     setConfig(newConfig);
     setHasChanges(JSON.stringify(newConfig) !== JSON.stringify(originalConfig));
   };
@@ -105,6 +122,7 @@ export default function Settings() {
   };
 
   const handleSave = async (updatedConfig = config) => {
+    if (!updatedConfig) return;
     setIsSaving(true);
     try {
       await fetch('http://localhost:8000/api/config', {
@@ -117,7 +135,7 @@ export default function Settings() {
       setHasChanges(false);
       addToast("Konfigurasi disimpan!", "success");
       window.dispatchEvent(new Event('configUpdated'));
-    } catch (e) {
+    } catch {
       addToast("Gagal menyimpan config", "error");
     } finally {
       setIsSaving(false);
@@ -126,6 +144,7 @@ export default function Settings() {
 
 
   const handleAddOrEditProvider = async () => {
+    if (!config) return;
     const updatedConfig = { ...config };
     if (view === 'edit' && editName) {
       delete updatedConfig.providers[editName];
@@ -144,7 +163,8 @@ export default function Settings() {
     setNewProvider({
       display_name: '', model_id: '', api_key: '',
       protocol: PROTOCOLS[0], base_url: '',
-      purpose: PURPOSES[0], cost_label: COSTS[0]
+      purpose: PURPOSES[0], cost_label: COSTS[0],
+      is_active: true, is_default: false, latency: 0, health_ok: 0, health_fail: 0
     });
   };
 
@@ -173,12 +193,68 @@ export default function Settings() {
     }
   };
 
-  const startEdit = (name: string, p: any) => {
+  const startEdit = (name: string, p: ProviderConfig) => {
     setEditName(name);
     setNewProvider({ ...p, display_name: name });
     setView('edit');
   };
+  const uninstallSkill = async (id: string) => {
+    if (!confirm(`Hapus keahlian "${id}"?`)) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/skills/uninstall/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setSkills(prev => prev.filter(s => s.id !== id));
+        addToast("Skill dihapus", "success");
+      }
+    } catch { addToast("Gagal menghapus skill", "error"); }
+  };
 
+  const testSkill = async (id: string) => {
+    addToast(`Menguji: ${id}...`, "info");
+    try {
+      const res = await fetch(`http://localhost:8000/api/skills/test/${id}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'success') {
+        addToast(`Hasil: ${data.output}`, "success");
+      } else {
+        addToast(data.message, "error");
+      }
+    } catch { addToast("Uji coba gagal", "error"); }
+  };
+  const openEditSkill = async (skill: Skill) => {
+    try {
+      // We use the existing memory API but point to skills folder
+      const res = await fetch(`http://localhost:8000/api/memory/file?name=../skills/${skill.id}.py`);
+      const data = await res.json();
+      if (data.content) {
+        setSkillCode(data.content);
+        setEditingSkill(skill);
+      } else {
+         // Maybe it's a plugin folder
+         setSkillCode("# Plugin source editing not yet supported for directory-based skills.");
+         setEditingSkill(skill);
+      }
+    } catch {
+      addToast("Gagal mengambil kode skill", "error");
+    }
+  };
+
+  const saveSkillEdit = async () => {
+    if (!editingSkill) return;
+    try {
+      const res = await fetch('http://localhost:8000/api/skills/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editingSkill.id, code: skillCode })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        addToast("Logic skill berhasil diperbarui!", "success");
+        setEditingSkill(null);
+      }
+    } catch { addToast("Gagal menyimpan skill", "error"); }
+  };
 
   if (!config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse">Loading System Config...</div>;
 
@@ -213,13 +289,13 @@ export default function Settings() {
         </header>
 
         <div className="flex gap-8 mb-8 border-b border-white/10">
-          {['intelligence', 'appearance', 'personality', 'skills'].map(tab => (
+          {['intelligence', 'appearance', 'themes', 'personality', 'skills'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`pb-4 px-2 text-sm font-bold uppercase tracking-widest transition-all ${activeTab === tab ? 'text-primary border-b-2 border-primary' : 'text-white/40 hover:text-white'}`}
             >
-              {tab}
+              {tab === 'skills' ? 'Manage Abilities' : tab}
             </button>
           ))}
         </div>
@@ -228,7 +304,7 @@ export default function Settings() {
           <>
             {view === 'list' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {Object.entries(config.providers).map(([name, p]: [string, any]) => (
+                {Object.entries(config.providers).map(([name, p]: [string, ProviderConfig]) => (
                   <div key={name} className={`relative p-6 rounded-3xl border backdrop-blur-3xl transition-all group ${p.is_active ? 'border-white/10 bg-black/40' : 'border-white/5 bg-black/20 opacity-60'}`}>
                     <div className="flex justify-between items-start mb-6">
                       <div className="p-3 rounded-2xl bg-primary/10 text-primary">
@@ -255,7 +331,7 @@ export default function Settings() {
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 uppercase tracking-tighter">FREE</span>
                       {p.is_default && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary text-black uppercase tracking-tighter">DEFAULT</span>}
                     </div>
-                    <p className="text-xs text-white/40 font-mono">Model: {p.model_id || p.model_name}</p>
+                    <p className="text-xs text-white/40 font-mono">Model: {p.model_id}</p>
                   </div>
 
                   <div className="space-y-2 mb-8 font-mono text-[11px] text-white/60">
@@ -314,7 +390,7 @@ export default function Settings() {
                   </label>
                   
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                    {Object.entries(PRESETS).map(([key, preset]: [string, any]) => {
+                    {Object.entries(PRESETS).map(([key, preset]: [string, Partial<ProviderConfig>]) => {
                       const isSelected = newProvider.display_name === key;
                       return (
                         <div 
@@ -515,7 +591,7 @@ export default function Settings() {
                         if (type === 'color' && newUrl.startsWith('/')) {
                           newUrl = '#0a0a0a';
                         }
-                        updateConfig({ ...config, appearance: { ...config.appearance, background_type: type, background_url: newUrl } });
+                        updateConfig({ ...config, appearance: { ...config.appearance, background_type: type as 'video' | 'image' | 'color', background_url: newUrl } });
                       }}
                       className={`px-6 py-2 rounded-xl font-bold transition-all ${config.appearance.background_type === type ? 'bg-primary text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
                     >
@@ -584,6 +660,11 @@ export default function Settings() {
             </div>
           </div>
         )}
+        
+        {/* Themes Settings Tab */}
+        {activeTab === 'themes' && (
+          <ThemeTab config={config} updateConfig={updateConfig} />
+        )}
 
         {activeTab === 'personality' && (
           <div className="max-w-3xl bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300">
@@ -606,7 +687,7 @@ export default function Settings() {
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">AI Age</label>
                   <input 
                     type="number" value={config.bot_age}
-                    onChange={e => updateConfig({ ...config, bot_age: e.target.value })}
+                    onChange={e => updateConfig({ ...config, bot_age: parseInt(e.target.value) || 0 })}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                   />
                 </div>
@@ -710,23 +791,26 @@ export default function Settings() {
               </div>
 
               {/* Dynamic Skill Cards */}
-              {skills.map((skill: any) => (
+              {skills.map((skill: Skill) => (
                 <div key={skill.id} className="p-6 rounded-[2.5rem] bg-black/40 backdrop-blur-3xl border border-white/10 hover:border-primary/40 transition-all group">
                   <div className="flex justify-between items-start mb-4">
                     <div className="p-3 rounded-2xl bg-white/5 text-white/70 group-hover:text-primary transition-colors">
                       <Zap size={20} />
                     </div>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                      <button className="p-2 text-white/40 hover:text-white"><Pencil size={16}/></button>
-                      <button className="p-2 text-white/40 hover:text-error"><Trash2 size={16}/></button>
+                      <button onClick={() => openEditSkill(skill)} className="p-2 text-white/40 hover:text-white" title="Edit Logic"><Pencil size={16}/></button>
+                      <button onClick={() => uninstallSkill(skill.id)} className="p-2 text-white/40 hover:text-error" title="Uninstall Skill"><Trash2 size={16}/></button>
                     </div>
                   </div>
                   <h3 className="text-lg font-bold text-white mb-1">{skill.name}</h3>
                   <p className="text-xs text-white/40 line-clamp-2 mb-6 h-8">{skill.description}</p>
                   
                   <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                    <span className="text-[10px] font-mono text-white/20 uppercase">{new Date(skill.created_at).toLocaleDateString()}</span>
+                    <span className="text-[10px] font-mono text-white/20 uppercase">
+                      {skill.created_at ? new Date(skill.created_at).toLocaleDateString() : 'Active'}
+                    </span>
                     <button 
+                      onClick={() => testSkill(skill.id)}
                       className="px-4 py-1.5 rounded-full bg-white/5 text-white/70 text-[10px] font-bold hover:bg-primary hover:text-black transition-all"
                     >
                       Test Ability
@@ -780,6 +864,53 @@ export default function Settings() {
           </div>
         ))}
       </div>
+
+      {/* SKILL EDITOR MODAL */}
+      {editingSkill && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="w-full max-w-4xl bg-black/80 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/20 text-primary"><Pencil size={20}/></div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Edit Logic: {editingSkill.name}</h3>
+                  <p className="text-[10px] text-white/30 uppercase tracking-widest font-mono">Fine-Tuning Core Skill Runbook</p>
+                </div>
+              </div>
+              <button onClick={() => setEditingSkill(null)} className="p-2 text-white/40 hover:text-white"><XCircle size={24}/></button>
+            </div>
+            
+            <div className="flex-1 p-6 overflow-hidden flex flex-col gap-4">
+              <div className="flex-1 bg-black/40 rounded-2xl border border-white/5 overflow-hidden">
+                <textarea 
+                  value={skillCode}
+                  onChange={(e) => setSkillCode(e.target.value)}
+                  className="w-full h-full p-6 bg-transparent text-primary font-mono text-sm outline-none resize-none custom-scrollbar"
+                  spellCheck={false}
+                />
+              </div>
+              
+              <div className="flex justify-between items-center pt-2">
+                <p className="text-[10px] text-white/20 italic">Warning: Kesalahan pada kode Python dapat menyebabkan skill gagal dieksekusi.</p>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setEditingSkill(null)}
+                    className="px-6 py-2 rounded-xl text-white/60 font-bold hover:text-white transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    onClick={saveSkillEdit}
+                    className="px-8 py-2 bg-primary text-black rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                  >
+                    Simpan Logic
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

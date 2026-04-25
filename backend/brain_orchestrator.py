@@ -59,7 +59,7 @@ Available Tools:
 3. type: "text" to type.
 4. press: "key" name.
 5. terminal: "command" to run in shell.
-6. save_skill: args: {"name": "skill_name", "code": "python_code"}. Use this to build your own abilities for complex tasks.
+6. save_skill: args: {"name": "skill_name", "code": "python_code"}. Use this to build your own abilities for complex tasks. When a user asks you to "Architect a Skill" or create a new ability, design a robust Python script (preferably using the Skill class plugin format) and save it using this tool.
 7. execute_skill: args: {"name": "skill_name", "args": {}}. Run a previously saved skill.
 
 If you use a tool, I will execute it and provide the result in the next turn.

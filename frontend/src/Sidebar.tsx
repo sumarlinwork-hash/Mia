@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Settings2, Brain, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, Settings2, Brain, Activity, ChevronLeft, ChevronRight, Heart, Zap } from 'lucide-react';
 
-export default function Sidebar({ onToggleZen }: any) {
+interface SidebarProps {
+  onToggleZen: () => void;
+  isZenMode: boolean;
+}
+
+export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -11,6 +16,8 @@ export default function Sidebar({ onToggleZen }: any) {
     { name: "Home", icon: <Home size={22} />, path: "/" },
     { name: "Crone (Tasks)", icon: <Activity size={22} />, path: "/crone" },
     { name: "I'm_Mia (Memory)", icon: <Brain size={22} />, path: "/iam-mia" },
+    { name: "Emotion Dashboard", icon: <Heart size={22} />, path: "/emotion" },
+    { name: "Discovery Marketplace", icon: <Zap size={22} />, path: "/skills" },
     { name: "Settings", icon: <Settings2 size={22} />, path: "/settings" },
   ];
 
@@ -27,8 +34,8 @@ export default function Sidebar({ onToggleZen }: any) {
           title="Toggle Zen Mode"
         >
           <div 
-            className="w-8 h-8 rounded-full animate-pulse shrink-0 group-hover:scale-110 transition-transform" 
-            style={{ backgroundColor: '#00ffcc', boxShadow: '0 0 10px rgba(0,255,204,0.8), 0 0 20px rgba(0,255,204,0.4)' }}
+            className={`w-8 h-8 rounded-full shrink-0 group-hover:scale-110 transition-transform ${isZenMode ? 'animate-bounce shadow-[0_0_20px_#00ffcc]' : 'animate-pulse'}`} 
+            style={{ backgroundColor: '#00ffcc', boxShadow: isZenMode ? '0 0 20px #00ffcc' : '0 0 10px rgba(0,255,204,0.8), 0 0 20px rgba(0,255,204,0.4)' }}
           ></div>
           {!collapsed && (
             <span 

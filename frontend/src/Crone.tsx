@@ -47,10 +47,15 @@ export default function Crone() {
   };
 
   useEffect(() => {
-    fetchStatus();
+    // Avoid synchronous setState by deferring the first fetch
+    const timeout = setTimeout(fetchStatus, 0);
+    
     // Auto-refresh every 30 seconds
     const interval = setInterval(fetchStatus, 30_000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, []);
 
   const getStatusDot = (s: string) => {

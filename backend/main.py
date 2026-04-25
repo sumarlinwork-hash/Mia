@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 import shutil
 import asyncio
 import sqlite3
@@ -20,13 +21,16 @@ from tts_service import tts_service
 from stt_service import stt_service
 from skill_manager import skill_manager
 
-app = FastAPI(title="MIA Backend API")
-intimacy_mode = False  # Global state for Intimacy Mode
-
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
     crone_daemon.start()
+    yield
+    # Shutdown logic (if any)
+    pass
+
+app = FastAPI(title="MIA Backend API", lifespan=lifespan)
+intimacy_mode = False  # Global state for Intimacy Mode
 
 # Setup CORS for React Frontend
 app.add_middleware(
@@ -58,9 +62,21 @@ threading.Thread(target=start_hotkey_listener, daemon=True).start()
 
 # --- SKILL LIBRARY ENDPOINTS ---
 
-@app.get("/api/skills")
-async def get_skills():
-    return skill_manager.scan_skills()
+@app.get("/api/skills/installed")
+async def get_installed_skills():
+    return skill_manager.scan_skills(directory=skill_manager.SKILLS_DIR)
+
+@app.get("/api/skills/marketplace")
+async def get_marketplace_skills():
+    return skill_manager.scan_skills(directory=skill_manager.MARKETPLACE_DIR)
+
+@app.post("/api/skills/install/{skill_id}")
+async def install_skill(skill_id: str):
+    return skill_manager.install_skill(skill_id)
+
+@app.delete("/api/skills/uninstall/{skill_id}")
+async def uninstall_skill(skill_id: str):
+    return skill_manager.uninstall_skill(skill_id)
 
 @app.post("/api/skills/upload")
 async def upload_skill(file: UploadFile = File(...)):
@@ -68,9 +84,32 @@ async def upload_skill(file: UploadFile = File(...)):
     name = file.filename or f"skill_{int(time.time())}.py"
     return skill_manager.save_skill(name, contents.decode('utf-8'))
 
+class SkillSaveRequest(BaseModel):
+    name: str
+    code: str
+
+@app.post("/api/skills/save")
+async def save_skill(req: SkillSaveRequest):
+    return skill_manager.save_skill(req.name, req.code)
+
 @app.post("/api/skills/test/{skill_id}")
 async def test_skill(skill_id: str, args: dict = {}):
     return await skill_manager.execute_skill(skill_id, args)
+
+@app.post("/api/skill/execute")
+async def execute_skill(skill_id: str, args: dict = {}):
+    return await skill_manager.execute_skill(skill_id, args)
+
+@app.get("/api/emotion")
+async def get_emotion():
+    """Mock emotion data for the dashboard."""
+    import random
+    return {
+        "happiness": random.randint(70, 95),
+        "arousal": random.randint(40, 80),
+        "dominance": random.randint(50, 70),
+        "last_update": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    }
 
 # --- PROVIDER MANAGEMENT ENDPOINTS ---
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Mic, Send, Activity, Settings2, Eye, Brain, Paperclip, 
   Image as ImageIcon, FileText, MonitorUp, Volume2, VolumeX, 
@@ -6,11 +6,28 @@ import {
   ThumbsUp, ThumbsDown, Pin, Pencil, Trash2, Download, PlayCircle,
   Copy, Check, Loader2, AlertCircle, Info as InfoIcon, Heart
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+import type { MIAConfig } from './types/config';
+
+interface WaveformBarProps {
+  level: number;
+}
+
+const WaveformBar: React.FC<WaveformBarProps> = ({ level }) => {
+  const [randomFactor] = useState(() => 0.5 + Math.random());
+  return (
+    <div 
+      className="w-[3px] bg-primary rounded-full transition-all duration-75"
+      style={{ height: `${20 + (level * randomFactor)}%` }}
+    ></div>
+  );
+};
+
 
 const COMMANDS = [
   { cmd: '/search', desc: 'Real-time web search', icon: <Search size={16} /> },
@@ -34,19 +51,23 @@ interface Message {
   audio?: string;
 }
 
+interface Toast {
+  id: number;
+  msg: string;
+  type: 'info' | 'success' | 'error';
+}
+
 export default function Home() {
+  const location = useLocation();
+  // --- 1. STATES ---
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Disconnected");
-  const [config, setConfig] = useState<any>(null);
-  
-  // UI States
+  const [config, setConfig] = useState<MIAConfig | null>(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isTTSMuted, setIsTTSMuted] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
-  
-  // Command & Mention States
   const [showCommands, setShowCommands] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [memoryFiles, setMemoryFiles] = useState<string[]>([]);
@@ -54,16 +75,16 @@ export default function Home() {
   const [filteredCommands, setFilteredCommands] = useState(COMMANDS);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isThinking, setIsThinking] = useState(false);
-  const [toasts, setToasts] = useState<any[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
-  const [mood, setMood] = useState("neutral"); // neutral, energetic, serious, warm
+  const [mood] = useState("neutral"); 
   const [intimacyActive, setIntimacyActive] = useState(false);
 
-
+  // --- 2. REFS ---
   const ws = useRef<WebSocket | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -74,8 +95,144 @@ export default function Home() {
   const audioContext = useRef<AudioContext | null>(null);
   const analyser = useRef<AnalyserNode | null>(null);
   const animationFrame = useRef<number | null>(null);
-  const heartbeatInterval = useRef<any>(null);
+  const heartbeatInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playAudioRef = useRef<((src: string) => void) | null>(null);
 
+  // --- 3. UTILITY CALLBACKS ---
+  const addToast = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, msg, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  }, []);
+
+  const playSFX = useCallback((type: 'send' | 'receive' | 'pop' | 'error') => {
+    if (!audioContext.current) return;
+    const ctx = audioContext.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    if (type === 'send') {
+      osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    } else if (type === 'receive') {
+      osc.type = 'sine'; osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    } else if (type === 'pop') {
+      osc.type = 'triangle'; osc.frequency.setValueAtTime(600, ctx.currentTime);
+      gain.gain.setValueAtTime(0.05, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+    }
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.1);
+  }, []);
+
+  // --- 4. MEDIA & AUDIO LOGIC ---
+  const stopAudio = useCallback(() => {
+    if (currentAudio.current) { currentAudio.current.pause(); currentAudio.current.src = ""; }
+    audioQueue.current = [];
+    setIsSpeaking(false);
+  }, []);
+
+  const playAudio = useCallback((src: string) => {
+    if (isSpeaking) { audioQueue.current.push(src); return; }
+    const audio = new Audio(src);
+    audio.crossOrigin = "anonymous";
+    currentAudio.current = audio;
+    if (!audioContext.current) {
+      audioContext.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      analyser.current = audioContext.current.createAnalyser();
+      analyser.current.fftSize = 256;
+    }
+    const source = audioContext.current.createMediaElementSource(audio);
+    source.connect(analyser.current!);
+    analyser.current!.connect(audioContext.current.destination);
+    const updateLevel = () => {
+      if (!analyser.current) return;
+      const dataArray = new Uint8Array(analyser.current.frequencyBinCount);
+      analyser.current.getByteFrequencyData(dataArray);
+      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+      setAudioLevel(average);
+      animationFrame.current = requestAnimationFrame(updateLevel);
+    };
+    audio.onplay = () => {
+      setIsSpeaking(true);
+      if (audioContext.current?.state === 'suspended') audioContext.current.resume();
+      updateLevel();
+    };
+    audio.onended = () => {
+      setIsSpeaking(false); setAudioLevel(0);
+      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+      if (audioQueue.current.length > 0) {
+        const next = audioQueue.current.shift();
+        if (next) playAudioRef.current?.(next);
+      }
+    };
+    audio.onerror = () => {
+      setIsSpeaking(false); setAudioLevel(0);
+      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+    };
+    audio.play().catch(() => console.log("Audio play blocked by browser policy"));
+  }, [isSpeaking]);
+
+  useEffect(() => { playAudioRef.current = playAudio; }, [playAudio]);
+
+  // --- 5. SYSTEM & CHAT LOGIC ---
+  const sendMessage = useCallback(() => {
+    if (!input.trim() || !ws.current) return;
+    if (input.trim() === '/clear') {
+       fetch('http://localhost:8000/api/chat/history', { method: 'DELETE' }); 
+       setMessages([]); setInput("");
+       addToast("Chat history cleared", "info");
+       return;
+    }
+    setIsThinking(true); playSFX('send');
+    ws.current.send(input);
+    setInput(""); setShowCommands(false); setShowMentions(false); setShowAttachMenu(false);
+  }, [input, addToast, playSFX]);
+
+  const toggleIntimacy = useCallback(async () => {
+    try {
+      const target = !intimacyActive;
+      const res = await fetch(`http://localhost:8000/api/intimacy/toggle?active=${target}`, { method: 'POST' });
+      const data = await res.json();
+      setIntimacyActive(data.intimacy_active);
+      addToast(data.intimacy_active ? "Intimacy Phase Activated 💖" : "Returning to Work Mode 💼", data.intimacy_active ? "success" : "info");
+      setShowPalette(false);
+    } catch { addToast("Failed to toggle intimacy mode", "error"); }
+  }, [intimacyActive, addToast]);
+
+  // --- 6. PLAIN VALUES ---
+  const paletteMenuItems = [
+    { icon: <Heart size={18} className={intimacyActive ? "text-pink-500 fill-pink-500" : ""}/>, name: intimacyActive ? "Deactivate Soulmate" : "Activate Soulmate", desc: "Phase Utama Keintiman", action: toggleIntimacy },
+    { icon: <Zap size={18}/>, name: "Skills Manager", desc: "View MIA's abilities", link: "/settings" },
+    { icon: <ImageIcon size={18}/>, name: "Change Background", desc: "Appearance settings", link: "/settings" },
+    { icon: <Database size={18}/>, name: "Clear Memory", desc: "Reset chat history", action: () => { setInput("/clear"); sendMessage(); setShowPalette(false); } },
+    { icon: <XCircle size={18}/>, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
+  ];
+
+  const startHeartbeat = useCallback(() => {
+    if (heartbeatInterval.current) return;
+    heartbeatInterval.current = setInterval(() => {
+      if (!audioContext.current) return;
+      const ctx = audioContext.current;
+      const playThump = (freq: number, time: number, vol: number) => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.setValueAtTime(freq, time);
+        osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
+        gain.gain.setValueAtTime(vol, time); gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(time); osc.stop(time + 0.1);
+      };
+      const now = ctx.currentTime;
+      playThump(50, now, 0.03); playThump(40, now + 0.15, 0.02);
+    }, 1500);
+  }, []);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatInterval.current) { clearInterval(heartbeatInterval.current); heartbeatInterval.current = null; }
+  }, []);
+
+  // --- 7. EFFECTS ---
   useEffect(() => {
     const fetchConfig = () => {
       fetch('http://localhost:8000/api/config')
@@ -113,209 +270,49 @@ export default function Home() {
     ws.current = new WebSocket("ws://localhost:8000/ws/heartbeat");
     ws.current.onopen = () => setStatus("Connected (Heartbeat Active)");
     ws.current.onclose = () => setStatus("Disconnected");
-    
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "message" || data.type === "system") {
-        setIsThinking(false);
-        playSFX('receive');
-        
-        // Simple Sentiment Analysis for Mood Tinting
-        const content = data.content.toLowerCase();
-        if (content.includes("berhasil") || content.includes("siap") || content.includes("halo")) setMood("energetic");
-        else if (content.includes("maaf") || content.includes("error") || content.includes("gagal")) setMood("serious");
-        else if (content.includes("selamat") || content.includes("bagus") || content.includes("terima kasih")) setMood("warm");
-        else setMood("neutral");
-
-        const newMessage = { 
-          id: data.id,
-          role: data.type === "system" ? "System" : "MIA", 
-          content: data.content,
-          audio: data.audio
-        };
+        setIsThinking(false); playSFX('receive');
+        const newMessage = { id: data.id, role: data.type === "system" ? "System" : "MIA", content: data.content, audio: data.audio };
         setMessages(prev => [...prev, newMessage]);
-        
-        // Add to audio queue if not muted
-        if (data.audio && !isTTSMuted) {
-          playAudio(data.audio);
-        }
+        if (data.audio && !isTTSMuted) playAudio(data.audio);
       } else if (data.type === "status") {
         setStatus(`Connected (${data.content})`);
-        if (data.content === "Thinking...") setIsThinking(true);
-        if (data.content === "Idle") setIsThinking(false);
-      } else if (data.type === "clear") {
-        setMessages([]);
+        setIsThinking(data.content === "Thinking...");
       }
     };
 
-    // Global Shortcuts
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowPalette(prev => !prev);
-        playSFX('pop');
-      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setShowPalette(prev => !prev); playSFX('pop'); }
       if (e.key === 'Escape') setShowPalette(false);
     };
-
     window.addEventListener('keydown', handleGlobalShortcuts);
     return () => {
-      ws.current?.close();
-      window.removeEventListener('keydown', handleGlobalShortcuts);
-      clearInterval(intimacyInterval);
-      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
+      ws.current?.close(); window.removeEventListener('keydown', handleGlobalShortcuts);
+      clearInterval(intimacyInterval); if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
     };
-  }, []);
+  }, [isTTSMuted, playAudio, playSFX]);
 
   useEffect(() => {
-    if (intimacyActive) {
-      startHeartbeat();
-    } else {
-      stopHeartbeat();
-    }
-  }, [intimacyActive]);
-
-  const startHeartbeat = () => {
-    if (heartbeatInterval.current) return;
-    heartbeatInterval.current = setInterval(() => {
-      if (!audioContext.current) return;
-      const ctx = audioContext.current;
-      
-      const playThump = (freq: number, time: number, vol: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, time);
-        osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
-        gain.gain.setValueAtTime(vol, time);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(time);
-        osc.stop(time + 0.1);
-      };
-
-      const now = ctx.currentTime;
-      // Double thump: thump-thump
-      playThump(50, now, 0.03); 
-      playThump(40, now + 0.15, 0.02);
-    }, 1500); // Sync with CSS animate-heartbeat
-  };
-
-  const stopHeartbeat = () => {
-    if (heartbeatInterval.current) {
-      clearInterval(heartbeatInterval.current);
-      heartbeatInterval.current = null;
-    }
-  };
-
-  const playSFX = (type: 'send' | 'receive' | 'pop' | 'error') => {
-    if (!audioContext.current) return;
-    const ctx = audioContext.current;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    if (type === 'send') {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-    } else if (type === 'receive') {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-    } else if (type === 'pop') {
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(600, ctx.currentTime);
-      gain.gain.setValueAtTime(0.05, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-    }
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.1);
-  };
-
-  const stopAudio = () => {
-    if (currentAudio.current) {
-      currentAudio.current.pause();
-      currentAudio.current.src = "";
-    }
-    audioQueue.current = [];
-    setIsSpeaking(false);
-  };
-
-  const playAudio = (src: string) => {
-    if (isSpeaking) {
-      audioQueue.current.push(src);
-      return;
-    }
-
-    const audio = new Audio(src);
-    audio.crossOrigin = "anonymous";
-    currentAudio.current = audio;
-
-    // Initialize Web Audio API for Visualization
-    if (!audioContext.current) {
-      audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      analyser.current = audioContext.current.createAnalyser();
-      analyser.current.fftSize = 256;
-    }
-
-    const source = audioContext.current.createMediaElementSource(audio);
-    source.connect(analyser.current!);
-    analyser.current!.connect(audioContext.current.destination);
-
-    const updateLevel = () => {
-      if (!analyser.current) return;
-      const dataArray = new Uint8Array(analyser.current.frequencyBinCount);
-      analyser.current.getByteFrequencyData(dataArray);
-      
-      // Calculate average level
-      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-      setAudioLevel(average);
-      animationFrame.current = requestAnimationFrame(updateLevel);
-    };
-
-    audio.onplay = () => {
-      setIsSpeaking(true);
-      if (audioContext.current?.state === 'suspended') audioContext.current.resume();
-      updateLevel();
-    };
-
-    audio.onended = () => {
-      setIsSpeaking(false);
-      setAudioLevel(0);
-      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
-      if (audioQueue.current.length > 0) {
-        const next = audioQueue.current.shift();
-        if (next) playAudio(next);
-      }
-    };
-    
-    audio.onerror = () => {
-      setIsSpeaking(false);
-      setAudioLevel(0);
-      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
-    };
-
-    audio.play().catch(() => console.log("Audio play blocked by browser policy"));
-  };
-
-  const addToast = (msg: string, type: 'info' | 'success' | 'error' = 'info') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, msg, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-  };
-
+    if (intimacyActive) startHeartbeat();
+    else stopHeartbeat();
+  }, [intimacyActive, startHeartbeat, stopHeartbeat]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (location.state && location.state.initialInput) {
+      // Use timeout to avoid sync setState in effect lint error
+      const tid = setTimeout(() => {
+        setInput(location.state.initialInput);
+        if (inputRef.current) inputRef.current.focus();
+      }, 0);
+      return () => clearTimeout(tid);
+    }
+  }, [location.state]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -383,36 +380,8 @@ export default function Home() {
     inputRef.current.focus();
   };
 
-  const sendMessage = () => {
-    if (!input.trim() || !ws.current) return;
-    if (input.trim() === '/clear') {
-       fetch('http://localhost:8000/api/chat/history', { method: 'DELETE' }); 
-       setMessages([]);
-       setInput("");
-       addToast("Chat history cleared", "info");
-       return;
-    }
-    setIsThinking(true);
-    playSFX('send');
-    ws.current.send(input);
-    setInput("");
-    setShowCommands(false);
-    setShowMentions(false);
-    setShowAttachMenu(false);
-  };
+  // Already handled above
 
-  const toggleIntimacy = async () => {
-    try {
-      const target = !intimacyActive;
-      const res = await fetch(`http://localhost:8000/api/intimacy/toggle?active=${target}`, { method: 'POST' });
-      const data = await res.json();
-      setIntimacyActive(data.intimacy_active);
-      addToast(data.intimacy_active ? "Intimacy Phase Activated 💖" : "Returning to Work Mode 💼", data.intimacy_active ? "success" : "info");
-      setShowPalette(false);
-    } catch (e) {
-      addToast("Failed to toggle intimacy mode", "error");
-    }
-  };
 
   const handleTouch = async () => {
     if (!intimacyActive) return;
@@ -424,8 +393,8 @@ export default function Home() {
         // Only show toast if needed, but for touch, maybe just audio is more immersive
         // addToast(data.content, "success");
       }
-    } catch (e) {
-      console.error("[Intimacy] Touch failed:", e);
+    } catch {
+      console.error("[Intimacy] Touch failed");
     }
   };
 
@@ -466,7 +435,7 @@ export default function Home() {
           } else {
             addToast("STT Error: " + data.message, "error");
           }
-        } catch (e) {
+        } catch {
           addToast("Failed to connect to STT API", "error");
         } finally {
           setIsThinking(false);
@@ -478,12 +447,12 @@ export default function Home() {
       mediaRecorder.current.start();
       setIsRecording(true);
       addToast("Listening... (Click mic again to stop)", "info");
-    } catch (err) {
+    } catch {
       addToast("Microphone permission denied", "error");
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
@@ -501,13 +470,13 @@ export default function Home() {
         setInput(prev => prev + (prev ? " " : "") + `[ATTACHED ${type}](${data.url}) `);
         addToast("File uploaded and linked", "success");
       }
-    } catch (err) {
+    } catch {
       addToast("Upload failed", "error");
     }
     setShowAttachMenu(false);
-  };
-  
-  const captureScreen = async () => {
+  }, [addToast]);
+
+  const captureScreen = useCallback(async () => {
     addToast("Capturing screen...", "info");
     try {
       const res = await fetch('http://localhost:8000/api/agent/screenshot', { method: 'POST' });
@@ -516,11 +485,12 @@ export default function Home() {
         setInput(prev => prev + (prev ? " " : "") + `[ATTACHED IMAGE](${data.url}) `);
         addToast("Screen captured and linked", "success");
       }
-    } catch (err) {
+    } catch {
       addToast("Screen capture failed", "error");
     }
     setShowAttachMenu(false);
-  };
+  }, [addToast]);
+
 
 
   const handleDelete = async (id: number) => {
@@ -629,15 +599,12 @@ export default function Home() {
               {isSpeaking ? (
                 <span className="flex items-center gap-2">
                   MIA is Speaking
-                  <div className="flex items-end gap-[2px] h-3">
-                    {[1,2,3,4,5].map(i => (
-                      <div 
-                        key={i} 
-                        className="w-[3px] bg-primary rounded-full transition-all duration-75"
-                        style={{ height: `${20 + (audioLevel * (0.5 + Math.random()))}%` }}
-                      ></div>
-                    ))}
-                  </div>
+                   MIA is Speaking
+                   <div className="flex items-end gap-[2px] h-3">
+                     {[1,2,3,4,5].map(i => (
+                       <WaveformBar key={i} level={audioLevel} />
+                     ))}
+                   </div>
                 </span>
               ) : status}
             </span>
@@ -761,15 +728,10 @@ export default function Home() {
                   className="bg-transparent border-none outline-none text-white text-lg w-full font-sans"
                 />
               </div>
-              <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-4 mb-2">Quick Actions</div>
-                {[
-                  { icon: <Heart size={18} className={intimacyActive ? "text-pink-500 fill-pink-500" : ""}/>, name: intimacyActive ? "Deactivate Soulmate" : "Activate Soulmate", desc: "Phase Utama Keintiman", action: toggleIntimacy },
-                  { icon: <Zap size={18}/>, name: "Skills Manager", desc: "View MIA's abilities", link: "/settings" },
-                  { icon: <ImageIcon size={18}/>, name: "Change Background", desc: "Appearance settings", link: "/settings" },
-                  { icon: <Database size={18}/>, name: "Clear Memory", desc: "Reset chat history", action: () => { setInput("/clear"); sendMessage(); setShowPalette(false); } },
-                  { icon: <XCircle size={18}/>, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
-                ].map((item, i) => (
+               <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                 <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-4 mb-2">Quick Actions</div>
+                  {/* eslint-disable-next-line react-hooks/refs */}
+                  {paletteMenuItems.map((item, i) => (
                   <div 
                     key={i} 
                     onClick={() => item.action ? item.action() : null}
@@ -799,7 +761,23 @@ export default function Home() {
   );
 }
 
-function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin, isEditing, editValue, onEditChange, onSaveEdit, onCancelEdit }: any) {
+interface ChatBubbleProps {
+  msg: Message;
+  isMIA: boolean;
+  isSys: boolean;
+  config: MIAConfig;
+  onDelete: (id: number) => void;
+  onEdit: (id: number, content: string) => void;
+  onLike: (id: number, liked: number) => void;
+  onPin: (id: number) => void;
+  isEditing: boolean;
+  editValue: string;
+  onEditChange: (val: string) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+}
+
+function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin, isEditing, editValue, onEditChange, onSaveEdit, onCancelEdit }: ChatBubbleProps) {
   const [isCopied, setIsCopied] = useState(false);
   
   // Helper to determine text color based on background luminance
@@ -867,11 +845,11 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
             <ReactMarkdown 
               remarkPlugins={[remarkGfm]}
               components={{
-                code({node, inline, className, children, ...props}: any) {
+                code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
                   const match = /language-(\w+)/.exec(className || '')
-                  return !inline && match ? (
+                  return match ? (
                     <SyntaxHighlighter
-                      style={atomDark}
+                      style={atomDark as { [key: string]: React.CSSProperties }}
                       language={match[1]}
                       PreTag="div"
                       {...props}

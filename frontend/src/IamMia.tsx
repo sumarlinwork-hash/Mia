@@ -8,6 +8,13 @@ export default function IamMia() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  const loadFile = (filename: string) => {
+    setSelectedFile(filename);
+    fetch(`http://localhost:8000/api/memory/file?name=${encodeURIComponent(filename)}`)
+      .then(res => res.json())
+      .then(data => setContent(data.content || ""));
+  };
+
   useEffect(() => {
     fetch('http://localhost:8000/api/memory/files')
       .then(res => res.json())
@@ -18,13 +25,6 @@ export default function IamMia() {
         }
       });
   }, []);
-
-  const loadFile = (filename: string) => {
-    setSelectedFile(filename);
-    fetch(`http://localhost:8000/api/memory/file?name=${encodeURIComponent(filename)}`)
-      .then(res => res.json())
-      .then(data => setContent(data.content || ""));
-  };
 
   const handleSave = async () => {
     if (!selectedFile) return;
@@ -37,7 +37,7 @@ export default function IamMia() {
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (e) {
+    } catch {
       alert("Failed to save.");
     } finally {
       setSaving(false);

@@ -35,6 +35,10 @@ class CroneDaemon:
             name="Proactive Caring"
         )
 
+        # Pause all jobs by default as per user request
+        for job in self.scheduler.get_jobs():
+            job.pause()
+
         self.job_metadata = {
             "Memory Pruning": {
                 "desc": "Menganalisis chat harian untuk mengekstrak fakta permanen ke MEMORY.md.",

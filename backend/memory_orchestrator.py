@@ -15,8 +15,11 @@ CHROMA_DB_DIR = os.path.join(IAM_MIA_DIR, "chroma_db")
 class MemoryOrchestrator:
     def __init__(self):
         os.makedirs(CHROMA_DB_DIR, exist_ok=True)
-        # Initialize ChromaDB persistent client
-        self.client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
+        # Initialize ChromaDB persistent client with telemetry disabled
+        self.client = chromadb.PersistentClient(
+            path=CHROMA_DB_DIR,
+            settings=Settings(anonymized_telemetry=False)
+        )
         
         # We explicitly DO NOT use Chroma's default embedding function (which downloads local models).
         # We will pass embeddings manually.
