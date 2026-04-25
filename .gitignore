@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+*.log
+
+# Node/React
+node_modules/
+dist/
+dist-ssr
+*.local
+.eslintcache
+.vite/
+
+# Env/Keys & Configs (SANGAT PENTING)
+.env
+.env.*
+! .env.example
+*.json
+! package.json
+! tsconfig.json
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+desktop.ini
+
+# MIA Private Memories (Jangan unggah privasi Bos ke publik)
+backend/iam_mia/EPISODIC_MEMORY.md
+backend/iam_mia/INTIMACY.md
+backend/iam_mia/MEMORY.md
+backend/iam_mia/SOUL.md
+backend/history.db
+frontend/public/assets/chatbg/*
+! frontend/public/assets/chatbg/.gitkeep

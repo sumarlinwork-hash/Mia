@@ -1,0 +1,785 @@
+import { useState, useEffect } from 'react';
+import { 
+  ArrowLeft, Save, Plus, Trash2, Pencil, Zap, 
+  CheckCircle2, XCircle, Info, RefreshCcw, Star
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Anthropic API", "Groq", "DeepSeek", "Mistral"];
+const PURPOSES = ["Text & Logic (LLM)", "Vision / Multimodal", "Coding Specialist", "Audio / Speech", "Search / RAG"];
+const COSTS = ["GRATIS (Tanpa Cost / Rate Limit Tinggi)", "PAID (Pay-per-token)", "PREMIUM (Enterprise / Private)"];
+
+const PRESETS: any = {
+  "OpenAI": { model_id: "gpt-4o", protocol: "OpenAI Compatible", base_url: "https://api.openai.com/v1", cost_label: COSTS[1] },
+  "Google Gemini": { model_id: "gemini-2.0-flash", protocol: "Gemini API", base_url: "", cost_label: COSTS[0] },
+  "Anthropic": { model_id: "claude-3-5-sonnet-20240620", protocol: "OpenAI Compatible", base_url: "https://api.anthropic.com/v1", cost_label: COSTS[1] },
+  "Groq": { model_id: "llama-3.1-8b-instant", protocol: "Groq", base_url: "https://api.groq.com/openai/v1", cost_label: COSTS[0] },
+  "DeepSeek": { model_id: "deepseek-chat", protocol: "DeepSeek", base_url: "https://api.deepseek.com", cost_label: COSTS[1] },
+  "Mistral": { model_id: "mistral-large-latest", protocol: "OpenAI Compatible", base_url: "https://api.mistral.ai/v1", cost_label: COSTS[1] },
+  "Perplexity": { model_id: "llama-3-sonar-large-32k-online", protocol: "OpenAI Compatible", base_url: "https://api.perplexity.ai", cost_label: COSTS[1] },
+  "Together AI": { model_id: "meta-llama/Llama-3-70b-chat-hf", protocol: "OpenAI Compatible", base_url: "https://api.together.xyz/v1", cost_label: COSTS[1] },
+  "OpenRouter": { model_id: "openrouter/auto", protocol: "OpenAI Compatible", base_url: "https://openrouter.ai/api/v1", cost_label: COSTS[1] },
+  "HuggingFace": { model_id: "meta-llama/Meta-Llama-3-8B-Instruct", protocol: "OpenAI Compatible", base_url: "https://api-inference.huggingface.co/v1", cost_label: COSTS[0] },
+  "Cohere": { model_id: "command-r-plus", protocol: "OpenAI Compatible", base_url: "https://api.cohere.ai/v1", cost_label: COSTS[1] },
+  "Fireworks AI": { model_id: "accounts/fireworks/models/llama-v3-70b-instruct", protocol: "OpenAI Compatible", base_url: "https://api.fireworks.ai/inference/v1", cost_label: COSTS[1] },
+  "xAI (Grok)": { model_id: "grok-1", protocol: "OpenAI Compatible", base_url: "https://api.x.ai/v1", cost_label: COSTS[1] },
+  "Ollama (Local)": { model_id: "llama3", protocol: "OpenAI Compatible", base_url: "http://localhost:11434/v1", cost_label: COSTS[0] },
+  "Custom Provider": { model_id: "", protocol: "OpenAI Compatible", base_url: "", cost_label: COSTS[0] },
+};
+
+export default function Settings() {
+  const [config, setConfig] = useState<any>(null);
+  const [originalConfig, setOriginalConfig] = useState<any>(null);
+  const [view, setView] = useState<'list' | 'add' | 'edit'>('list');
+  const [activeTab, setActiveTab] = useState('intelligence');
+  const [isSaving, setIsSaving] = useState(false);
+  const [editName, setEditName] = useState<string | null>(null);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [skills, setSkills] = useState<any[]>([]);
+
+  
+  // Form State
+  const [newProvider, setNewProvider] = useState({
+    display_name: '',
+    model_id: '',
+    api_key: '',
+    protocol: PROTOCOLS[0],
+    base_url: '',
+    purpose: PURPOSES[0],
+    cost_label: COSTS[0]
+  });
+  const [toasts, setToasts] = useState<any[]>([]);
+
+  const addToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, msg, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  };
+
+  // Color Helpers
+  const rgbaToHex = (rgba: string) => {
+    if (!rgba.startsWith('rgba')) return rgba;
+    const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (!match) return "#00ffcc";
+    const r = parseInt(match[1]);
+    const g = parseInt(match[2]);
+    const b = parseInt(match[3]);
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  };
+
+  const getOpacity = (rgba: string) => {
+    if (!rgba.startsWith('rgba')) return 1;
+    const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    return match && match[4] ? parseFloat(match[4]) : 1;
+  };
+
+  const combineToRgba = (hex: string, opacity: number) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  };
+
+  useEffect(() => {
+    fetch('http://localhost:8000/api/config')
+      .then(res => res.json())
+      .then(data => {
+        setConfig(data);
+        setOriginalConfig(data);
+      });
+    
+    fetch('http://localhost:8000/api/skills')
+      .then(res => res.json())
+      .then(data => setSkills(data));
+  }, []);
+
+  const updateConfig = (newConfig: any) => {
+    setConfig(newConfig);
+    setHasChanges(JSON.stringify(newConfig) !== JSON.stringify(originalConfig));
+  };
+
+  const handleReset = () => {
+    setConfig(originalConfig);
+    setHasChanges(false);
+    addToast("Pengaturan dikembalikan ke awal", "info");
+  };
+
+  const handleSave = async (updatedConfig = config) => {
+    setIsSaving(true);
+    try {
+      await fetch('http://localhost:8000/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedConfig),
+      });
+      setConfig({ ...updatedConfig });
+      setOriginalConfig({ ...updatedConfig });
+      setHasChanges(false);
+      addToast("Konfigurasi disimpan!", "success");
+      window.dispatchEvent(new Event('configUpdated'));
+    } catch (e) {
+      addToast("Gagal menyimpan config", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
+  const handleAddOrEditProvider = async () => {
+    const updatedConfig = { ...config };
+    if (view === 'edit' && editName) {
+      delete updatedConfig.providers[editName];
+    }
+    updatedConfig.providers[newProvider.display_name] = {
+      ...newProvider,
+      is_active: true,
+      is_default: updatedConfig.providers[newProvider.display_name]?.is_default || Object.keys(config.providers).length === 0,
+      latency: updatedConfig.providers[newProvider.display_name]?.latency || 0,
+      health_ok: updatedConfig.providers[newProvider.display_name]?.health_ok || 0,
+      health_fail: updatedConfig.providers[newProvider.display_name]?.health_fail || 0
+    };
+    await handleSave(updatedConfig);
+    setView('list');
+    setEditName(null);
+    setNewProvider({
+      display_name: '', model_id: '', api_key: '',
+      protocol: PROTOCOLS[0], base_url: '',
+      purpose: PURPOSES[0], cost_label: COSTS[0]
+    });
+  };
+
+
+  const deleteProvider = async (name: string) => {
+    const updatedConfig = { ...config };
+    delete updatedConfig.providers[name];
+    await handleSave(updatedConfig);
+  };
+
+  const toggleProvider = async (name: string) => {
+    const updatedConfig = { ...config };
+    updatedConfig.providers[name].is_active = !updatedConfig.providers[name].is_active;
+    await handleSave(updatedConfig);
+  };
+
+  const testProvider = async (name: string) => {
+    const updatedProviders = { ...config.providers };
+    updatedProviders[name].latency = -1; // Loading state
+    setConfig({ ...config, providers: updatedProviders });
+    
+    const res = await fetch(`http://localhost:8000/api/providers/test/${encodeURIComponent(name)}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'success') {
+      fetch('http://localhost:8000/api/config').then(res => res.json()).then(data => setConfig(data));
+    }
+  };
+
+  const startEdit = (name: string, p: any) => {
+    setEditName(name);
+    setNewProvider({ ...p, display_name: name });
+    setView('edit');
+  };
+
+
+  if (!config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse">Loading System Config...</div>;
+
+  return (
+    <div className="min-h-screen w-full p-4 sm:p-8 overflow-y-auto custom-scrollbar">
+      <div className="max-w-6xl mx-auto">
+        <header className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="p-2 rounded-full hover:bg-white/10 text-white/70 transition-all">
+              <ArrowLeft size={24} />
+            </Link>
+            <h1 className="text-3xl font-bold text-white tracking-tight">System Settings</h1>
+          </div>
+          <div className="flex gap-2">
+            {view === 'list' ? (
+              <button 
+                onClick={() => setView('add')}
+                className="flex items-center gap-2 px-6 py-2.5 bg-primary text-black rounded-xl font-bold hover:scale-105 transition-all shadow-lg shadow-primary/20"
+              >
+                <Plus size={20} /> Daftarkan Provider Baru
+              </button>
+            ) : (
+              <button 
+                onClick={() => { setView('list'); setEditName(null); }}
+                className="px-6 py-2.5 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-all"
+              >
+                Batal
+              </button>
+            )}
+          </div>
+
+        </header>
+
+        <div className="flex gap-8 mb-8 border-b border-white/10">
+          {['intelligence', 'appearance', 'personality', 'skills'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-4 px-2 text-sm font-bold uppercase tracking-widest transition-all ${activeTab === tab ? 'text-primary border-b-2 border-primary' : 'text-white/40 hover:text-white'}`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'intelligence' && (
+          <>
+            {view === 'list' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {Object.entries(config.providers).map(([name, p]: [string, any]) => (
+                  <div key={name} className={`relative p-6 rounded-3xl border backdrop-blur-3xl transition-all group ${p.is_active ? 'border-white/10 bg-black/40' : 'border-white/5 bg-black/20 opacity-60'}`}>
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="p-3 rounded-2xl bg-primary/10 text-primary">
+                        <Zap size={24} className={p.is_active ? "animate-pulse" : ""} />
+                      </div>
+                      <div className="flex gap-2">
+                      <div className="group relative">
+                        <Info size={14} className="text-white/20 cursor-help" />
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-black/90 border border-white/10 rounded-lg text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                          Protocol: {p.protocol} | Purpose: {p.purpose}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => startEdit(name, p)} className="p-2 text-white/40 hover:text-white"><Pencil size={18}/></button>
+                        <button onClick={() => deleteProvider(name)} className="p-2 text-white/40 hover:text-error"><Trash2 size={18}/></button>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-xl font-bold text-white">{name}</h3>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 uppercase tracking-tighter">FREE</span>
+                      {p.is_default && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary text-black uppercase tracking-tighter">DEFAULT</span>}
+                    </div>
+                    <p className="text-xs text-white/40 font-mono">Model: {p.model_id || p.model_name}</p>
+                  </div>
+
+                  <div className="space-y-2 mb-8 font-mono text-[11px] text-white/60">
+                    <div className="flex justify-between">
+                      <span>Latency(avg):</span>
+                      <span className="text-primary">{p.latency} ms</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Health:</span>
+                      <span className={p.health_fail > 0 ? 'text-error' : 'text-green-400'}>
+                        OK {p.health_ok} / FAIL {p.health_fail}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${p.is_active ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-white/20'}`} />
+                      <span className="text-xs font-bold text-white/90">Status: {p.is_active ? 'ON' : 'OFF'}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => testProvider(name)}
+                        disabled={p.latency === -1}
+                        className="flex items-center gap-2 px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-[11px] font-bold text-white transition-all disabled:opacity-50"
+                      >
+                        <RefreshCcw size={12} className={p.latency === -1 ? "animate-spin" : ""} /> {p.latency === -1 ? 'Testing...' : 'Test'}
+                      </button>
+
+                      <div 
+                        onClick={() => toggleProvider(name)}
+                        className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${p.is_active ? 'bg-primary' : 'bg-white/10'}`}
+                      >
+                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${p.is_active ? 'left-6' : 'left-1'}`} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="max-w-3xl bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in zoom-in-95 duration-300 shadow-2xl shadow-black/50">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/20 text-primary"><Star size={20}/></div>
+                  <h2 className="text-xl font-bold text-white">Formulir Registrasi Intelijen</h2>
+                </div>
+                <div className="text-[10px] font-mono text-white/20 uppercase tracking-widest">Step 3 of 9: Intelligence Setup</div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                <div className="relative mb-8">
+                  <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-4">
+                    Pilih Intelegensi Inti (Preset)
+                    {newProvider.display_name && <CheckCircle2 size={12} className="text-green-500" />}
+                  </label>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {Object.entries(PRESETS).map(([key, preset]: [string, any]) => {
+                      const isSelected = newProvider.display_name === key;
+                      return (
+                        <div 
+                          key={key}
+                          onClick={() => setNewProvider({ ...newProvider, display_name: key, ...preset })}
+                          className={`
+                            cursor-pointer p-4 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center text-center gap-2
+                            ${isSelected 
+                              ? 'bg-primary/20 border-primary shadow-[0_0_15px_rgba(0,255,204,0.3)] scale-105 z-10' 
+                              : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'}
+                          `}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-lg 
+                            ${isSelected ? 'bg-primary text-black' : 'bg-black/50 text-white/60'}`}
+                          >
+                            {key.charAt(0)}
+                          </div>
+                          <div className={`text-xs font-bold ${isSelected ? 'text-primary' : 'text-white/80'}`}>
+                            {key}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="relative">
+                    <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
+                      Nama Display (Bebas)
+                      {newProvider.display_name.length < 3 ? <XCircle size={12} className="text-error" /> : <CheckCircle2 size={12} className="text-green-500" />}
+                    </label>
+                    <input 
+                      type="text" value={newProvider.display_name} 
+                      onChange={e => setNewProvider({...newProvider, display_name: e.target.value})}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                      placeholder="MIA Main Brain"
+                    />
+                  </div>
+                  <div className="relative">
+                    <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
+                      ID Model
+                      {!newProvider.model_id ? <XCircle size={12} className="text-error" /> : <CheckCircle2 size={12} className="text-green-500" />}
+                    </label>
+                    <input 
+                      type="text" value={newProvider.model_id} 
+                      onChange={e => setNewProvider({...newProvider, model_id: e.target.value})}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                      placeholder="gpt-4o"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="relative">
+                    <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
+                      API Key
+                      {newProvider.api_key.length < 8 ? <XCircle size={12} className="text-error" /> : <CheckCircle2 size={12} className="text-green-500" />}
+                    </label>
+                    <input 
+                      type="password" value={newProvider.api_key} 
+                      onChange={e => setNewProvider({...newProvider, api_key: e.target.value})}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                      placeholder="sk-proj-..."
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
+                      End Point <span title="Kosongkan jika menggunakan endpoint default (hanya untuk Custom/On-Premise)" className="cursor-help"><Info size={12} /></span>
+                    </label>
+                    <input 
+                      type="text" value={newProvider.base_url} 
+                      onChange={e => setNewProvider({...newProvider, base_url: e.target.value})}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                      placeholder="https://..."
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Kelompok Saraf (Purpose)</label>
+                    <select 
+                      value={newProvider.purpose}
+                      onChange={e => setNewProvider({...newProvider, purpose: e.target.value})}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                    >
+                      {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Label Biaya</label>
+                    <select 
+                      value={newProvider.cost_label}
+                      onChange={e => setNewProvider({...newProvider, cost_label: e.target.value})}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                    >
+                      {COSTS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleAddOrEditProvider}
+                  disabled={isSaving}
+                  className="mt-4 w-full py-4 bg-primary text-black rounded-2xl font-bold text-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
+                >
+                  {isSaving ? <RefreshCcw className="animate-spin" /> : <Save size={20} />} 
+                  {view === 'edit' ? 'Simpan Perubahan' : 'Simpan & Aktifkan'}
+                </button>
+
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+        {activeTab === 'appearance' && (
+          <div className="max-w-3xl bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300">
+            <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-secondary/20 text-secondary"><Zap size={20}/></div>
+              Visual & Interface Settings
+            </h2>
+            
+            <div className="grid grid-cols-1 gap-8">
+              <div>
+                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-4">UI Transparency: {Math.round(config.appearance.ui_opacity * 100)}%</label>
+                <input 
+                  type="range" min="0.1" max="1" step="0.05"
+                  value={config.appearance.ui_opacity}
+                  onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, ui_opacity: parseFloat(e.target.value) } })}
+                  className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">MIA Bubble Color & Opacity</label>
+                  <div className="flex flex-col gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
+                    <div className="flex gap-4 items-center">
+                      <input 
+                        type="color" 
+                        value={rgbaToHex(config.appearance.bubble_color_mia)}
+                        onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_mia)) } })}
+                        className="w-12 h-12 rounded-lg bg-transparent border-none cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <input 
+                          type="range" min="0" max="1" step="0.05"
+                          value={getOpacity(config.appearance.bubble_color_mia)}
+                          onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(rgbaToHex(config.appearance.bubble_color_mia), parseFloat(e.target.value)) } })}
+                          className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                        />
+                        <div className="flex justify-between text-[10px] mt-1 text-white/20 font-mono">
+                          <span>Alpha: {Math.round(getOpacity(config.appearance.bubble_color_mia) * 100)}%</span>
+                          <span>HEX: {rgbaToHex(config.appearance.bubble_color_mia)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">User Bubble Color & Opacity</label>
+                  <div className="flex flex-col gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
+                    <div className="flex gap-4 items-center">
+                      <input 
+                        type="color" 
+                        value={rgbaToHex(config.appearance.bubble_color_user)}
+                        onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_user)) } })}
+                        className="w-12 h-12 rounded-lg bg-transparent border-none cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <input 
+                          type="range" min="0" max="1" step="0.05"
+                          value={getOpacity(config.appearance.bubble_color_user)}
+                          onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(rgbaToHex(config.appearance.bubble_color_user), parseFloat(e.target.value)) } })}
+                          className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                        />
+                        <div className="flex justify-between text-[10px] mt-1 text-white/20 font-mono">
+                          <span>Alpha: {Math.round(getOpacity(config.appearance.bubble_color_user) * 100)}%</span>
+                          <span>HEX: {rgbaToHex(config.appearance.bubble_color_user)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Background Type</label>
+                <div className="flex gap-4">
+                  {['video', 'image', 'color'].map(type => (
+                    <button 
+                      key={type}
+                      onClick={() => {
+                        let newUrl = config.appearance.background_url;
+                        if (type === 'color' && newUrl.startsWith('/')) {
+                          newUrl = '#0a0a0a';
+                        }
+                        updateConfig({ ...config, appearance: { ...config.appearance, background_type: type, background_url: newUrl } });
+                      }}
+                      className={`px-6 py-2 rounded-xl font-bold transition-all ${config.appearance.background_type === type ? 'bg-primary text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+                    >
+                      {type.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {config.appearance.background_type !== 'color' ? (
+                <div>
+                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
+                    Background URL / Local Path
+                  </label>
+                  <div className="flex gap-3">
+                    <input 
+                      type="text" 
+                      value={config.appearance.background_url}
+                      onChange={e => setConfig({ ...config, appearance: { ...config.appearance, background_url: e.target.value } })}
+                      onBlur={() => handleSave()}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary font-mono text-xs"
+                      placeholder={config.appearance.background_type === 'video' ? "https://example.com/loop.mp4" : "https://example.com/bg.jpg"}
+                    />
+                    <button 
+                      onClick={() => document.getElementById('bg-upload')?.click()}
+                      className="px-6 py-3 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-all flex items-center gap-2"
+                    >
+                      <Plus size={18} /> Upload Lokal
+                    </button>
+                    <input 
+                      type="file" id="bg-upload" className="hidden" 
+                      accept={config.appearance.background_type === 'video' ? "video/*" : "image/*"}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        const res = await fetch('http://localhost:8000/api/upload-bg', { method: 'POST', body: formData });
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                          updateConfig({ 
+                            ...config, 
+                            appearance: { 
+                              ...config.appearance, 
+                              background_url: data.url,
+                              background_type: config.appearance.background_type === 'video' ? 'video' : 'image' 
+                            } 
+                          });
+                        }
+                      }}
+                    />
+                  </div>
+                  <p className="mt-2 text-[10px] text-white/20 italic">Tip: Gunakan file lokal atau URL publik untuk performa terbaik.</p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Background Solid Color</label>
+                  <input 
+                    type="color" 
+                    value={config.appearance.background_url.startsWith('#') ? config.appearance.background_url : '#0a0a0a'}
+                    onChange={e => updateConfig({ ...config, appearance: { ...config.appearance, background_url: e.target.value } })}
+                    className="w-full h-12 rounded-xl bg-transparent border border-white/10 cursor-pointer"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'personality' && (
+          <div className="max-w-3xl bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300">
+            <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/20 text-primary"><RefreshCcw size={20}/></div>
+              Personality & Behavior Core
+            </h2>
+
+            <div className="grid grid-cols-1 gap-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">AI Name</label>
+                  <input 
+                    type="text" value={config.bot_name}
+                    onChange={e => updateConfig({ ...config, bot_name: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">AI Age</label>
+                  <input 
+                    type="number" value={config.bot_age}
+                    onChange={e => updateConfig({ ...config, bot_age: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Base System Persona</label>
+                <textarea 
+                  value={config.bot_persona}
+                  onChange={e => updateConfig({ ...config, bot_persona: e.target.value })}
+                  rows={6}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary font-sans leading-relaxed"
+                  placeholder="Definisikan karakter MIA di sini..."
+                />
+              </div>
+
+              {/* Voice & Speech Engine */}
+              <div className="pt-8 mt-8 border-t border-white/5">
+                <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-6">Voice & Speech Engine</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                  {['edge-tts', 'elevenlabs', 'openai'].map(engine => (
+                    <button
+                      key={engine}
+                      onClick={() => updateConfig({ ...config, tts_engine: engine })}
+                      className={`px-6 py-4 rounded-2xl border transition-all text-left group ${
+                        config.tts_engine === engine 
+                        ? 'bg-primary/20 border-primary text-primary' 
+                        : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
+                      }`}
+                    >
+                      <div className="font-bold capitalize">{engine.replace('-', ' ')}</div>
+                      <div className="text-[10px] opacity-60">
+                        {engine === 'edge-tts' ? 'Gratis & Stabil (Default)' : engine === 'elevenlabs' ? 'Cloning Ultra-Realistis' : 'Premium & Natural'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {config.tts_engine === 'elevenlabs' && (
+                  <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-white/30 uppercase mb-2">ElevenLabs API Key</label>
+                        <input 
+                          type="password" value={config.elevenlabs_api_key}
+                          onChange={e => updateConfig({ ...config, elevenlabs_api_key: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                          placeholder="xi-api-key..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-white/30 uppercase mb-2">Voice ID</label>
+                        <input 
+                          type="text" value={config.elevenlabs_voice_id}
+                          onChange={e => updateConfig({ ...config, elevenlabs_voice_id: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                          placeholder="e.g. 21m00Tcm4TlvDq8ikWAM"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {config.tts_engine === 'openai' && (
+                  <div className="animate-in slide-in-from-top-2 duration-300">
+                    <label className="block text-[10px] font-bold text-white/30 uppercase mb-2">OpenAI API Key</label>
+                    <input 
+                      type="password" value={config.openai_api_key}
+                      onChange={e => updateConfig({ ...config, openai_api_key: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                      placeholder="sk-..."
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'skills' && (
+          <div className="max-w-6xl mx-auto animate-in slide-in-from-right-4 duration-500">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/20 text-primary"><Zap size={24}/></div>
+                Skills & Autonomous Abilities
+              </h2>
+              <div className="text-xs font-mono text-white/30 uppercase tracking-[0.2em]">MIA Self-Expansion Module</div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Skill Builder Card */}
+              <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-primary/20 to-secondary/10 border border-primary/30 shadow-2xl flex flex-col items-center justify-center text-center group cursor-pointer hover:scale-[1.02] transition-all">
+                <div className="w-16 h-16 rounded-full bg-primary text-black flex items-center justify-center mb-4 shadow-lg shadow-primary/30 group-hover:rotate-12 transition-transform">
+                  <Plus size={32} />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Pesan Keahlian Baru</h3>
+                <p className="text-xs text-white/50 leading-relaxed">
+                  Cukup bicarakan kebutuhan Anda di chat utama, dan MIA akan menulis kodenya sendiri untuk Anda.
+                </p>
+              </div>
+
+              {/* Dynamic Skill Cards */}
+              {skills.map((skill: any) => (
+                <div key={skill.id} className="p-6 rounded-[2.5rem] bg-black/40 backdrop-blur-3xl border border-white/10 hover:border-primary/40 transition-all group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="p-3 rounded-2xl bg-white/5 text-white/70 group-hover:text-primary transition-colors">
+                      <Zap size={20} />
+                    </div>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                      <button className="p-2 text-white/40 hover:text-white"><Pencil size={16}/></button>
+                      <button className="p-2 text-white/40 hover:text-error"><Trash2 size={16}/></button>
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-bold text-white mb-1">{skill.name}</h3>
+                  <p className="text-xs text-white/40 line-clamp-2 mb-6 h-8">{skill.description}</p>
+                  
+                  <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                    <span className="text-[10px] font-mono text-white/20 uppercase">{new Date(skill.created_at).toLocaleDateString()}</span>
+                    <button 
+                      className="px-4 py-1.5 rounded-full bg-white/5 text-white/70 text-[10px] font-bold hover:bg-primary hover:text-black transition-all"
+                    >
+                      Test Ability
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {skills.length === 0 && (
+              <div className="mt-12 p-12 rounded-[3rem] border border-dashed border-white/10 text-center">
+                <div className="text-white/20 font-mono text-sm">Belum ada keahlian tambahan yang dipelajari.</div>
+                <div className="text-[10px] text-white/10 mt-2 uppercase tracking-widest">MIA sedang menunggu perintah pertama Anda</div>
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      {/* Global Action Bar (Visible when changes detected) */}
+      {hasChanges && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 px-8 py-4 bg-black/80 backdrop-blur-3xl border border-primary/30 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 duration-500 z-50">
+          <div className="text-white/70 text-sm font-bold mr-4">Ada perubahan yang belum disimpan!</div>
+          <button 
+            onClick={handleReset}
+            className="flex items-center gap-2 px-6 py-2.5 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-all"
+          >
+            <RefreshCcw size={18} /> Reset ke Awal
+          </button>
+          <button 
+            onClick={() => handleSave()}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-8 py-2.5 bg-primary text-black rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+          >
+            {isSaving ? <RefreshCcw className="animate-spin" size={18} /> : <Save size={18} />} Simpan Semua Perubahan
+          </button>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      <div className="fixed bottom-8 right-8 flex flex-col gap-2 z-[100]">
+        {toasts.map(t => (
+          <div key={t.id} className={`flex items-center gap-3 px-6 py-3 rounded-2xl border backdrop-blur-xl animate-in slide-in-from-right-4 duration-300 shadow-2xl ${
+            t.type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-400' : 
+            t.type === 'info' ? 'bg-primary/10 border-primary/50 text-primary' :
+            'bg-error/10 border-error/50 text-error'
+          }`}>
+            {t.type === 'success' ? <CheckCircle2 size={20}/> : t.type === 'info' ? <Info size={20}/> : <XCircle size={20}/>}
+            <span className="font-bold text-sm">{t.msg}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

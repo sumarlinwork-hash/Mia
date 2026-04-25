@@ -1,0 +1,940 @@
+import { useState, useEffect, useRef } from 'react';
+import { 
+  Mic, Send, Activity, Settings2, Eye, Brain, Paperclip, 
+  Image as ImageIcon, FileText, MonitorUp, Volume2, VolumeX, 
+  Search, Code, Zap, Database, CheckSquare, Sparkles, XCircle,
+  ThumbsUp, ThumbsDown, Pin, Pencil, Trash2, Download, PlayCircle,
+  Copy, Check, Loader2, AlertCircle, Info as InfoIcon, Heart
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+const COMMANDS = [
+  { cmd: '/search', desc: 'Real-time web search', icon: <Search size={16} /> },
+  { cmd: '/code', desc: 'Write or execute code', icon: <Code size={16} /> },
+  { cmd: '/vision', desc: 'Analyze image/screen', icon: <Eye size={16} /> },
+  { cmd: '/memorize', desc: 'Save to long-term memory', icon: <Database size={16} /> },
+  { cmd: '/skill', desc: 'Execute a specific skill runbook', icon: <Zap size={16} /> },
+  { cmd: '/deep-research', desc: 'Deep dive multi-step research', icon: <Sparkles size={16} /> },
+  { cmd: '/plan', desc: 'Create implementation plan', icon: <CheckSquare size={16} /> },
+  { cmd: '/clear', desc: 'Clear chat history', icon: <XCircle size={16} /> },
+];
+
+interface Message {
+  id?: number;
+  role: string;
+  content: string;
+  timestamp?: string;
+  is_pinned?: boolean;
+  is_liked?: number;
+  is_editing?: boolean;
+  audio?: string;
+}
+
+export default function Home() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [status, setStatus] = useState("Disconnected");
+  const [config, setConfig] = useState<any>(null);
+  
+  // UI States
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [isTTSMuted, setIsTTSMuted] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  
+  // Command & Mention States
+  const [showCommands, setShowCommands] = useState(false);
+  const [showMentions, setShowMentions] = useState(false);
+  const [memoryFiles, setMemoryFiles] = useState<string[]>([]);
+  const [filteredFiles, setFilteredFiles] = useState<string[]>([]);
+  const [filteredCommands, setFilteredCommands] = useState(COMMANDS);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isThinking, setIsThinking] = useState(false);
+  const [toasts, setToasts] = useState<any[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
+  const [mood, setMood] = useState("neutral"); // neutral, energetic, serious, warm
+  const [intimacyActive, setIntimacyActive] = useState(false);
+
+
+  const ws = useRef<WebSocket | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const audioChunks = useRef<Blob[]>([]);
+  const currentAudio = useRef<HTMLAudioElement | null>(null);
+  const audioQueue = useRef<string[]>([]);
+  const audioContext = useRef<AudioContext | null>(null);
+  const analyser = useRef<AnalyserNode | null>(null);
+  const animationFrame = useRef<number | null>(null);
+  const heartbeatInterval = useRef<any>(null);
+
+  useEffect(() => {
+    const fetchConfig = () => {
+      fetch('http://localhost:8000/api/config')
+        .then(res => res.json())
+        .then(data => setConfig(data))
+        .catch(() => setTimeout(fetchConfig, 1000));
+    };
+    fetchConfig();
+
+    const fetchHistory = () => {
+      fetch('http://localhost:8000/api/chat/history')
+        .then(res => res.json())
+        .then(data => setMessages(data.history || []))
+        .catch(() => setTimeout(fetchHistory, 1000));
+    };
+    fetchHistory();
+
+    const fetchMemory = () => {
+      fetch('http://localhost:8000/api/memory/files')
+        .then(res => res.json())
+        .then(data => setMemoryFiles(data.files || []))
+        .catch(() => setTimeout(fetchMemory, 1000));
+    };
+    fetchMemory();
+
+    const fetchIntimacyStatus = () => {
+      fetch('http://localhost:8000/api/intimacy/status')
+        .then(res => res.json())
+        .then(data => setIntimacyActive(data.intimacy_active))
+        .catch(() => {});
+    };
+    fetchIntimacyStatus();
+    const intimacyInterval = setInterval(fetchIntimacyStatus, 5000);
+
+    ws.current = new WebSocket("ws://localhost:8000/ws/heartbeat");
+    ws.current.onopen = () => setStatus("Connected (Heartbeat Active)");
+    ws.current.onclose = () => setStatus("Disconnected");
+    
+    ws.current.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "message" || data.type === "system") {
+        setIsThinking(false);
+        playSFX('receive');
+        
+        // Simple Sentiment Analysis for Mood Tinting
+        const content = data.content.toLowerCase();
+        if (content.includes("berhasil") || content.includes("siap") || content.includes("halo")) setMood("energetic");
+        else if (content.includes("maaf") || content.includes("error") || content.includes("gagal")) setMood("serious");
+        else if (content.includes("selamat") || content.includes("bagus") || content.includes("terima kasih")) setMood("warm");
+        else setMood("neutral");
+
+        const newMessage = { 
+          id: data.id,
+          role: data.type === "system" ? "System" : "MIA", 
+          content: data.content,
+          audio: data.audio
+        };
+        setMessages(prev => [...prev, newMessage]);
+        
+        // Add to audio queue if not muted
+        if (data.audio && !isTTSMuted) {
+          playAudio(data.audio);
+        }
+      } else if (data.type === "status") {
+        setStatus(`Connected (${data.content})`);
+        if (data.content === "Thinking...") setIsThinking(true);
+        if (data.content === "Idle") setIsThinking(false);
+      } else if (data.type === "clear") {
+        setMessages([]);
+      }
+    };
+
+    // Global Shortcuts
+    const handleGlobalShortcuts = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowPalette(prev => !prev);
+        playSFX('pop');
+      }
+      if (e.key === 'Escape') setShowPalette(false);
+    };
+
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => {
+      ws.current?.close();
+      window.removeEventListener('keydown', handleGlobalShortcuts);
+      clearInterval(intimacyInterval);
+      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (intimacyActive) {
+      startHeartbeat();
+    } else {
+      stopHeartbeat();
+    }
+  }, [intimacyActive]);
+
+  const startHeartbeat = () => {
+    if (heartbeatInterval.current) return;
+    heartbeatInterval.current = setInterval(() => {
+      if (!audioContext.current) return;
+      const ctx = audioContext.current;
+      
+      const playThump = (freq: number, time: number, vol: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time);
+        osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
+        gain.gain.setValueAtTime(vol, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(time);
+        osc.stop(time + 0.1);
+      };
+
+      const now = ctx.currentTime;
+      // Double thump: thump-thump
+      playThump(50, now, 0.03); 
+      playThump(40, now + 0.15, 0.02);
+    }, 1500); // Sync with CSS animate-heartbeat
+  };
+
+  const stopHeartbeat = () => {
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
+    }
+  };
+
+  const playSFX = (type: 'send' | 'receive' | 'pop' | 'error') => {
+    if (!audioContext.current) return;
+    const ctx = audioContext.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    if (type === 'send') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    } else if (type === 'receive') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    } else if (type === 'pop') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+    }
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+  };
+
+  const stopAudio = () => {
+    if (currentAudio.current) {
+      currentAudio.current.pause();
+      currentAudio.current.src = "";
+    }
+    audioQueue.current = [];
+    setIsSpeaking(false);
+  };
+
+  const playAudio = (src: string) => {
+    if (isSpeaking) {
+      audioQueue.current.push(src);
+      return;
+    }
+
+    const audio = new Audio(src);
+    audio.crossOrigin = "anonymous";
+    currentAudio.current = audio;
+
+    // Initialize Web Audio API for Visualization
+    if (!audioContext.current) {
+      audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      analyser.current = audioContext.current.createAnalyser();
+      analyser.current.fftSize = 256;
+    }
+
+    const source = audioContext.current.createMediaElementSource(audio);
+    source.connect(analyser.current!);
+    analyser.current!.connect(audioContext.current.destination);
+
+    const updateLevel = () => {
+      if (!analyser.current) return;
+      const dataArray = new Uint8Array(analyser.current.frequencyBinCount);
+      analyser.current.getByteFrequencyData(dataArray);
+      
+      // Calculate average level
+      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+      setAudioLevel(average);
+      animationFrame.current = requestAnimationFrame(updateLevel);
+    };
+
+    audio.onplay = () => {
+      setIsSpeaking(true);
+      if (audioContext.current?.state === 'suspended') audioContext.current.resume();
+      updateLevel();
+    };
+
+    audio.onended = () => {
+      setIsSpeaking(false);
+      setAudioLevel(0);
+      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+      if (audioQueue.current.length > 0) {
+        const next = audioQueue.current.shift();
+        if (next) playAudio(next);
+      }
+    };
+    
+    audio.onerror = () => {
+      setIsSpeaking(false);
+      setAudioLevel(0);
+      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+    };
+
+    audio.play().catch(() => console.log("Audio play blocked by browser policy"));
+  };
+
+  const addToast = (msg: string, type: 'info' | 'success' | 'error' = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, msg, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  };
+
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInput(val);
+
+    // Full-duplex: Stop speaking if user starts typing a message
+    if (val.trim() && isSpeaking) {
+      stopAudio();
+    }
+
+    const cursor = e.target.selectionStart || 0;
+    const beforeCursor = val.slice(0, cursor);
+    const words = beforeCursor.split(' ');
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith('/')) {
+      setShowCommands(true);
+      setShowMentions(false);
+      const query = lastWord.toLowerCase();
+      setFilteredCommands(COMMANDS.filter(c => c.cmd.startsWith(query)));
+      setActiveIndex(0);
+    } else if (lastWord.startsWith('@')) {
+      setShowMentions(true);
+      setShowCommands(false);
+      const query = lastWord.slice(1).toLowerCase();
+      setFilteredFiles(memoryFiles.filter(f => f.toLowerCase().includes(query)));
+      setActiveIndex(0);
+    } else {
+      setShowCommands(false);
+      setShowMentions(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showCommands) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(prev => (prev + 1) % filteredCommands.length); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(prev => (prev - 1 + filteredCommands.length) % filteredCommands.length); }
+      else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertToken(filteredCommands[activeIndex].cmd + " ");
+      }
+    } else if (showMentions) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(prev => (prev + 1) % filteredFiles.length); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(prev => (prev - 1 + filteredFiles.length) % filteredFiles.length); }
+      else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertToken("@" + filteredFiles[activeIndex] + " ");
+      }
+    } else if (e.key === 'Enter') {
+      sendMessage();
+    }
+  };
+
+  const insertToken = (token: string) => {
+    if (!inputRef.current) return;
+    const cursor = inputRef.current.selectionStart || 0;
+    const beforeCursor = input.slice(0, cursor);
+    const afterCursor = input.slice(cursor);
+    const words = beforeCursor.split(' ');
+    words.pop();
+    const newBefore = words.length > 0 ? words.join(' ') + ' ' + token : token;
+    setInput(newBefore + afterCursor);
+    setShowCommands(false);
+    setShowMentions(false);
+    inputRef.current.focus();
+  };
+
+  const sendMessage = () => {
+    if (!input.trim() || !ws.current) return;
+    if (input.trim() === '/clear') {
+       fetch('http://localhost:8000/api/chat/history', { method: 'DELETE' }); 
+       setMessages([]);
+       setInput("");
+       addToast("Chat history cleared", "info");
+       return;
+    }
+    setIsThinking(true);
+    playSFX('send');
+    ws.current.send(input);
+    setInput("");
+    setShowCommands(false);
+    setShowMentions(false);
+    setShowAttachMenu(false);
+  };
+
+  const toggleIntimacy = async () => {
+    try {
+      const target = !intimacyActive;
+      const res = await fetch(`http://localhost:8000/api/intimacy/toggle?active=${target}`, { method: 'POST' });
+      const data = await res.json();
+      setIntimacyActive(data.intimacy_active);
+      addToast(data.intimacy_active ? "Intimacy Phase Activated 💖" : "Returning to Work Mode 💼", data.intimacy_active ? "success" : "info");
+      setShowPalette(false);
+    } catch (e) {
+      addToast("Failed to toggle intimacy mode", "error");
+    }
+  };
+
+  const handleTouch = async () => {
+    if (!intimacyActive) return;
+    try {
+      const res = await fetch('http://localhost:8000/api/intimacy/touch', { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'success') {
+        playAudio(data.audio);
+        // Only show toast if needed, but for touch, maybe just audio is more immersive
+        // addToast(data.content, "success");
+      }
+    } catch (e) {
+      console.error("[Intimacy] Touch failed:", e);
+    }
+  };
+
+  const handleMic = async () => {
+    if (isRecording) {
+      mediaRecorder.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    // Stop MIA from speaking if user wants to record
+    if (isSpeaking) {
+      stopAudio();
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder.current = new MediaRecorder(stream);
+      audioChunks.current = [];
+
+      mediaRecorder.current.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.current.push(e.data);
+      };
+
+      mediaRecorder.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.wav');
+        
+        setIsThinking(true);
+        addToast("Transcribing audio...", "info");
+        try {
+          const res = await fetch('http://localhost:8000/api/stt', { method: 'POST', body: formData });
+          const data = await res.json();
+          if (data.status === 'success') {
+            setInput(prev => prev + (prev ? " " : "") + data.text);
+            addToast("Audio transcribed", "success");
+          } else {
+            addToast("STT Error: " + data.message, "error");
+          }
+        } catch (e) {
+          addToast("Failed to connect to STT API", "error");
+        } finally {
+          setIsThinking(false);
+        }
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.current.start();
+      setIsRecording(true);
+      addToast("Listening... (Click mic again to stop)", "info");
+    } catch (err) {
+      addToast("Microphone permission denied", "error");
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    addToast(`Uploading ${type}: ${file.name}...`, "info");
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const res = await fetch('http://localhost:8000/api/upload-bg', { // Shared endpoint for now
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setInput(prev => prev + (prev ? " " : "") + `[ATTACHED ${type}](${data.url}) `);
+        addToast("File uploaded and linked", "success");
+      }
+    } catch (err) {
+      addToast("Upload failed", "error");
+    }
+    setShowAttachMenu(false);
+  };
+  
+  const captureScreen = async () => {
+    addToast("Capturing screen...", "info");
+    try {
+      const res = await fetch('http://localhost:8000/api/agent/screenshot', { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setInput(prev => prev + (prev ? " " : "") + `[ATTACHED IMAGE](${data.url}) `);
+        addToast("Screen captured and linked", "success");
+      }
+    } catch (err) {
+      addToast("Screen capture failed", "error");
+    }
+    setShowAttachMenu(false);
+  };
+
+
+  const handleDelete = async (id: number) => {
+    await fetch(`http://localhost:8000/api/chat/message/${id}`, { method: 'DELETE' });
+    setMessages(prev => prev.filter(m => m.id !== id));
+  };
+
+  const handleEdit = (id: number, content: string) => {
+    setEditingId(id);
+    setEditValue(content);
+  };
+
+  const saveEdit = async () => {
+    if (editingId === null) return;
+    await fetch(`http://localhost:8000/api/chat/message`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_id: editingId, content: editValue })
+    });
+    setMessages(prev => prev.map(m => m.id === editingId ? { ...m, content: editValue } : m));
+    setEditingId(null);
+  };
+
+  const handleLike = async (id: number, liked: number) => {
+    await fetch(`http://localhost:8000/api/chat/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_id: id, liked })
+    });
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, is_liked: liked } : m));
+  };
+
+  const handlePin = async (id: number) => {
+    await fetch(`http://localhost:8000/api/chat/pin/${id}`, { method: 'POST' });
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, is_pinned: true } : m));
+  };
+
+  if (!config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse bg-transparent">Loading MIA Core...</div>;
+
+  const uiOpacity = config.appearance.ui_opacity;
+
+  return (
+    <div 
+      className={`w-full h-full flex flex-col p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto overflow-hidden transition-all ${isDragging ? 'scale-[0.98] blur-[2px]' : ''}`}
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={(e) => { e.preventDefault(); setIsDragging(false); /* handleFileUpload can be adapted for drops */ }}
+    >
+        {/* Sentiment-Based Mood Overlay */}
+        <div 
+          className={`fixed inset-0 z-0 transition-all duration-3000 pointer-events-none ${
+            intimacyActive ? 'bg-pink-500/5' :
+            mood === 'energetic' ? 'bg-primary/5' : 
+            mood === 'serious' ? 'bg-error/5' : 
+            mood === 'warm' ? 'bg-orange-500/10' : 'bg-transparent'
+          }`}
+        ></div>
+
+        {/* Background Ducking Overlay (Cinema Mode) */}
+        <div 
+          className={`fixed inset-0 z-0 bg-black/60 backdrop-blur-md transition-all duration-1000 pointer-events-none ${
+            (isSpeaking || intimacyActive) ? 'opacity-100' : 'opacity-0'
+          } ${intimacyActive ? 'shadow-[inset_0_0_150px_rgba(255,100,150,0.3)]' : ''}`}
+        ></div>
+        {isDragging && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-primary/20 backdrop-blur-md border-4 border-dashed border-primary m-10 rounded-[3rem] animate-pulse">
+            <div className="text-center text-primary">
+              <Download size={64} className="mx-auto mb-4" />
+              <h2 className="text-3xl font-bold font-mono tracking-tighter">DROP TO ANALYZE</h2>
+            </div>
+          </div>
+        )}
+        
+        {/* Top Status Bar */}
+        <div 
+          className={`flex items-center justify-between mb-6 p-4 rounded-2xl border border-white/10 backdrop-blur-xl shadow-lg shrink-0 transition-all duration-500 ${
+            intimacyActive ? 'border-pink-500/50 shadow-[0_0_40px_rgba(255,100,150,0.2)] bg-black/80' :
+            isSpeaking ? 'border-primary/50 shadow-[0_0_30px_rgba(0,255,204,0.15)]' : ''
+          }`}
+          style={{ backgroundColor: intimacyActive ? undefined : `rgba(10, 10, 10, ${uiOpacity})` }}
+        >
+          <div className="flex items-center gap-3">
+            <div 
+              className="relative cursor-pointer group/aura"
+              onClick={handleTouch}
+              onMouseEnter={() => {
+                // Subtle reactive pulse on hover
+                if (intimacyActive && !isSpeaking) handleTouch();
+              }}
+            >
+              <Activity className={
+                intimacyActive ? "text-pink-500 animate-heartbeat z-10 relative group-hover/aura:scale-110 transition-transform" :
+                status.includes("Connected") ? "text-primary animate-pulse z-10 relative" : "text-error z-10 relative"
+              } />
+              {(isSpeaking || (intimacyActive && audioLevel > 5)) && (
+                <div 
+                  className={`absolute inset-0 rounded-full blur-md transition-transform duration-75 ${intimacyActive ? 'bg-pink-500/40' : 'bg-primary/40'}`}
+                  style={{ transform: `scale(${1 + (audioLevel / 50)})`, opacity: 0.3 + (audioLevel / 150) }}
+                ></div>
+              )}
+              {intimacyActive && (
+                <div className="absolute inset-0 bg-pink-500/20 rounded-full blur-xl opacity-0 group-hover/aura:opacity-100 transition-opacity"></div>
+              )}
+            </div>
+            <span className="font-mono text-sm tracking-wide text-white/90">
+              {isSpeaking ? (
+                <span className="flex items-center gap-2">
+                  MIA is Speaking
+                  <div className="flex items-end gap-[2px] h-3">
+                    {[1,2,3,4,5].map(i => (
+                      <div 
+                        key={i} 
+                        className="w-[3px] bg-primary rounded-full transition-all duration-75"
+                        style={{ height: `${20 + (audioLevel * (0.5 + Math.random()))}%` }}
+                      ></div>
+                    ))}
+                  </div>
+                </span>
+              ) : status}
+            </span>
+          </div>
+          <div className="flex items-center gap-6 text-white/70">
+            <span onClick={() => setIsTTSMuted(!isTTSMuted)} className="hover:text-primary transition-colors cursor-pointer">
+              {isTTSMuted ? <VolumeX size={22} className="text-white/40" /> : <Volume2 size={22} className="text-primary" />}
+            </span>
+            <Link to="/settings" className="hover:text-primary transition-colors">
+              <Settings2 size={22} />
+            </Link>
+          </div>
+        </div>
+
+        {/* Chat Area */}
+        <div className="flex-1 overflow-y-auto mb-6 pr-2 space-y-6 custom-scrollbar scroll-smooth">
+          {messages.length === 0 && (
+            <div className="h-full flex items-center justify-center opacity-40">
+              <div className="px-6 py-4 rounded-2xl border border-white/10 font-mono text-white text-center">
+                <Brain className="mx-auto mb-2 opacity-50" size={40} />
+                Awaiting commands...<br/>
+                <span className="text-xs">Type / for commands, @ for context</span>
+              </div>
+            </div>
+          )}
+          
+          {messages.map((msg, idx) => (
+            <ChatBubble 
+              key={msg.id || idx} 
+              msg={msg} 
+              isMIA={msg.role === 'MIA'}
+              isSys={msg.role === 'System'}
+              config={config}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+              onLike={handleLike}
+              onPin={handlePin}
+              isEditing={editingId === msg.id}
+              editValue={editValue}
+              onEditChange={setEditValue}
+              onSaveEdit={saveEdit}
+              onCancelEdit={() => setEditingId(null)}
+            />
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Input Area */}
+        <div className="relative flex flex-col gap-2 shrink-0">
+          {showAttachMenu && (
+            <div className="absolute bottom-[110%] left-0 w-64 p-4 grid grid-cols-3 gap-3 bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-50">
+              <button onClick={() => document.getElementById('attach-img')?.click()} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
+                <ImageIcon size={20} />
+                <span className="text-[10px] font-mono">Image</span>
+              </button>
+              <button onClick={() => document.getElementById('attach-file')?.click()} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
+                <FileText size={20} />
+                <span className="text-[10px] font-mono">File</span>
+              </button>
+              <button onClick={captureScreen} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
+                <MonitorUp size={20} />
+                <span className="text-[10px] font-mono">Screen</span>
+              </button>
+            </div>
+
+          )}
+
+          {(showCommands || showMentions) && (
+            <div className="absolute bottom-[110%] left-10 w-80 max-h-64 overflow-y-auto custom-scrollbar bg-black/90 backdrop-blur-2xl border border-white/10 rounded-xl py-2 shadow-2xl z-50 font-mono text-sm">
+              {showCommands && filteredCommands.map((c, i) => (
+                <button key={c.cmd} onClick={() => insertToken(c.cmd + " ")} className={`w-full flex items-center justify-between px-4 py-2 ${activeIndex === i ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/10'}`}>
+                  <div className="flex items-center gap-2">{c.icon} <b>{c.cmd}</b></div>
+                  <span className="text-[10px] opacity-50">{c.desc}</span>
+                </button>
+              ))}
+              {showMentions && filteredFiles.map((f, i) => (
+                <button key={f} onClick={() => insertToken("@" + f + " ")} className={`w-full flex items-center gap-2 px-4 py-2 ${activeIndex === i ? 'bg-secondary/20 text-secondary' : 'text-white/80 hover:bg-white/10'}`}>
+                  <FileText size={16} /> <b>@{f}</b>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className={`flex items-center gap-3 p-3 rounded-full border border-white/20 backdrop-blur-xl shadow-2xl transition-all ${isThinking ? 'thinking-pulse border-primary shadow-[0_0_20px_rgba(0,255,204,0.3)]' : 'focus-within:border-primary/50'}`} style={{ backgroundColor: `rgba(0, 0, 0, ${uiOpacity + 0.1})` }}>
+            <button onClick={() => setShowAttachMenu(!showAttachMenu)} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${showAttachMenu ? 'text-primary' : 'text-white/60'}`}><Paperclip size={20} /></button>
+            
+            <input ref={inputRef} type="text" value={input} onChange={handleInputChange} onKeyDown={handleKeyDown} placeholder={isThinking ? "MIA is thinking..." : "Message MIA..."} className="flex-1 bg-transparent border-none outline-none font-sans text-lg text-white" disabled={isThinking} />
+            
+            <button onClick={handleMic} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${isRecording ? 'text-secondary animate-pulse' : 'text-white/60 hover:text-primary'}`}><Mic size={20} /></button>
+            
+            <button onClick={sendMessage} disabled={!input.trim() || isThinking} className="p-3 mr-1 rounded-full bg-primary text-black hover:scale-105 transition-all disabled:opacity-50 disabled:grayscale">
+              {isThinking ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+            </button>
+          </div>
+
+          {/* Hidden File Inputs */}
+          <input type="file" id="attach-img" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'IMAGE')} />
+          <input type="file" id="attach-file" className="hidden" onChange={(e) => handleFileUpload(e, 'FILE')} />
+        </div>
+
+        {/* Toast Notification Hub */}
+        <div className="toast-container">
+          {toasts.map(t => (
+            <div key={t.id} className="toast">
+              {t.type === 'error' ? <AlertCircle size={16} className="text-error"/> : t.type === 'success' ? <Check size={16} className="text-success"/> : <InfoIcon size={16} className="text-primary"/>}
+              {t.msg}
+            </div>
+          ))}
+        </div>
+
+        {/* Global Command Palette */}
+        {showPalette && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-md" onClick={() => setShowPalette(false)}></div>
+            <div className="relative w-full max-w-xl bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden">
+              <div className="p-6 border-b border-white/5 flex items-center gap-4">
+                <Search className="text-primary" size={20} />
+                <input 
+                  autoFocus
+                  placeholder="Type a command or search settings..."
+                  className="bg-transparent border-none outline-none text-white text-lg w-full font-sans"
+                />
+              </div>
+              <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-4 mb-2">Quick Actions</div>
+                {[
+                  { icon: <Heart size={18} className={intimacyActive ? "text-pink-500 fill-pink-500" : ""}/>, name: intimacyActive ? "Deactivate Soulmate" : "Activate Soulmate", desc: "Phase Utama Keintiman", action: toggleIntimacy },
+                  { icon: <Zap size={18}/>, name: "Skills Manager", desc: "View MIA's abilities", link: "/settings" },
+                  { icon: <ImageIcon size={18}/>, name: "Change Background", desc: "Appearance settings", link: "/settings" },
+                  { icon: <Database size={18}/>, name: "Clear Memory", desc: "Reset chat history", action: () => { setInput("/clear"); sendMessage(); setShowPalette(false); } },
+                  { icon: <XCircle size={18}/>, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
+                ].map((item, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => item.action ? item.action() : null}
+                    className="flex items-center justify-between p-4 rounded-2xl hover:bg-white/5 cursor-pointer group transition-all"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-primary transition-colors">{item.icon}</div>
+                      <div>
+                        <div className="text-sm font-bold text-white/80 group-hover:text-white">{item.name}</div>
+                        <div className="text-[10px] text-white/30">{item.desc}</div>
+                      </div>
+                    </div>
+                    <div className="text-[10px] font-mono text-white/10 group-hover:text-primary transition-colors">ENTER</div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 bg-white/5 flex justify-between items-center">
+                <div className="text-[10px] text-white/20 font-mono">COMMAND PALETTE v1.0</div>
+                <div className="flex gap-2">
+                  <span className="px-2 py-0.5 rounded bg-white/10 text-[10px] text-white/40">ESC to close</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+    </div>
+  );
+}
+
+function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin, isEditing, editValue, onEditChange, onSaveEdit, onCancelEdit }: any) {
+  const [isCopied, setIsCopied] = useState(false);
+  
+  // Helper to determine text color based on background luminance
+  const getContrastYIQ = (hexcolor: string) => {
+    if (!hexcolor || hexcolor.startsWith('rgba')) return 'white'; // Default to white for transparent/rgba
+    hexcolor = hexcolor.replace("#", "");
+    const r = parseInt(hexcolor.substr(0,2),16);
+    const g = parseInt(hexcolor.substr(2,2),16);
+    const b = parseInt(hexcolor.substr(4,2),16);
+    const yiq = ((r*299)+(g*587)+(b*114))/1000;
+    return (yiq >= 128) ? 'black' : 'white';
+  };
+
+  const bubbleBg = isMIA ? config.appearance.bubble_color_mia : (isSys ? 'rgba(0,0,0,0.3)' : config.appearance.bubble_color_user);
+  const textColor = isSys ? 'text-secondary' : (getContrastYIQ(bubbleBg) === 'black' ? 'text-black' : 'text-white');
+  const mutedTextColor = getContrastYIQ(bubbleBg) === 'black' ? 'text-black/50' : 'text-white/50';
+
+  const videoMatch = msg.content.match(/\[VIDEO\]\((.*?)\)/) || msg.content.match(/src="([^"]*?\.mp4)"/);
+  const videoUrl = videoMatch ? videoMatch[1] : null;
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(msg.content);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  return (
+    <div className={`flex ${isMIA || isSys ? 'justify-start' : 'justify-end'} group relative mb-2 animate-chat-spring`}>
+      <div 
+        className={`max-w-[85%] p-6 rounded-[2.5rem] backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border transition-all duration-500 hover:scale-[1.01] ${
+          isMIA ? 'border-primary/30 rounded-tl-none' : isSys ? 'bg-black/40 border-secondary/20 italic' : 'border-white/20 rounded-tr-none'
+        } ${textColor}`}
+        style={{ 
+          backgroundColor: bubbleBg,
+          background: !isSys ? `linear-gradient(145deg, ${bubbleBg}, ${bubbleBg}dd)` : undefined,
+          boxShadow: isMIA ? `0 10px 40px -10px rgba(0, 255, 204, 0.2), 0 20px 50px rgba(0,0,0,0.3)` : `0 20px 50px rgba(0,0,0,0.3)`
+        }}
+      >
+        <div className={`flex items-center justify-between mb-4 ${mutedTextColor} font-mono text-[10px] uppercase tracking-[0.3em]`}>
+          <span className="font-extrabold flex items-center gap-2">
+            {isMIA && <Sparkles size={12} className="text-primary animate-pulse" />}
+            {msg.role}
+          </span>
+          <div className="flex items-center gap-3">
+            {msg.is_pinned && <Pin size={12} className="text-primary fill-primary" />}
+            <span className="opacity-70">{msg.timestamp?.slice(11, 16)}</span>
+          </div>
+        </div>
+
+        {isEditing ? (
+          <div className="flex flex-col gap-2">
+            <textarea 
+              value={editValue} 
+              onChange={(e) => onEditChange(e.target.value)}
+              className="w-full bg-black/40 border border-white/20 rounded-lg p-2 text-white font-sans outline-none focus:border-primary"
+              rows={3}
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={onCancelEdit} className="px-3 py-1 text-xs text-white/60 hover:text-white">Cancel</button>
+              <button onClick={onSaveEdit} className="px-3 py-1 text-xs bg-primary text-black rounded-md font-bold">Save</button>
+            </div>
+          </div>
+        ) : (
+          <div className={`prose ${textColor === 'text-black' ? 'prose-black' : 'prose-invert'} max-w-none prose-sm leading-relaxed tracking-wide`}>
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code({node, inline, className, children, ...props}: any) {
+                  const match = /language-(\w+)/.exec(className || '')
+                  return !inline && match ? (
+                    <SyntaxHighlighter
+                      style={atomDark}
+                      language={match[1]}
+                      PreTag="div"
+                      {...props}
+                    >
+                      {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                  ) : (
+                    <code className={className} {...props}>{children}</code>
+                  )
+                }
+              }}
+            >
+              {msg.content.replace(/\[VIDEO\]\(.*?\)/g, '')}
+            </ReactMarkdown>
+          </div>
+        )}
+
+        {videoUrl && (
+          <div className="mt-4 rounded-xl overflow-hidden border border-white/10 bg-black/40">
+            <video 
+              src={videoUrl.startsWith('/') ? `http://localhost:8000/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl} 
+              controls 
+              className="w-full max-h-96"
+            />
+            <div className="p-2 flex justify-between items-center bg-black/60">
+              <span className="text-[10px] text-white/40 flex items-center gap-1"><PlayCircle size={12}/> MIA Generated Video</span>
+              <a 
+                href={videoUrl.startsWith('/') ? `http://localhost:8000/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl} 
+                download 
+                className="p-1 hover:text-primary transition-colors"
+                title="Download Video"
+              >
+                <Download size={16} />
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* Audio handled by Global Controller */}
+
+        {/* Action Bar */}
+        {!isSys && !isEditing && (
+          <div className="mt-4 pt-2 border-t border-white/5 flex items-center justify-between gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-3">
+              {isMIA ? (
+                <>
+                  <button onClick={() => onLike(msg.id, 1)} className={`hover:text-primary transition-colors ${msg.is_liked === 1 ? 'text-primary' : 'text-white/40'}`}><ThumbsUp size={14} /></button>
+                  <button onClick={() => onLike(msg.id, -1)} className={`hover:text-error transition-colors ${msg.is_liked === -1 ? 'text-error' : 'text-white/40'}`}><ThumbsDown size={14} /></button>
+                  <button onClick={() => onPin(msg.id)} className={`hover:text-primary transition-colors ${msg.is_pinned ? 'text-primary' : 'text-white/40'}`}><Pin size={14} /></button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => onEdit(msg.id, msg.content)} className="text-white/40 hover:text-primary transition-colors"><Pencil size={14} /></button>
+                  <button onClick={() => onDelete(msg.id)} className="text-white/40 hover:text-error transition-colors"><Trash2 size={14} /></button>
+                </>
+              )}
+            </div>
+            <button onClick={copyToClipboard} className="text-white/40 hover:text-white transition-colors">
+              {isCopied ? <Check size={14} className="text-primary" /> : <Copy size={14} />}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
