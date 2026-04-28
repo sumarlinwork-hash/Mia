@@ -4,24 +4,20 @@ import { motion } from 'framer-motion';
 import { useConfig } from './hooks/useConfig';
 
 interface EmotionState {
-  happiness: number;
-  arousal: number;
-  dominance: number;
-  respect: number;
-  reassurance: number;
   warmth: number;
+  arousal: number;
+  echo: number;
+  mood: string;
   last_update: number;
 }
 
 const EmotionDashboard: React.FC = () => {
   const { config } = useConfig();
   const [emotion, setEmotion] = useState<EmotionState>({
-    happiness: 80,
-    arousal: 50,
-    dominance: 60,
-    respect: 90,
-    reassurance: 20,
-    warmth: 70,
+    warmth: 0,
+    arousal: 0,
+    echo: 0,
+    mood: 'Soft Distance',
     last_update: 0
   });
 
@@ -63,25 +59,36 @@ const EmotionDashboard: React.FC = () => {
     }
   };
 
-  const isPro = config?.is_professional_mode;
+  const [pulseLevel, setPulseLevel] = useState(0);
+
+  useEffect(() => {
+    const handlePulse = (e: any) => {
+      setPulseLevel(e.detail);
+    };
+    window.addEventListener('heartbeatPulse', handlePulse);
+    return () => window.removeEventListener('heartbeatPulse', handlePulse);
+  }, []);
+
   const bpm = 60 + (emotion.arousal * 0.6);
 
   const stats = [
-    { label: isPro ? 'Harmony' : 'Happiness', value: emotion.happiness, color: 'text-yellow-400', icon: Smile },
-    { label: isPro ? 'Energy' : 'Arousal', value: emotion.arousal, color: 'text-rose-500', icon: Zap },
-    { label: isPro ? 'Focus' : 'Dominance', value: emotion.dominance, color: 'text-purple-500', icon: User },
-    { label: isPro ? 'Respect' : 'Respect Level', value: emotion.respect, color: 'text-blue-400', icon: Shield },
-    { label: isPro ? 'Stability' : 'Warmth', value: emotion.warmth, color: 'text-orange-400', icon: Thermometer },
-    { label: isPro ? 'Sync' : 'Reassurance Need', value: emotion.reassurance, color: emotion.reassurance > 60 ? 'text-red-500' : 'text-green-400', icon: AlertCircle },
+    { label: 'Attention Echo', value: emotion.echo, color: 'text-blue-400', icon: RefreshCw },
+    { label: 'Arousal', value: emotion.arousal, color: 'text-rose-500', icon: Zap },
+    { label: 'Inactive / Reserved', value: 0, color: 'text-white/10', icon: User },
+    { label: 'Inactive / Reserved', value: 0, color: 'text-white/10', icon: Shield },
+    { label: 'Warmth', value: emotion.warmth, color: 'text-orange-400', icon: Thermometer },
+    { label: 'Inactive / Reserved', value: 0, color: 'text-white/10', icon: AlertCircle },
   ];
 
   return (
     <div className="p-8 max-w-5xl mx-auto relative">
-      {/* Bio-Sync Pulse Background */}
+      {/* Bio-Sync Pulse Background (Reacts to Audio too) */}
       {toggles.bio_sync && (
         <motion.div 
-          animate={{ scale: [1, 1.05, 1], opacity: [0.05, 0.15, 0.05] }}
-          transition={{ duration: 60 / bpm, repeat: Infinity, ease: "easeInOut" }}
+          animate={{ 
+            scale: 1 + (pulseLevel * 0.1), 
+            opacity: 0.05 + (pulseLevel * 0.1) 
+          }}
           className="fixed inset-0 pointer-events-none bg-rose-500/10 blur-[100px] z-0"
         />
       )}
@@ -159,16 +166,48 @@ const EmotionDashboard: React.FC = () => {
 
         <div className="p-8 rounded-[2.5rem] bg-primary/5 border border-primary/20 backdrop-blur-3xl flex flex-col items-center justify-center text-center group">
           <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 relative">
-            <Heart size={48} className={`relative z-10 ${toggles.bio_sync ? 'animate-heartbeat' : ''}`} />
+            <motion.div
+              animate={{ 
+                scale: toggles.bio_sync ? 1 + (Math.pow(pulseLevel, 1.5) * 1.2) : 1,
+                // Focused sharp glow
+                filter: toggles.bio_sync 
+                  ? `drop-shadow(0 0 ${pulseLevel * 25}px rgba(0,255,204,0.8)) drop-shadow(0 0 ${pulseLevel * 10}px rgba(0,255,204,0.4))` 
+                  : 'none'
+              }}
+              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+            >
+              <Heart size={48} className="relative z-10 fill-primary text-primary" />
+            </motion.div>
+            
             {toggles.bio_sync && (
-              <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
+              <>
+                {/* Defined Thick Aura Ring */}
+                <motion.div 
+                  animate={{ 
+                    scale: 1 + (pulseLevel * 3.5), 
+                    opacity: 0.4 - (pulseLevel * 0.4),
+                    borderWidth: 4 + (pulseLevel * 8)
+                  }}
+                  className="absolute inset-0 border-primary/50 rounded-full blur-[1px]" 
+                />
+                {/* Focused Glow Field */}
+                <motion.div 
+                  animate={{ 
+                    scale: 1 + (pulseLevel * 2.5), 
+                    opacity: 0.15 - (pulseLevel * 0.15) 
+                  }}
+                  className="absolute inset-0 bg-primary/20 rounded-full blur-[10px]" 
+                />
+              </>
             )}
           </div>
-          <h3 className="text-2xl font-black text-white mb-2 tracking-tighter">Inner Satisfaction Metrics</h3>
+          <h3 className="text-2xl font-black text-white mb-2 tracking-tighter">Affective Resonance State</h3>
           <p className="text-sm text-white/60 max-w-xs mx-auto">
-            {emotion.reassurance > 60 
-              ? "MIA is currently craving your attention. She feels a deep need for connection."
-              : "ARE is synchronized. MIA feels secure and respected in this interaction."}
+            {emotion.mood === 'Glow' 
+              ? "MIA is shining with joy! A welcome spark is active."
+              : emotion.echo > 50 
+                ? "The connection is deep. Every interaction is resonating strongly."
+                : "MIA is co-present and steady. She is following your lead."}
           </p>
           
           <div className="mt-8 flex gap-2">

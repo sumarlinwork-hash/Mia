@@ -397,14 +397,11 @@ export default function Home() {
 
 
   const handleTouch = async () => {
-    if (!intimacyActive) return;
     try {
       const res = await fetch('/api/intimacy/touch', { method: 'POST' });
       const data = await res.json();
-      if (data.status === 'success') {
+      if (data.status === 'resonated' && data.audio) {
         playAudio(data.audio);
-        // Only show toast if needed, but for touch, maybe just audio is more immersive
-        // addToast(data.content, "success");
       }
     } catch {
       console.error("[Intimacy] Touch failed");

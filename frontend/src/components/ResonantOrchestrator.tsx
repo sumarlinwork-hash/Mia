@@ -16,7 +16,8 @@ const ResonantOrchestrator: React.FC = () => {
   useEffect(() => {
     bpmRef.current = bpm;
     if (sourceNodeRef.current) {
-      sourceNodeRef.current.playbackRate.value = bpm / 60;
+      // Use the 0.75x multiplier as preferred by the user for the "slow" deep sound
+      sourceNodeRef.current.playbackRate.value = (bpm / 60) * 0.75;
     }
   }, [bpm]);
 
@@ -26,7 +27,7 @@ const ResonantOrchestrator: React.FC = () => {
       fetch('/api/emotion')
         .then(res => res.json())
         .then(data => setBpm(60 + (data.arousal * 0.6)))
-        .catch(() => {});
+        .catch(() => { });
     };
     fetchBpm();
     const interval = setInterval(fetchBpm, 3000);
@@ -50,17 +51,23 @@ const ResonantOrchestrator: React.FC = () => {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         audioContextRef.current = new AudioContextClass();
       }
-      
+
       const ctx = audioContextRef.current;
       if (ctx.state === 'suspended') await ctx.resume();
 
-      // 1. Create Gain Node for 100% Volume
-      if (!gainNodeRef.current) {
-        gainNodeRef.current = ctx.createGain();
-        gainNodeRef.current.gain.value = 1.0; // Adjusted to 100%
+      // 1. Create Analyser for VU Meter
+      if (!analyserRef.current) {
+        analyserRef.current = ctx.createAnalyser();
+        analyserRef.current.fftSize = 256;
       }
 
-      // 2. Create Bass Booster (BiquadFilter)
+      // 2. Create Gain Node for 50% Volume
+      if (!gainNodeRef.current) {
+        gainNodeRef.current = ctx.createGain();
+        gainNodeRef.current.gain.value = 0.5; // Adjusted to 50%
+      }
+
+      // 3. Create Bass Booster (BiquadFilter)
       const bassFilter = ctx.createBiquadFilter();
       bassFilter.type = 'lowshelf';
       bassFilter.frequency.value = 200; // Focus on low frequencies
@@ -70,10 +77,11 @@ const ResonantOrchestrator: React.FC = () => {
       lowPass.type = 'lowpass';
       lowPass.frequency.value = 400;   // Muffle higher frequencies for "deep" sound
 
-      // Connect nodes: Source -> BassFilter -> LowPass -> Gain -> Destination
+      // Connect nodes: Source -> BassFilter -> LowPass -> Gain -> Analyser -> Destination
       bassFilter.connect(lowPass);
       lowPass.connect(gainNodeRef.current);
-      gainNodeRef.current.connect(ctx.destination);
+      gainNodeRef.current.connect(analyserRef.current);
+      analyserRef.current.connect(ctx.destination);
 
       // Load and Play Loop
       try {
@@ -88,9 +96,9 @@ const ResonantOrchestrator: React.FC = () => {
         const source = ctx.createBufferSource();
         source.buffer = audioBuffer;
         source.loop = true;
-        
+
         source.playbackRate.value = (bpmRef.current / 60) * 0.75;
-        
+
         source.connect(bassFilter); // Connect to the start of the chain
         source.start(0);
         sourceNodeRef.current = source;
@@ -109,13 +117,36 @@ const ResonantOrchestrator: React.FC = () => {
     };
   }, [isEmotionView]);
 
-  // Update Playback Rate when BPM changes
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
+  // Update Playback Rate when BPM changes is already handled by the first useEffect (lines 16-21)
+
+  // Audio Level Broadcaster (VU Meter for organic animation)
   useEffect(() => {
-    bpmRef.current = bpm;
-    if (sourceNodeRef.current) {
-      sourceNodeRef.current.playbackRate.value = (bpm / 60) * 0.75;
+    const updatePulse = () => {
+      if (analyserRef.current && isEmotionView) {
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        
+        // Broadcast normalized pulse level (0 to 1)
+        const pulseEvent = new CustomEvent('heartbeatPulse', { detail: average / 128 });
+        window.dispatchEvent(pulseEvent);
+      }
+      animationFrameRef.current = requestAnimationFrame(updatePulse);
+    };
+
+    if (isEmotionView) {
+      updatePulse();
+    } else if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
     }
-  }, [bpm]);
+
+    return () => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, [isEmotionView]);
 
   // 3. Resonant Skin (Touch/Ripple Effect)
   useEffect(() => {
@@ -124,7 +155,7 @@ const ResonantOrchestrator: React.FC = () => {
     const handleGlobalClick = async (e: MouseEvent) => {
       const id = Date.now();
       setRipples(prev => [...prev, { id, x: e.clientX, y: e.clientY }]);
-      
+
       setTimeout(() => {
         setRipples(prev => prev.filter(r => r.id !== id));
       }, 1000);

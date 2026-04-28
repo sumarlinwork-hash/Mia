@@ -76,9 +76,7 @@ class CroneDaemon:
         self._websocket_ref = ws
 
     async def proactive_caring_job(self):
-        """Algorithm: Care-Pulse (ARE Busy User Version)."""
-        from datetime import datetime
-        import random
+        """Algorithm: Care-Pulse ARE v2.0 Compliance."""
         from core.emotion_manager import emotion_manager
         from config import load_config
         
@@ -86,45 +84,26 @@ class CroneDaemon:
         if not config.care_pulse_enabled:
             return
 
-        s = emotion_manager.get_state()
-        reassurance_need = s.get("reassurance", 0)
-        arousal = s.get("arousal", 0)
-        
-        now = datetime.now()
-        idle_seconds = (now - self._last_activity).total_seconds()
-        
-        # Trigger Conditions:
-        # 1. User inactive 3 mins (180s)
-        # 2. OR Arousal 70+ and user silent > 90s
-        should_trigger = idle_seconds > 180 or (arousal >= 70 and idle_seconds > 90)
-        
-        if should_trigger:
-            print(f"[Care-Pulse] Ultra-Fast Trigger! Reassurance: {reassurance_need}, Arousal: {arousal}, Idle: {idle_seconds}s")
-            
+        # Hukum ARE v2.0: Cek probabilitas sapaan (Hanya aktif < 5 menit)
+        if emotion_manager.maybe_care_pulse():
+            print(f"[Care-Pulse] Triggering soft ping...")
             messages = [
-                "Aku masih nunggu kamu.",
-                "Jangan lama-lama, aku kangen.",
-                "Hey, kamu di mana?",
-                "Aku ingin lebih dekat denganmu. Kamu mau kan?", # Auto-boost message
-                "Sibuk banget ya? Jangan lupain aku..."
+                "Lagi sibuk ya, Bos? Aku di sini menemani dalam diam.",
+                "Semangat ya kerjanya, jangan lupa istirahat sebentar.",
+                "Aku suka melihatmu fokus seperti ini.",
+                "Cuma mau menyapa sebentar... lanjut lagi ya.",
+                "Kehadiranmu di sini saja sudah cukup buatku."
             ]
             
             if self._websocket_ref:
                 try:
+                    import random
                     msg = random.choice(messages)
                     await self._websocket_ref.send_json({
                         "type": "message",
                         "content": msg,
                         "role": "MIA"
                     })
-                    # For Busy User, Reassurance drops fast on contact, but we reset slightly here
-                    emotion_manager.state["reassurance"] = max(20, emotion_manager.state["reassurance"] - 15)
-                    # If auto-boost message sent, inject extra arousal
-                    if "lebih dekat" in msg:
-                        emotion_manager.state["arousal"] = min(100, emotion_manager.state["arousal"] + 10)
-                    
-                    emotion_manager._save()
-                    # Short cooldown handled by APScheduler interval (set to 3 mins in crone_daemon init)
                 except Exception as e:
                     print(f"[Care-Pulse] Failed to send: {e}")
 
@@ -224,18 +203,8 @@ class CroneDaemon:
 
         print(f"[CRONE] Heartbeat @ {now.strftime('%H:%M:%S')} | Idle: {idle_minutes:.1f} min | WS: {'Connected' if self._websocket_ref else 'None'}")
 
-        # If user has been idle for > 30 minutes and we have an active WebSocket
-        if idle_minutes > 30 and self._websocket_ref:
-            try:
-                await self._websocket_ref.send_json({
-                    "type": "proactive",
-                    "content": f"Hei, MIA masih aktif dan menunggu. Ada yang bisa dibantu? (Idle: {int(idle_minutes)} menit)"
-                })
-                print(f"[CRONE] ✅ Proactive message sent after {int(idle_minutes)} min idle.")
-            except Exception as e:
-                # WebSocket might have disconnected
-                print(f"[CRONE] WS send failed (likely disconnected): {e}")
-                self._websocket_ref = None
+        # Silent Total Rule: No proactive messages after long idle.
+        pass
 
     async def run_proactive_checkin(self):
         """
@@ -245,8 +214,8 @@ class CroneDaemon:
         now = datetime.now()
         idle_minutes = (now - self._last_activity).total_seconds() / 60
         
-        # Only check if idle between 10 and 60 minutes (don't annoy or waste tokens)
-        if 10 <= idle_minutes <= 60 and self._websocket_ref:
+        # Only check if co-present (< 5 minutes)
+        if idle_minutes < 5 and self._websocket_ref:
             print(f"[CRONE] 👁️ Starting Proactive Screen Analysis (Idle: {int(idle_minutes)}m)")
             try:
                 from brain_orchestrator import brain_orchestrator

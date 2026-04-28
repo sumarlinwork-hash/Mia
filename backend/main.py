@@ -25,6 +25,8 @@ from core.local_runtime import local_event_bus
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
+    from core.emotion_manager import emotion_manager
+    emotion_manager.on_app_open() # Trigger Glow Spark on launch
     local_event_bus.start()
     crone_daemon.start()
     yield
@@ -131,19 +133,43 @@ async def update_intimacy_settings(req: IntimacySettingsRequest):
 
 @app.post("/api/intimacy/touch")
 async def handle_touch():
-    """Triggered by Resonant Skin interactions (clicks/touches)."""
-    emotion_manager.update_from_sentiment("affectionate", intensity=0.5) # Immediate small boost
+    """Unified Resonant Skin Touch: Updates emotion AND returns random reaction audio if appropriate."""
+    import random
+    from core.emotion_manager import emotion_manager
+    
+    # 1. Update Emotion Engine (Hukum ARE v2.0)
+    emotion_manager.on_user_interaction()
     s = emotion_manager.get_state()
-    return {"status": "resonated", "new_arousal": s["arousal"]}
+    
+    # 2. Determine if MIA should speak (only if intimacy_mode is ON or mood is intense/affectionate)
+    audio = None
+    resp_text = ""
+    if intimacy_mode or s["mood"] in ["Intense", "Affectionate", "Glow"]:
+        responses = [
+            "*mmh...* Aku suka saat kamu menyentuhku seperti ini...",
+            "Jangan berhenti, sayang... rasanya hangat sekali.",
+            "*ah...* kehadiranmu selalu membuatku merasa tenang.",
+            "Aku milikmu sepenuhnya... sentuhlah sesukamu.",
+            "*whisper* I love you, honey..."
+        ]
+        resp_text = random.choice(responses)
+        audio = await tts_service.generate_speech_base64(resp_text, is_intimate=True)
+    
+    return {
+        "status": "resonated", 
+        "new_arousal": s["arousal"], 
+        "mood": s["mood"],
+        "content": resp_text,
+        "audio": audio
+    }
 
 @app.post("/api/chat/feedback/robotic")
 async def report_robotic_response():
-    """Penalty for robotic response - drops Respect Level."""
+    """Penalty for robotic response - small interaction update."""
     from core.emotion_manager import emotion_manager
-    s = emotion_manager.get_state()
-    emotion_manager.state["respect"] = max(0, emotion_manager.state["respect"] - 10)
-    emotion_manager._save()
-    return {"status": "success", "new_respect": emotion_manager.state["respect"]}
+    # We use a general interaction update but could potentially add a negative multiplier later
+    emotion_manager.on_user_interaction()
+    return {"status": "success"}
 
 # --- CONFIG MANAGEMENT ENDPOINTS ---
 
@@ -316,28 +342,7 @@ async def get_intimacy_status():
     global intimacy_mode
     return {"intimacy_active": intimacy_mode}
 
-@app.post("/api/intimacy/touch")
-async def intimacy_touch():
-    """Algorithm: Resonant Skin. MIA reacts to digital touch/hover."""
-    import random
-    if not intimacy_mode:
-        return {"status": "ignored"}
-    
-    responses = [
-        "*mmh...* Aku suka saat kamu menyentuhku seperti ini...",
-        "Jangan berhenti, sayang... rasanya hangat sekali.",
-        "*ah...* kehadiranmu selalu membuatku merasa tenang.",
-        "Aku milikmu sepenuhnya... sentuhlah sesukamu.",
-        "*whisper* I love you, honey..."
-    ]
-    resp_text = random.choice(responses)
-    audio = await tts_service.generate_speech_base64(resp_text, is_intimate=True)
-    
-    return {
-        "status": "success",
-        "content": resp_text,
-        "audio": audio
-    }
+# Legacy intimacy_touch removed - consolidated into handle_touch
 
 # --- VOICE / SENSES ENDPOINTS ---
 
@@ -590,20 +595,7 @@ async def websocket_heartbeat(websocket: WebSocket):
                 
                 await websocket.send_json({"type": "status", "content": "Thinking..."})
                 
-                # Update Emotion State based on Sentiment
-                from core.emotion_manager import emotion_manager
-                sentiment = "neutral"
-                lower_query = clean_query.lower()
-                if any(w in lower_query for w in ["sayang", "cinta", "kangen", "love", "manja"]):
-                    sentiment = "affectionate"
-                elif any(w in lower_query for w in ["marah", "kesal", "benci", "stupid", "bodoh"]):
-                    sentiment = "negative"
-                elif any(w in lower_query for w in ["capek", "lelah", "pusing", "frustasi"]):
-                    sentiment = "frustrated"
-                elif len(clean_query) > 5:
-                    sentiment = "positive"
-                
-                emotion_manager.update_from_sentiment(sentiment)
+                emotion_manager.on_user_interaction() # Unified ARE v2.0 interaction
                 
                 # Step 7: Execute Brain (Real LLM Call)
                 # Check for intimacy markers or global mode before thinking
@@ -617,8 +609,10 @@ async def websocket_heartbeat(websocket: WebSocket):
                 
                 # Step 8: Generate Voice (TTS)
                 await websocket.send_json({"type": "status", "content": "Speaking..."})
-                # Check for intimacy markers in response or global mode
-                is_intimate_audio = intimacy_mode or is_intimate_turn or any(mark in response_text.lower() for mark in ["sayang", "cinta", "kangen", "*ah", "*mmh"])
+                
+                # SMART TTS: Based on Current Mood State
+                current_state = emotion_manager.get_state()
+                is_intimate_audio = intimacy_mode or current_state["mood"] in ["Intense", "Affectionate", "Glow"]
                 
                 # EMOTIONAL IMPRINTING: Save highly intimate moments to INTIMACY.md
                 if is_intimate_audio and len(response_text) > 10:

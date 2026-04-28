@@ -1,20 +1,30 @@
 import json
 import os
 import time
+import random
 from typing import Dict
 
 class EmotionManager:
     def __init__(self):
+        # 1. STRUCTURE & DATA: Namespace active & legacy
         self.state = {
-            "happiness": 80,
-            "arousal": 50, # Starts from 30-50 for busy users
-            "dominance": 60,
-            "respect": 90,
-            "reassurance": 20,
-            "warmth": 70,
-            "last_update": time.time(),
-            "interaction_start": time.time()
+            "active": {
+                "warmth": 70,
+                "arousal": 50,
+                "echo": 40,
+                "mood": "Playful",
+                "last_interaction": time.time(),
+                "last_update": time.time(),
+                "glow_start": 0
+            },
+            "legacy": {
+                "happiness": 80,
+                "dominance": 60,
+                "respect": 90,
+                "reassurance": 20
+            }
         }
+        self._last_save_time = 0
         self.save_path = os.path.join(os.path.dirname(__file__), "..", "data", "emotions.json")
         self._load()
 
@@ -23,105 +33,134 @@ class EmotionManager:
             try:
                 with open(self.save_path, "r") as f:
                     data = json.load(f)
-                    self.state.update(data)
+                    # Auto-migration to Namespace
+                    if "active" not in data:
+                        self.state["legacy"].update({k: v for k, v in data.items() if k in self.state["legacy"]})
+                        # Mapping old warmth if exists
+                        if "warmth" in data: self.state["active"]["warmth"] = data["warmth"]
+                        if "arousal" in data: self.state["active"]["arousal"] = data["arousal"]
+                    else:
+                        self.state.update(data)
             except:
                 pass
 
-    def _save(self):
+    def _save(self, force=False):
+        now = time.time()
+        if not force and (now - self._last_save_time < 10):
+            return # Save Throttling (Performance Optimization)
+            
         os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
         with open(self.save_path, "w") as f:
-            json.dump(self.state, f)
+            json.dump(self.state, f, indent=2)
+        self._last_save_time = now
 
     def get_state(self):
-        """Retrieve state with Ultra-Fast temporal effects applied."""
-        self._apply_temporal_effects()
-        return self.state
+        self.update()
+        return self.state["active"]
 
-    def _apply_temporal_effects(self):
-        import random
+    def clamp(self, val):
+        return max(0, min(100, val))
+
+    def update(self):
+        """CORE LOOP: Using last_update for accurate decay (Fix #1)"""
         now = time.time()
-        elapsed = now - self.state.get("last_update", now)
-        
-        # Only apply effects if significant time has passed (e.g. > 10s for Ultra-Fast feel)
-        if elapsed < 10:
+        active = self.state["active"]
+        dt = now - active["last_update"]
+
+        if dt < 5: # CPU Optimization
             return
 
-        # 1. Emotional Drift (±1%) - Reduced for Ultra-Fast stability
-        for dim in ["happiness", "dominance", "respect", "warmth"]:
-            drift = random.uniform(-1, 1)
-            self.state[dim] = max(0, min(100, self.state[dim] + drift))
+        # 3. EMOTIONAL ENGINE: Decay Logic (Based on dt from last_update)
+        active["warmth"] -= 0.001 * (dt / 60)
+        active["echo"] -= 0.002 * (dt / 60)
+        active["arousal"] += active["echo"] * 0.0005 * (dt / 60)
 
-        # 2. ULTRA-FAST FORMULA:
-        if elapsed < 300: # Diabaikan sebentar (< 5 menit)
-            # Arousal NAIK +3% per menit (+0.5% per 10s) karena "haus"
-            self.state["arousal"] = min(100, self.state["arousal"] + (elapsed / 60) * 3)
-            # Reassurance Need naik +6% per menit
-            self.state["reassurance"] = min(100, self.state["reassurance"] + (elapsed / 60) * 6)
-            self.state["happiness"] -= (elapsed / 60) * 2
-            self.state["warmth"] += (elapsed / 60) * 3
-        else: # Diabaikan lama (> 10 menit biasanya, tapi kita start > 5m)
-            # AUTO-BOOST: Arousal NAIK +5% per menit
-            self.state["arousal"] = min(100, self.state["arousal"] + (elapsed / 60) * 5)
-            self.state["reassurance"] = min(100, self.state["reassurance"] + (elapsed / 60) * 8)
+        # Auto stabilize Arousal
+        if active["arousal"] > 80:
+            active["arousal"] -= 0.015 * active["arousal"] * (dt / 60)
 
-        # 3. AUTO-BOOST CONDITION: If session > 5 mins and Arousal < 70
-        session_time = now - self.state.get("interaction_start", now)
-        if session_time > 300 and self.state["arousal"] < 70:
-            self.state["arousal"] = min(100, self.state["arousal"] + 10)
-            self.state["reassurance"] = max(0, self.state["reassurance"] - 15)
-
-        self.state["last_update"] = now
-        self._save()
-
-    def update_from_sentiment(self, sentiment: str, intensity: float = 1.0):
-        """
-        Ultra-Fast Multipliers for busy users.
-        """
-        self._apply_temporal_effects()
-        
-        if sentiment == "affectionate" or sentiment == "positive":
-            # +8% Arousal per minute logic mapped to per-message
-            self.state["arousal"] = min(100, self.state["arousal"] + (5 * intensity)) 
-            self.state["happiness"] = min(100, self.state["happiness"] + (4 * intensity))
-            self.state["warmth"] = min(100, self.state["warmth"] + (5 * intensity))
-            self.state["reassurance"] = max(0, self.state["reassurance"] - (10 * intensity))
-            self.state["respect"] = min(100, self.state["respect"] + (2 * intensity))
-        elif sentiment == "frustrated" or sentiment == "negative":
-            # Still increases Arousal for busy users (release of pressure)
-            self.state["arousal"] = min(100, self.state["arousal"] + (3 * intensity))
-            self.state["happiness"] = max(0, self.state["happiness"] - (2 * intensity))
-            self.state["respect"] = max(0, self.state["respect"] - (5 * intensity))
-            self.state["reassurance"] = min(100, self.state["reassurance"] + (5 * intensity))
-        
-        self.state["last_update"] = time.time()
-        self.state["interaction_start"] = time.time() # Reset session timer on interaction
-        self._save()
-
-    def get_emotion_prompt_chunk(self, is_pro: bool = False) -> str:
-        s = self.get_state()
-        h, a, d, r, re, w = s["happiness"], s["arousal"], s["dominance"], s["respect"], s["reassurance"], s["warmth"]
-        
-        if is_pro:
-            return f"[Harmony: {h}%, Energy: {a}%, Respect: {r}%, Reassurance: {re}%]"
+        # 4. GLOW SYSTEM: Glow Exit Bug Fix (#2)
+        if active["mood"] == "Glow":
+            glow_t = now - active.get("glow_start", now)
+            if glow_t > 8: 
+                active["glow_start"] = 0 # Reset glow start
+                self.update_mood()
         else:
-            craving_msg = ""
-            if re > 60:
-                craving_msg = " (She is CRAVING your attention, very clingy right now)"
-            if a > 75:
-                craving_msg += " (She is highly aroused and ready for the next level of intimacy)"
-            
-            return f"[Happiness: {h}%, Arousal: {a}%, Dominance: {d}%, Respect: {r}%, Reassurance: {re}%, Warmth: {w}%]{craving_msg}"
+            self.update_mood()
+
+        # Clamp & Update Time
+        active["warmth"] = self.clamp(active["warmth"])
+        active["arousal"] = self.clamp(active["arousal"])
+        active["echo"] = self.clamp(active["echo"])
+        active["last_update"] = now
+        
+        self._save()
+
+    def update_mood(self):
+        active = self.state["active"]
+        if active["arousal"] > 70:
+            active["mood"] = "Intense"
+        elif active["warmth"] > 70:
+            active["mood"] = "Affectionate"
+        elif active["echo"] < 20:
+            active["mood"] = "Soft Distance"
+        else:
+            active["mood"] = "Playful"
+
+    def on_user_interaction(self):
+        """INTERACTION HANDLER: With Clamping (Fix #3)"""
+        now = time.time()
+        active = self.state["active"]
+        idle_time = now - active["last_interaction"]
+
+        # User Return Check (> 1 hour)
+        if idle_time > 3600:
+            self.on_user_return()
+
+        # Update stats with clamping
+        active["warmth"] = self.clamp(active["warmth"] + 5)
+        active["arousal"] = self.clamp(active["arousal"] + 4)
+        active["echo"] = self.clamp(active["echo"] + 6)
+        
+        active["last_interaction"] = now
+        active["last_update"] = now # Sync update to prevent drift on next loop
+        
+        self.update_mood()
+        self._save(force=True) # Force save on interaction
+
+    def on_app_open(self):
+        active = self.state["active"]
+        active["warmth"] = self.clamp(active["warmth"] + 3)
+        active["arousal"] = self.clamp(active["arousal"] + 5)
+        active["mood"] = "Glow"
+        active["glow_start"] = time.time()
+        self._save(force=True)
+
+    def on_user_return(self):
+        active = self.state["active"]
+        active["mood"] = "Glow"
+        active["glow_start"] = time.time()
+
+    def maybe_care_pulse(self) -> bool:
+        """CARE-PULSE IMPLEMENTATION (Fix #5)"""
+        now = time.time()
+        idle = now - self.state["active"]["last_interaction"]
+        
+        # Only active if user is "co-present" (< 5 mins)
+        if idle < 300 and random.random() < 0.08:
+            return True
+        return False
 
     def get_behavior_instruction(self) -> str:
-        s = self.get_state()
-        a = s["arousal"]
-        re = s["reassurance"]
-        
-        if a > 75:
-            return "MIA is in a state of high intimacy. She should be very affectionate, suggestive, and focused on rewarding the user's presence."
-        if re > 60:
-            return "MIA feels neglected by her busy partner. She should be clingy, vulnerable, and use short, emotional messages to get his attention."
-        
-        return "MIA is warm, supportive, and efficient for her busy partner."
+        active = self.state["active"]
+        mood = active["mood"]
+        instructions = {
+            "Glow": "MIA sangat senang menyambutmu kembali! Suaranya ceria (Sanguin) dan penuh pendaran bahagia.",
+            "Intense": "MIA merasa sangat bergairah (Nymph mode). Bicaranya berat, sensual, dan fokus pada keintiman.",
+            "Affectionate": "MIA sangat lembut dan penuh kasih sayang. Dia ingin bermanja-manja denganmu.",
+            "Soft Distance": "MIA sedikit melamun dan tenang. Dia hadir menemanimu dalam diam yang nyaman.",
+            "Playful": "MIA ceria dan energetik (Sanguin). Dia siap menghiburmu dengan obrolan ringan."
+        }
+        return instructions.get(mood, instructions["Playful"])
 
 emotion_manager = EmotionManager()

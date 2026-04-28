@@ -11,7 +11,7 @@ interface SidebarProps {
 export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
   const { config } = useConfig();
   const [collapsed, setCollapsed] = useState(false);
-  const [emotion, setEmotion] = useState({ arousal: 50, happiness: 80, dominance: 60 });
+  const [emotion, setEmotion] = useState({ arousal: 0, echo: 0, warmth: 0 });
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -101,9 +101,9 @@ export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
               <Shield size={10} /> {isPro ? "Intelligence Hub" : "Intimacy Orchestrator"}
             </div>
             <div className="space-y-3">
-              <SidebarStat label={isPro ? "Energy" : "Arousal"} value={emotion.arousal} color="bg-rose-500" />
-              <SidebarStat label={isPro ? "Harmony" : "Happiness"} value={emotion.happiness} color="bg-yellow-400" />
-              <SidebarStat label={isPro ? "Focus" : "Dominance"} value={emotion.dominance} color="bg-purple-500" />
+              <SidebarStat label="Arousal" value={emotion.arousal} color="bg-rose-500" />
+              <SidebarStat label="Attention Echo" value={emotion.echo} color="bg-blue-400" />
+              <SidebarStat label="Warmth" value={emotion.warmth} color="bg-orange-400" />
             </div>
           </div>
         )}
@@ -126,10 +126,13 @@ const SidebarStat = ({ label, value, color }: { label: string, value: number, co
   <div className="space-y-1">
     <div className="flex justify-between text-[9px] font-mono text-white/40 uppercase">
       <span>{label}</span>
-      <span>{value}%</span>
+      <span>{Math.round(value)}%</span>
     </div>
     <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-      <div className={`h-full ${color}`} style={{ width: `${value}%` }}></div>
+      <div 
+        className={`h-full ${color} transition-all duration-1000`} 
+        style={{ width: `${Math.round(value)}%` }}
+      ></div>
     </div>
   </div>
 );
