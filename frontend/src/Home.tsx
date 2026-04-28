@@ -97,7 +97,6 @@ export default function Home() {
   const audioContext = useRef<AudioContext | null>(null);
   const analyser = useRef<AnalyserNode | null>(null);
   const animationFrame = useRef<number | null>(null);
-  const heartbeatInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const playAudioRef = useRef<((src: string) => void) | null>(null);
 
   // --- 3. UTILITY CALLBACKS ---
@@ -184,7 +183,7 @@ export default function Home() {
     if (!trimmedInput || !ws.current) return;
 
     if (trimmedInput === '/clear') {
-       fetch('http://localhost:8000/api/chat/history', { method: 'DELETE' }); 
+       fetch('/api/chat/history', { method: 'DELETE' }); 
        setMessages([]); setInput("");
        addToast("Chat history cleared", "info");
        return;
@@ -212,7 +211,7 @@ export default function Home() {
   const toggleIntimacy = useCallback(async () => {
     try {
       const target = !intimacyActive;
-      const res = await fetch(`http://localhost:8000/api/intimacy/toggle?active=${target}`, { method: 'POST' });
+      const res = await fetch(`/api/intimacy/toggle?active=${target}`, { method: 'POST' });
       const data = await res.json();
       setIntimacyActive(data.intimacy_active);
       addToast(data.intimacy_active ? "Intimacy Phase Activated 💖" : "Returning to Work Mode 💼", data.intimacy_active ? "success" : "info");
@@ -229,33 +228,12 @@ export default function Home() {
     { icon: <XCircle size={18}/>, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
   ];
 
-  const startHeartbeat = useCallback(() => {
-    if (heartbeatInterval.current) return;
-    heartbeatInterval.current = setInterval(() => {
-      if (!audioContext.current) return;
-      const ctx = audioContext.current;
-      const playThump = (freq: number, time: number, vol: number) => {
-        const osc = ctx.createOscillator(); const gain = ctx.createGain();
-        osc.type = 'sine'; osc.frequency.setValueAtTime(freq, time);
-        osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
-        gain.gain.setValueAtTime(vol, time); gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(time); osc.stop(time + 0.1);
-      };
-      const now = ctx.currentTime;
-      playThump(50, now, 0.03); playThump(40, now + 0.15, 0.02);
-    }, 1500);
-  }, []);
-
-  const stopHeartbeat = useCallback(() => {
-    if (heartbeatInterval.current) { clearInterval(heartbeatInterval.current); heartbeatInterval.current = null; }
-  }, []);
 
   // --- 7. EFFECTS ---
   useEffect(() => {
     // History, Memory and Intimacy fetching still needed locally or can be moved to context
     const fetchHistory = () => {
-      fetch('http://localhost:8000/api/chat/history')
+      fetch('/api/chat/history')
         .then(res => res.json())
         .then(data => setMessages(data.history || []))
         .catch(() => setTimeout(fetchHistory, 1000));
@@ -263,7 +241,7 @@ export default function Home() {
     fetchHistory();
 
     const fetchMemory = () => {
-      fetch('http://localhost:8000/api/memory/files')
+      fetch('/api/memory/files')
         .then(res => res.json())
         .then(data => setMemoryFiles(data.files || []))
         .catch(() => setTimeout(fetchMemory, 1000));
@@ -271,7 +249,7 @@ export default function Home() {
     fetchMemory();
 
     const fetchIntimacyStatus = () => {
-      fetch('http://localhost:8000/api/intimacy/status')
+      fetch('/api/intimacy/status')
         .then(res => res.json())
         .then(data => setIntimacyActive(data.intimacy_active))
         .catch(() => {});
@@ -279,7 +257,9 @@ export default function Home() {
     fetchIntimacyStatus();
     const intimacyInterval = setInterval(fetchIntimacyStatus, 5000);
 
-    ws.current = new WebSocket("ws://localhost:8000/ws/heartbeat");
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/heartbeat`;
+    ws.current = new WebSocket(wsUrl);
     ws.current.onopen = () => setStatus("Connected (Heartbeat Active)");
     ws.current.onclose = () => setStatus("Disconnected");
     ws.current.onmessage = (event) => {
@@ -325,14 +305,9 @@ export default function Home() {
       }
       window.removeEventListener('keydown', handleGlobalShortcuts);
       clearInterval(intimacyInterval); 
-      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
     };
   }, [isTTSMuted, playAudio, playSFX]);
 
-  useEffect(() => {
-    if (intimacyActive) startHeartbeat();
-    else stopHeartbeat();
-  }, [intimacyActive, startHeartbeat, stopHeartbeat]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -424,7 +399,7 @@ export default function Home() {
   const handleTouch = async () => {
     if (!intimacyActive) return;
     try {
-      const res = await fetch('http://localhost:8000/api/intimacy/touch', { method: 'POST' });
+      const res = await fetch('/api/intimacy/touch', { method: 'POST' });
       const data = await res.json();
       if (data.status === 'success') {
         playAudio(data.audio);
@@ -465,7 +440,7 @@ export default function Home() {
         setIsThinking(true);
         addToast("Transcribing audio...", "info");
         try {
-          const res = await fetch('http://localhost:8000/api/stt', { method: 'POST', body: formData });
+          const res = await fetch('/api/stt', { method: 'POST', body: formData });
           const data = await res.json();
           if (data.status === 'success') {
             setInput(prev => prev + (prev ? " " : "") + data.text);
@@ -499,7 +474,7 @@ export default function Home() {
     formData.append('file', file);
     
     try {
-      const res = await fetch('http://localhost:8000/api/upload-bg', { // Shared endpoint for now
+      const res = await fetch('/api/upload-bg', { // Shared endpoint for now
         method: 'POST',
         body: formData
       });
@@ -517,7 +492,7 @@ export default function Home() {
   const captureScreen = useCallback(async () => {
     addToast("Capturing screen...", "info");
     try {
-      const res = await fetch('http://localhost:8000/api/agent/screenshot', { method: 'POST' });
+      const res = await fetch('/api/agent/screenshot', { method: 'POST' });
       const data = await res.json();
       if (data.status === 'success') {
         setInput(prev => prev + (prev ? " " : "") + `[ATTACHED IMAGE](${data.url}) `);
@@ -532,7 +507,7 @@ export default function Home() {
 
 
   const handleDelete = async (id: number) => {
-    await fetch(`http://localhost:8000/api/chat/message/${id}`, { method: 'DELETE' });
+    await fetch(`/api/chat/message/${id}`, { method: 'DELETE' });
     setMessages(prev => prev.filter(m => m.id !== id));
   };
 
@@ -543,7 +518,7 @@ export default function Home() {
 
   const saveEdit = async () => {
     if (editingId === null) return;
-    await fetch(`http://localhost:8000/api/chat/message`, {
+    await fetch(`/api/chat/message`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message_id: editingId, content: editValue })
@@ -553,7 +528,7 @@ export default function Home() {
   };
 
   const handleLike = async (id: number, liked: number) => {
-    await fetch(`http://localhost:8000/api/chat/feedback`, {
+    await fetch(`/api/chat/feedback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message_id: id, liked })
@@ -562,7 +537,7 @@ export default function Home() {
   };
 
   const handlePin = async (id: number) => {
-    await fetch(`http://localhost:8000/api/chat/pin/${id}`, { method: 'POST' });
+    await fetch(`/api/chat/pin/${id}`, { method: 'POST' });
     setMessages(prev => prev.map(m => m.id === id ? { ...m, is_pinned: true } : m));
   };
 
@@ -639,7 +614,7 @@ export default function Home() {
             <button 
               onClick={() => {
                 if (window.confirm("Hapus seluruh riwayat chat?")) {
-                  fetch('http://localhost:8000/api/chat/history', { method: 'DELETE' }); 
+                  fetch('/api/chat/history', { method: 'DELETE' }); 
                   setMessages([]); 
                   addToast("Chat history cleared", "info");
                 }
@@ -799,7 +774,6 @@ export default function Home() {
               </div>
                <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
                  <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-4 mb-2">Quick Actions</div>
-                  {/* eslint-disable-next-line react-hooks/refs */}
                   {paletteMenuItems.map((item, i) => (
                   <div 
                     key={i} 
@@ -939,14 +913,14 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
         {videoUrl && (
           <div className="mt-4 rounded-xl overflow-hidden border border-white/10 bg-black/40">
             <video 
-              src={videoUrl.startsWith('/') ? `http://localhost:8000/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl} 
+              src={videoUrl.startsWith('/') ? `/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl} 
               controls 
               className="w-full max-h-96"
             />
             <div className="p-2 flex justify-between items-center bg-black/60">
               <span className="text-[10px] text-white/40 flex items-center gap-1"><PlayCircle size={12}/> MIA Generated Video</span>
               <a 
-                href={videoUrl.startsWith('/') ? `http://localhost:8000/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl} 
+                href={videoUrl.startsWith('/') ? `/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl} 
                 download 
                 className="p-1 hover:text-primary transition-colors"
                 title="Download Video"
@@ -973,7 +947,7 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
                   <button 
                     onClick={async () => {
                       try {
-                        const res = await fetch('http://localhost:8000/api/chat/feedback/robotic', { method: 'POST' });
+                        const res = await fetch('/api/chat/feedback/robotic', { method: 'POST' });
                         const data = await res.json();
                         alert(`MIA acknowledges this was robotic. Respect Level: ${data.new_respect}%`);
                       } catch (err) {

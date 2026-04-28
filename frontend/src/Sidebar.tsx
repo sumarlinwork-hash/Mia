@@ -28,7 +28,7 @@ export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
 
   useEffect(() => {
     const fetchEmotion = () => {
-      fetch('http://localhost:8000/api/emotion')
+      fetch('/api/emotion')
         .then(res => res.json())
         .then(data => setEmotion(data))
         .catch(() => {});

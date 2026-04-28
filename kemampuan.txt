@@ -1,0 +1,8 @@
+menjalankan java script
+melakukan DOM layar
+menjalankan cdm dan terminal dan poershell
+CRUD file di folder manapun 
+coding
+clik, scroll typing di layar
+menulis Scratchpad
+smart waiting command completion before checking command result

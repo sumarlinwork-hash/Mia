@@ -1,24 +1,29 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useConfig } from '../hooks/useConfig';
 
 const ResonantOrchestrator: React.FC = () => {
   const { config } = useConfig();
+  const location = useLocation();
   const [ripples, setRipples] = useState<{ id: number, x: number, y: number }[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
   const [bpm, setBpm] = useState(60);
+  const isEmotionView = location.pathname === '/emotion';
+  const bpmRef = useRef(bpm);
 
-  // 1. Heartbeat Sound Generator (Bio-Digital Sync)
   useEffect(() => {
-    if (!config?.bio_sync_enabled) {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-      return;
+    bpmRef.current = bpm;
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.playbackRate.value = bpm / 60;
     }
+  }, [bpm]);
 
+  // 1. Emotion/BPM Sync
+  useEffect(() => {
     const fetchBpm = () => {
-      fetch('http://localhost:8000/api/emotion')
+      fetch('/api/emotion')
         .then(res => res.json())
         .then(data => setBpm(60 + (data.arousal * 0.6)))
         .catch(() => {});
@@ -26,12 +31,20 @@ const ResonantOrchestrator: React.FC = () => {
     fetchBpm();
     const interval = setInterval(fetchBpm, 3000);
     return () => clearInterval(interval);
-  }, [config?.bio_sync_enabled]);
+  }, []);
 
+  // 2. Authentic Heartbeat Audio Engine
   useEffect(() => {
-    if (!config?.bio_sync_enabled) return;
-    
-    const playHeartbeat = () => {
+    // Only play if on Emotion Dashboard
+    if (!isEmotionView) {
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.stop();
+        sourceNodeRef.current = null;
+      }
+      return;
+    }
+
+    const initAudio = async () => {
       if (!audioContextRef.current) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -39,62 +52,85 @@ const ResonantOrchestrator: React.FC = () => {
       }
       
       const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') ctx.resume();
+      if (ctx.state === 'suspended') await ctx.resume();
 
-      const playThump = (time: number, freq: number, vol: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, time);
-        osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
-        
-        gain.gain.setValueAtTime(vol, time);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-        
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        
-        osc.start(time);
-        osc.stop(time + 0.1);
-      };
+      // 1. Create Gain Node for 150% Volume
+      if (!gainNodeRef.current) {
+        gainNodeRef.current = ctx.createGain();
+        gainNodeRef.current.gain.value = 1.5; // Adjusted to 150%
+      }
 
-      const now = ctx.currentTime;
-      playThump(now, 60, 0.1); // First thump
-      playThump(now + 0.15, 50, 0.08); // Second thump (lub-dub)
+      // 2. Create Bass Booster (BiquadFilter)
+      const bassFilter = ctx.createBiquadFilter();
+      bassFilter.type = 'lowshelf';
+      bassFilter.frequency.value = 200; // Focus on low frequencies
+      bassFilter.gain.value = 12;      // Boost the bass
+
+      const lowPass = ctx.createBiquadFilter();
+      lowPass.type = 'lowpass';
+      lowPass.frequency.value = 400;   // Muffle higher frequencies for "deep" sound
+
+      // Connect nodes: Source -> BassFilter -> LowPass -> Gain -> Destination
+      bassFilter.connect(lowPass);
+      lowPass.connect(gainNodeRef.current);
+      gainNodeRef.current.connect(ctx.destination);
+
+      // Load and Play Loop
+      try {
+        const response = await fetch('/audio/heartbeat.mp3');
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+        if (sourceNodeRef.current) {
+          sourceNodeRef.current.stop();
+        }
+
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.loop = true;
+        
+        source.playbackRate.value = bpmRef.current / 60;
+        
+        source.connect(bassFilter); // Connect to the start of the chain
+        source.start(0);
+        sourceNodeRef.current = source;
+      } catch (err) {
+        console.error("Failed to load heartbeat audio:", err);
+      }
     };
 
-    const intervalTime = (60 / bpm) * 1000;
-    const heartbeatInterval = setInterval(playHeartbeat, intervalTime);
-    
-    return () => clearInterval(heartbeatInterval);
-  }, [config?.bio_sync_enabled, bpm]);
+    initAudio();
 
-  // 2. Resonant Skin (Touch/Ripple Effect)
+    return () => {
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.stop();
+        sourceNodeRef.current = null;
+      }
+    };
+  }, [isEmotionView]);
+
+  // 3. Resonant Skin (Touch/Ripple Effect)
   useEffect(() => {
     if (!config?.resonant_skin_enabled) return;
 
     const handleGlobalClick = async (e: MouseEvent) => {
-      // Create ripple
       const id = Date.now();
       setRipples(prev => [...prev, { id, x: e.clientX, y: e.clientY }]);
       
-      // Cleanup ripple after animation
       setTimeout(() => {
         setRipples(prev => prev.filter(r => r.id !== id));
       }, 1000);
 
-      // Backend sync
       try {
-        await fetch('http://localhost:8000/api/intimacy/touch', { method: 'POST' });
-      } catch (err) {
-        console.error("Touch resonance failed", err);
+        await fetch('/api/intimacy/touch', { method: 'POST' });
+      } catch {
+        // Silent fail for touch sync
       }
     };
 
     window.addEventListener('mousedown', handleGlobalClick);
     return () => window.removeEventListener('mousedown', handleGlobalClick);
-  }, [config?.resonant_skin_enabled]);
+  }, [config?.resonant_skin_enabled, bpm]);
 
   return (
     <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">

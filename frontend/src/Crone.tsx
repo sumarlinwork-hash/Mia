@@ -26,7 +26,7 @@ export default function Crone() {
   const fetchStatus = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/crone/status');
+      const res = await fetch('/api/crone/status');
       const data = await res.json();
       setStatus(data);
       setLastRefresh(new Date().toLocaleTimeString('id-ID'));
@@ -39,7 +39,7 @@ export default function Crone() {
 
   const controlJob = async (id: string, action: 'pause' | 'resume' | 'trigger') => {
     try {
-      await fetch(`http://localhost:8000/api/crone/${action}/${id}`, { method: 'POST' });
+      await fetch(`/api/crone/${action}/${id}`, { method: 'POST' });
       fetchStatus();
     } catch (e) {
       console.error(`[Crone] Failed to ${action} job:`, e);

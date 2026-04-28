@@ -29,7 +29,7 @@ const SkillMarketplace: React.FC = () => {
   }, []);
 
   const fetchSkills = useCallback(() => {
-    fetch('http://localhost:8000/api/skills/marketplace')
+    fetch('/api/skills/marketplace')
       .then(res => res.json())
       .then(data => {
         setSkills(data);
@@ -47,7 +47,7 @@ const SkillMarketplace: React.FC = () => {
 
   const handleInstall = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/skills/install/${id}`, { method: 'POST' });
+      const res = await fetch(`/api/skills/install/${id}`, { method: 'POST' });
       const data = await res.json();
       if (data.status === 'success') {
         fetchSkills(); // Refresh status
@@ -63,7 +63,7 @@ const SkillMarketplace: React.FC = () => {
       setExecutingSkill(skill);
     } else {
       addToast(`Running ${skill.name}...`, "info");
-      fetch(`http://localhost:8000/api/skill/execute?skill_id=${skill.id}`, { method: 'POST' });
+      fetch(`/api/skill/execute?skill_id=${skill.id}`, { method: 'POST' });
     }
   };
 
@@ -194,7 +194,7 @@ const SkillMarketplace: React.FC = () => {
           onClose={() => setExecutingSkill(null)}
           onExecute={(inputs) => {
             addToast(`Executing ${executingSkill.name}...`, "info");
-            fetch(`http://localhost:8000/api/skill/execute?skill_id=${executingSkill.id}`, { 
+            fetch(`/api/skill/execute?skill_id=${executingSkill.id}`, { 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(inputs)

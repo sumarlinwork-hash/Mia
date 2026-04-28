@@ -19,7 +19,7 @@ function App() {
 
   useEffect(() => {
     const fetchConfig = () => {
-      fetch('http://localhost:8000/api/config')
+      fetch('/api/config')
         .then(res => res.json())
         .then(data => setConfig(data))
         .catch(() => setTimeout(fetchConfig, 1000));
@@ -51,13 +51,13 @@ function App() {
                   autoPlay loop muted playsInline 
                   className="absolute inset-0 w-full h-full object-cover" 
                   style={{ opacity: config.appearance.ui_opacity }} 
-                  src={bgUrl.startsWith('/') ? `http://localhost:8000${encodeURI(bgUrl)}` : bgUrl} 
+                  src={bgUrl.startsWith('/') ? `http://127.0.0.1:8000${encodeURI(bgUrl)}` : bgUrl} 
                 />
               ) : config.appearance.background_type === 'image' ? (
                 <div 
                   className="absolute inset-0 w-full h-full bg-cover bg-center transition-all" 
                   style={{ 
-                    backgroundImage: `url("${bgUrl.startsWith('/') ? `http://localhost:8000${bgUrl}` : bgUrl}")`, 
+                    backgroundImage: `url("${bgUrl.startsWith('/') ? `http://127.0.0.1:8000${bgUrl}` : bgUrl}")`, 
                     opacity: config.appearance.ui_opacity 
                   }} 
                 />

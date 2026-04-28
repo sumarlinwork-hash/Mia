@@ -107,7 +107,7 @@ export default function Settings() {
       }, 0);
     }
     
-    fetch('http://localhost:8000/api/skills/installed')
+    fetch('/api/skills/installed')
       .then(res => res.json())
       .then(data => {
         if (isMounted) setSkills(data);
@@ -133,7 +133,7 @@ export default function Settings() {
     if (!updatedConfig) return;
     setIsSaving(true);
     try {
-      await fetch('http://localhost:8000/api/config', {
+      await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedConfig),
@@ -196,7 +196,7 @@ export default function Settings() {
     updatedProviders[name].latency = -1; // Loading state
     setGlobalConfig({ ...config, providers: updatedProviders });
     
-    const res = await fetch(`http://localhost:8000/api/providers/test/${encodeURIComponent(name)}`, { method: 'POST' });
+    const res = await fetch(`/api/providers/test/${encodeURIComponent(name)}`, { method: 'POST' });
     const data = await res.json();
     if (data.status === 'success') {
       refreshConfig();
@@ -211,7 +211,7 @@ export default function Settings() {
   const uninstallSkill = async (id: string) => {
     if (!confirm(`Hapus keahlian "${id}"?`)) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/skills/uninstall/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/skills/uninstall/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.status === 'success') {
         setSkills(prev => prev.filter(s => s.id !== id));
@@ -223,7 +223,7 @@ export default function Settings() {
   const testSkill = async (id: string) => {
     addToast(`Menguji: ${id}...`, "info");
     try {
-      const res = await fetch(`http://localhost:8000/api/skills/test/${id}`, { method: 'POST' });
+      const res = await fetch(`/api/skills/test/${id}`, { method: 'POST' });
       const data = await res.json();
       if (data.status === 'success') {
         addToast(`Hasil: ${data.output}`, "success");
@@ -235,7 +235,7 @@ export default function Settings() {
   const openEditSkill = async (skill: Skill) => {
     try {
       // We use the existing memory API but point to skills folder
-      const res = await fetch(`http://localhost:8000/api/memory/file?name=../skills/${skill.id}.py`);
+      const res = await fetch(`/api/memory/file?name=../skills/${skill.id}.py`);
       const data = await res.json();
       if (data.content) {
         setSkillCode(data.content);
@@ -253,7 +253,7 @@ export default function Settings() {
   const saveSkillEdit = async () => {
     if (!editingSkill) return;
     try {
-      const res = await fetch('http://localhost:8000/api/skills/save', {
+      const res = await fetch('/api/skills/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingSkill.id, code: skillCode })
@@ -639,7 +639,7 @@ export default function Settings() {
                         if (!file) return;
                         const formData = new FormData();
                         formData.append('file', file);
-                        const res = await fetch('http://localhost:8000/api/upload-bg', { method: 'POST', body: formData });
+                        const res = await fetch('/api/upload-bg', { method: 'POST', body: formData });
                         const data = await res.json();
                         if (data.status === 'success') {
                           updateConfigLocal({ 

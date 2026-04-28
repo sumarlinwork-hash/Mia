@@ -33,7 +33,7 @@ const EmotionDashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchEmotion = () => {
-      fetch('http://localhost:8000/api/emotion')
+      fetch('/api/emotion')
         .then(res => res.json())
         .then(data => setEmotion(data))
         .catch(() => console.log('Emotion API error'));
@@ -49,7 +49,7 @@ const EmotionDashboard: React.FC = () => {
     setToggles(newToggles);
 
     try {
-      await fetch('http://localhost:8000/api/intimacy/settings', {
+      await fetch('/api/intimacy/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -174,7 +174,7 @@ const EmotionDashboard: React.FC = () => {
           <div className="mt-8 flex gap-2">
             <button 
               onClick={async () => {
-                await fetch('http://localhost:8000/api/chat/feedback/robotic', { method: 'POST' });
+                await fetch('/api/chat/feedback/robotic', { method: 'POST' });
                 alert("Feedback sent: Robotic response reported. MIA's respect level decreased.");
               }}
               className="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-white/40 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50 transition-all uppercase tracking-widest"

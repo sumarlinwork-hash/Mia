@@ -8,7 +8,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     // Fetch initial hue from config if possible, or use default
-    fetch('http://localhost:8000/api/config')
+    fetch('/api/config')
       .then(res => res.json())
       .then(data => {
         setHue(normalizeThemeHue(data?.appearance?.theme_hue));

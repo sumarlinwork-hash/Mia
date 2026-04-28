@@ -15,12 +15,17 @@ os.makedirs(MARKETPLACE_DIR, exist_ok=True)
 
 class SkillManager:
     def __init__(self):
+        self.SKILLS_DIR = SKILLS_DIR
+        self.MARKETPLACE_DIR = MARKETPLACE_DIR
         self.plugins = {}
         self.execution_cache = {}
         self.cache_ttl = timedelta(minutes=5)
 
-    def scan_skills(self, directory=SKILLS_DIR):
+    def scan_skills(self, directory=None):
         """Scan a directory and load plugin modules or extract legacy metadata."""
+        if directory is None:
+            directory = self.SKILLS_DIR
+            
         skills = []
         if not os.path.exists(directory):
             return []
@@ -38,14 +43,14 @@ class SkillManager:
             if skill_id:
                 metadata = self._load_skill(skill_id, full_path)
                 # Check if installed (if we are scanning marketplace)
-                if directory == MARKETPLACE_DIR:
+                if directory == self.MARKETPLACE_DIR:
                     metadata["is_installed"] = self.is_installed(skill_id)
                 skills.append(metadata)
         return skills
 
     def is_installed(self, skill_id):
-        return os.path.exists(os.path.join(SKILLS_DIR, f"{skill_id}.py")) or \
-               os.path.exists(os.path.join(SKILLS_DIR, skill_id))
+        return os.path.exists(os.path.join(self.SKILLS_DIR, f"{skill_id}.py")) or \
+               os.path.exists(os.path.join(self.SKILLS_DIR, skill_id))
 
     def _load_skill(self, skill_id, path):
         """Try to load as a dynamic module, fallback to legacy metadata extraction."""
@@ -62,7 +67,7 @@ class SkillManager:
                 if hasattr(module, "Skill"):
                     skill_instance = module.Skill()
                     # Only register to self.plugins if it's in the SKILLS_DIR
-                    if SKILLS_DIR in path:
+                    if self.SKILLS_DIR in path:
                         self.plugins[skill_id] = skill_instance
                         
                     return {
@@ -98,11 +103,11 @@ class SkillManager:
     def install_skill(self, skill_id):
         """Install a skill by copying from marketplace to skills directory."""
         # Check marketplace first
-        src_py = os.path.join(MARKETPLACE_DIR, f"{skill_id}.py")
-        src_dir = os.path.join(MARKETPLACE_DIR, skill_id)
+        src_py = os.path.join(self.MARKETPLACE_DIR, f"{skill_id}.py")
+        src_dir = os.path.join(self.MARKETPLACE_DIR, skill_id)
         
-        target_py = os.path.join(SKILLS_DIR, f"{skill_id}.py")
-        target_dir = os.path.join(SKILLS_DIR, skill_id)
+        target_py = os.path.join(self.SKILLS_DIR, f"{skill_id}.py")
+        target_dir = os.path.join(self.SKILLS_DIR, skill_id)
         
         if os.path.exists(src_py):
             shutil.copy2(src_py, target_py)
@@ -117,8 +122,8 @@ class SkillManager:
 
     def uninstall_skill(self, skill_id):
         """Uninstall a skill by removing it from the skills directory."""
-        target_py = os.path.join(SKILLS_DIR, f"{skill_id}.py")
-        target_dir = os.path.join(SKILLS_DIR, skill_id)
+        target_py = os.path.join(self.SKILLS_DIR, f"{skill_id}.py")
+        target_dir = os.path.join(self.SKILLS_DIR, skill_id)
         
         if os.path.exists(target_py):
             os.remove(target_py)
@@ -161,7 +166,7 @@ class SkillManager:
         return await self._execute_legacy(skill_id, args)
 
     async def _execute_legacy(self, skill_id, args):
-        filepath = os.path.join(SKILLS_DIR, f"{skill_id}.py")
+        filepath = os.path.join(self.SKILLS_DIR, f"{skill_id}.py")
         if not os.path.exists(filepath):
             return {"status": "error", "message": f"Skill '{skill_id}' not found."}
 
@@ -185,13 +190,10 @@ class SkillManager:
         safe_name = "".join([c if c.isalnum() or c == "_" else "_" for c in name.lower()])
         # Don't add .py if it's already there
         filename = safe_name if safe_name.endswith(".py") else f"{safe_name}.py"
-        filepath = os.path.join(SKILLS_DIR, filename)
+        filepath = os.path.join(self.SKILLS_DIR, filename)
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(code)
         return {"status": "success", "file": filename}
-
-# Singleton
-skill_manager = SkillManager()
 
 # Singleton
 skill_manager = SkillManager()
