@@ -54,10 +54,10 @@ const ResonantOrchestrator: React.FC = () => {
       const ctx = audioContextRef.current;
       if (ctx.state === 'suspended') await ctx.resume();
 
-      // 1. Create Gain Node for 150% Volume
+      // 1. Create Gain Node for 100% Volume
       if (!gainNodeRef.current) {
         gainNodeRef.current = ctx.createGain();
-        gainNodeRef.current.gain.value = 1.5; // Adjusted to 150%
+        gainNodeRef.current.gain.value = 1.0; // Adjusted to 100%
       }
 
       // 2. Create Bass Booster (BiquadFilter)
@@ -89,7 +89,7 @@ const ResonantOrchestrator: React.FC = () => {
         source.buffer = audioBuffer;
         source.loop = true;
         
-        source.playbackRate.value = bpmRef.current / 60;
+        source.playbackRate.value = (bpmRef.current / 60) * 0.75;
         
         source.connect(bassFilter); // Connect to the start of the chain
         source.start(0);
@@ -108,6 +108,14 @@ const ResonantOrchestrator: React.FC = () => {
       }
     };
   }, [isEmotionView]);
+
+  // Update Playback Rate when BPM changes
+  useEffect(() => {
+    bpmRef.current = bpm;
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.playbackRate.value = (bpm / 60) * 0.75;
+    }
+  }, [bpm]);
 
   // 3. Resonant Skin (Touch/Ripple Effect)
   useEffect(() => {
