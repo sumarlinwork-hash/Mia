@@ -1,0 +1,4 @@
+Bertindaklah sebagai agen CI/CD. Secara iteratif, jalankan dan perbaiki error dari perintah berikut: lint, node node_modules\eslint\bin\eslint.js ., npx tsc --noEmit, vite build, dan python -m compileall.
+Identifikasi dan ringkas semua error.
+Perbaiki kode tanpa merusak fitur eksis.
+Ulangi siklus cek-dan-perbaiki sampai status "Zero Errors".
