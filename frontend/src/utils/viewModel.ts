@@ -13,12 +13,15 @@ export interface App {
   name: string;
   description: string;
   category?: string;
+  created_at?: string;
   is_installed?: boolean;
   is_running?: boolean;
   is_updating?: boolean;
   error?: string | null;
   execution_mode?: 'instant' | 'setup_required';
   has_preview?: boolean;
+  preview?: Record<string, unknown>;
+  input_schema?: Record<string, string>;
   capabilities?: string[];
   required_permissions?: string[];
   downloads?: number;

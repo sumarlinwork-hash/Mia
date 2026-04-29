@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Shield, Key, CheckCircle } from 'lucide-react';
-import { App } from '../utils/viewModel';
+import type { App } from '../utils/viewModel';
 
 interface SetupFlowProps {
   app: App;

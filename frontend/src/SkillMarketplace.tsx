@@ -8,28 +8,10 @@ import BuilderReview from './components/BuilderReview';
 import PreviewModal from './components/PreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { mapTelemetry } from './utils/telemetryMapper';
-import viewModel, { App } from './utils/viewModel';
+import viewModel from './utils/viewModel';
+import type { App } from './utils/viewModel';
 import labels from './utils/labels';
 
-export interface App {
-  id: string;
-  name: string;
-  description: string;
-  category?: string;
-  created_at?: string;
-  is_installed?: boolean;
-  is_running?: boolean;
-  is_updating?: boolean;
-  error?: string | null;
-  execution_mode?: 'instant' | 'setup_required';
-  has_preview?: boolean;
-  preview?: Record<string, unknown>;
-  input_schema?: Record<string, string>;
-  downloads?: number;
-  executions?: number;
-  trust_score?: number;
-  recommendation_reason?: string;
-}
 
 export interface AppManifest {
   id: string;
@@ -44,6 +26,7 @@ export interface AppManifest {
 const SkillMarketplace: React.FC = () => {
   const [apps, setApps] = useState<App[]>([]);
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [loading, setLoading] = useState(true);
   
   // Modals state
@@ -176,10 +159,12 @@ const SkillMarketplace: React.FC = () => {
     { name: 'Interaksi', icon: MessageCircle },
   ];
 
-  const filteredApps = apps.filter(s => 
-    s.name.toLowerCase().includes(search.toLowerCase()) || 
-    s.description.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredApps = apps.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) || 
+                         s.description.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = selectedCategory === 'Semua' || s.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -257,7 +242,12 @@ const SkillMarketplace: React.FC = () => {
         {categories.map(cat => (
           <button 
             key={cat.name}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 hover:text-white transition-all whitespace-nowrap"
+            onClick={() => setSelectedCategory(cat.name)}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl border transition-all whitespace-nowrap ${
+              selectedCategory === cat.name 
+              ? 'bg-primary/20 border-primary text-primary' 
+              : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white'
+            }`}
           >
             <cat.icon size={16} />
             <span className="font-bold text-xs uppercase tracking-wider">{cat.name}</span>
