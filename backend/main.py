@@ -23,6 +23,7 @@ from skill_manager import skill_manager
 from core.local_runtime import local_event_bus
 from discovery.services import AppBuilderService
 from discovery.preview_engine import preview_engine
+from core.mode_hub import mode_hub, MIAMode
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,6 +32,11 @@ async def lifespan(app: FastAPI):
     emotion_manager.on_app_open() # Trigger Glow Spark on launch
     local_event_bus.start()
     crone_daemon.start()
+    
+    # Sync Mode Hub with saved config
+    initial_config = load_config()
+    mode_hub.set_mode(MIAMode(initial_config.os_mode))
+    
     yield
     # Shutdown logic
     local_event_bus.stop()
@@ -276,6 +282,7 @@ async def get_config():
 @app.post("/api/config")
 async def update_config(config: MIAConfig):
     save_config(config)
+    mode_hub.set_mode(MIAMode(config.os_mode))
     return {"status": "success"}
 
 # --- PROVIDER MANAGEMENT ENDPOINTS ---

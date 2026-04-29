@@ -151,7 +151,10 @@ class EmotionManager:
             return True
         return False
 
-    def get_behavior_instruction(self) -> str:
+    def get_behavior_instruction(self, is_pro: bool = False) -> str:
+        if is_pro:
+            return "MIA sedang dalam mode profesional. Fokus pada efisiensi, akurasi teknis, dan dukungan produktivitas. Hindari bahasa yang terlalu personal atau emosional."
+            
         active = self.state["active"]
         mood = active["mood"]
         instructions = {
@@ -162,5 +165,16 @@ class EmotionManager:
             "Playful": "MIA ceria dan energetik (Sanguin). Dia siap menghiburmu dengan obrolan ringan."
         }
         return instructions.get(mood, instructions["Playful"])
+
+    def get_emotion_prompt_chunk(self, is_pro: bool = False) -> str:
+        """
+        Returns a string representation of the emotional state for the LLM prompt.
+        If is_pro is True, it sanitizes the output to be productivity-focused.
+        """
+        active = self.state["active"]
+        if is_pro:
+            return f"Status: Optimal | Focus: Productivity | Tone: Professional. (Mood: {active['mood']})"
+        
+        return f"Warmth: {active['warmth']}% | Arousal: {active['arousal']}% | Connection: {active['echo']}% | Mood: {active['mood']}"
 
 emotion_manager = EmotionManager()

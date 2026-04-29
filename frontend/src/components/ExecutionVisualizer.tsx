@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
 
 interface GraphNode {
-  id: str;
-  tool: str;
+  id: string;
+  tool: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
-  result?: any;
+  result?: unknown;
   error?: string;
   dependencies: string[];
 }
@@ -19,16 +19,16 @@ interface ExecutionGraph {
 
 interface ExecutionVisualizerProps {
   graphId: string;
-  onComplete?: (result: any) => void;
+  onComplete?: (result: string) => void;
 }
 
 export const ExecutionVisualizer: React.FC<ExecutionVisualizerProps> = ({ graphId, onComplete }) => {
   const [graph, setGraph] = useState<ExecutionGraph | null>(null);
   const [isLive, setIsLive] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchSnapshot = async () => {
+  const fetchSnapshot = useCallback(async () => {
     try {
       const resp = await fetch(`http://localhost:8000/api/graph/snapshot/${graphId}`);
       if (resp.ok) {
@@ -39,9 +39,9 @@ export const ExecutionVisualizer: React.FC<ExecutionVisualizerProps> = ({ graphI
     } catch (err) {
       console.error("[Reconciliation] Failed to fetch snapshot:", err);
     }
-  };
+  }, [graphId]);
 
-  const connectStream = () => {
+  const connectStream = useCallback(() => {
     if (wsRef.current) wsRef.current.close();
 
     const ws = new WebSocket(`ws://localhost:8000/ws/graph/${graphId}`);
@@ -87,17 +87,18 @@ export const ExecutionVisualizer: React.FC<ExecutionVisualizerProps> = ({ graphI
     ws.onerror = (err) => {
       console.error("[Stream] WebSocket error:", err);
     };
-  };
+  }, [graphId, onComplete, fetchSnapshot]);
 
   useEffect(() => {
     fetchSnapshot(); // Load initial state
     connectStream(); // Start live updates
 
+    const reconnectTimeout = reconnectTimeoutRef.current;
     return () => {
       if (wsRef.current) wsRef.current.close();
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [graphId]);
+  }, [graphId, fetchSnapshot, connectStream]);
 
   if (!graph) return <div className="p-4 text-gray-400">Initializing OS Execution Graph...</div>;
 

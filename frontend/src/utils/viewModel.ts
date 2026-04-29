@@ -37,7 +37,7 @@ export interface UIApp extends App {
   status: string;
   cta: {
     primary: string;
-    secondary: string | null;
+    secondary?: string | null;
     disabled: boolean;
   };
 }

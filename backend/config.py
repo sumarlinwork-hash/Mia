@@ -71,6 +71,7 @@ class MIAConfig(BaseModel):
     stt_engine: str = "speech_recognition"
     is_professional_mode: bool = False
     is_production_mode: bool = False
+    os_mode: str = "SAFE_MODE" # SAFE_MODE, POWER_MODE, BEGINNER_MODE
     
     # ARE (Affective Resonance Engine) Parameters
     care_pulse_enabled: bool = True

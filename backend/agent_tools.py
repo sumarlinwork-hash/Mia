@@ -13,6 +13,10 @@ class AgentTools:
         self.screenshot_dir = os.path.join(os.path.dirname(__file__), "temp_screens")
         os.makedirs(self.screenshot_dir, exist_ok=True)
 
+    def get_tool_names(self):
+        """Returns a list of callable tool names."""
+        return ["take_screenshot_bytes", "click", "type_text", "press_key", "run_command", "save_skill", "execute_skill"]
+
     def take_screenshot_bytes(self) -> bytes:
         """Takes a screenshot and returns the raw bytes."""
         screenshot = pyautogui.screenshot()

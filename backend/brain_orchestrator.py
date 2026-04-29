@@ -10,6 +10,7 @@ from core.emotion_manager import emotion_manager
 from core.cost_manager import cost_manager
 import json
 import re
+from typing import Dict, List, Any, Optional
 
 class BrainOrchestrator:
     def __init__(self):
@@ -170,7 +171,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 # Inject current emotional state into the loop
                 is_pro = config.is_professional_mode
                 emotion_chunk = emotion_manager.get_emotion_prompt_chunk(is_pro=is_pro)
-                behavior_instr = emotion_manager.get_behavior_instruction()
+                behavior_instr = emotion_manager.get_behavior_instruction(is_pro=is_pro)
                 
                 full_system_prompt = f"{system_prompt}\n\nCurrent Emotional State: {emotion_chunk}\nInstructions: {behavior_instr}"
                 

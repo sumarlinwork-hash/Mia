@@ -441,7 +441,7 @@ const SkillMarketplace: React.FC = () => {
           onClose={() => setExecutingApp(null)}
           onExecute={(inputs) => {
             addToast(labels.RUNNING_APP.replace('{name}', executingApp.name), "info");
-            fetch(`/api/skill/execute?skill_id=${app.id}`, { 
+            fetch(`/api/skill/execute?skill_id=${executingApp.id}`, { 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(inputs)

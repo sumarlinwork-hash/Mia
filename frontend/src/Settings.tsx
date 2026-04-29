@@ -8,7 +8,7 @@ import ThemeTab from './components/settings/ThemeTab';
 import { useConfig } from './hooks/useConfig';
 
 import type { MIAConfig, ProviderConfig } from './types/config';
-import type { Skill } from './SkillMarketplace';
+import type { App as Skill } from './utils/viewModel';
 
 const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Anthropic API", "Groq", "DeepSeek", "Mistral"];
 const PURPOSES = ["Text & Logic (LLM)", "Vision / Multimodal", "Coding Specialist", "Audio / Speech", "Search / RAG"];
@@ -312,6 +312,38 @@ export default function Settings() {
 
         {activeTab === 'intelligence' && (
           <>
+            {/* OS MODE SELECTOR (Contract 6.0 Integration) */}
+            <div className="mb-10 p-8 rounded-[32px] bg-primary/5 border border-primary/20 backdrop-blur-3xl">
+               <div className="flex items-center gap-3 mb-6">
+                 <div className="p-2 rounded-lg bg-primary/20 text-primary"><Zap size={20}/></div>
+                 <div>
+                   <h2 className="text-xl font-bold text-white">System Operation Mode</h2>
+                   <p className="text-xs text-white/40">Tentukan tingkat keamanan dan visibilitas operasional MIA.</p>
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 {[
+                   { id: 'SAFE_MODE', label: 'SAFE MODE', desc: 'Prioritas Keamanan Tinggi (Default)', color: 'border-green-500/30' },
+                   { id: 'POWER_MODE', label: 'POWER MODE', desc: 'Visibilitas Penuh & Expert Access', color: 'border-primary/50' },
+                   { id: 'BEGINNER_MODE', label: 'BEGINNER MODE', desc: 'Antarmuka Sederhana & Aman', color: 'border-blue-500/30' }
+                 ].map(mode => (
+                   <button
+                     key={mode.id}
+                     onClick={() => updateConfigLocal({ ...config, os_mode: mode.id })}
+                     className={`p-4 rounded-2xl border text-left transition-all group ${
+                       config.os_mode === mode.id 
+                       ? `bg-primary/10 ${mode.color} ring-1 ring-primary/20` 
+                       : 'bg-white/5 border-white/10 hover:border-white/20'
+                     }`}
+                   >
+                     <div className={`text-xs font-bold mb-1 ${config.os_mode === mode.id ? 'text-primary' : 'text-white/60'}`}>{mode.label}</div>
+                     <div className="text-[10px] text-white/40 group-hover:text-white/60">{mode.desc}</div>
+                   </button>
+                 ))}
+               </div>
+            </div>
+
             {view === 'list' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {Object.entries(config.providers).map(([name, p]: [string, ProviderConfig]) => (
