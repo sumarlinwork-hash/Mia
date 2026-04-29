@@ -153,6 +153,11 @@ const ResonantOrchestrator: React.FC = () => {
     if (!config?.resonant_skin_enabled) return;
 
     const handleGlobalClick = async (e: MouseEvent) => {
+      // 1. Resume AudioContext if suspended (Browser Policy)
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+
       const id = Date.now();
       setRipples(prev => [...prev, { id, x: e.clientX, y: e.clientY }]);
 

@@ -177,6 +177,8 @@ const SkillMarketplace: React.FC = () => {
         <div className="relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-primary transition-colors" size={18} />
           <input 
+            id="marketplace-search"
+            name="marketplace-search"
             type="text" 
             placeholder={labels.SEARCH_PLACEHOLDER}
             value={search}

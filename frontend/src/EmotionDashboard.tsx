@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Shield, Zap, User, Thermometer, AlertCircle, RefreshCw } from 'lucide-react';
+import { Heart, Zap, Thermometer, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useConfig } from './hooks/useConfig';
 
@@ -168,8 +168,8 @@ const EmotionDashboard: React.FC = () => {
                 scale: toggles.bio_sync ? 1 + (Math.pow(pulseLevel, 1.5) * 1.2) : 1,
                 // Focused sharp glow
                 filter: toggles.bio_sync 
-                  ? `drop-shadow(0 0 ${pulseLevel * 25}px rgba(0,255,204,0.8)) drop-shadow(0 0 ${pulseLevel * 10}px rgba(0,255,204,0.4))` 
-                  : 'none'
+                  ? `drop-shadow(0 0 ${Math.max(0.1, pulseLevel * 25)}px rgba(0,255,204,0.8))` 
+                  : 'drop-shadow(0 0 0px rgba(0,255,204,0))'
               }}
               transition={{ type: 'spring', stiffness: 400, damping: 15 }}
             >

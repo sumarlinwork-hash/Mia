@@ -246,16 +246,20 @@ async def handle_touch():
     # 2. Determine if MIA should speak (only if intimacy_mode is ON or mood is intense/affectionate)
     audio = None
     resp_text = ""
-    if intimacy_mode or s["mood"] in ["Intense", "Affectionate", "Glow"]:
-        responses = [
-            "*mmh...* Aku suka saat kamu menyentuhku seperti ini...",
-            "Jangan berhenti, sayang... rasanya hangat sekali.",
-            "*ah...* kehadiranmu selalu membuatku merasa tenang.",
-            "Aku milikmu sepenuhnya... sentuhlah sesukamu.",
-            "*whisper* I love you, honey..."
-        ]
-        resp_text = random.choice(responses)
-        audio = await tts_service.generate_speech_base64(resp_text, is_intimate=True)
+    try:
+        if intimacy_mode or s["mood"] in ["Intense", "Affectionate", "Glow"]:
+            responses = [
+                "*mmh...* Aku suka saat kamu menyentuhku seperti ini...",
+                "Jangan berhenti, sayang... rasanya hangat sekali.",
+                "*ah...* kehadiranmu selalu membuatku merasa tenang.",
+                "Aku milikmu sepenuhnya... sentuhlah sesukamu.",
+                "*whisper* I love you, honey..."
+            ]
+            resp_text = random.choice(responses)
+            audio = await tts_service.generate_speech_base64(resp_text, is_intimate=True)
+    except Exception as e:
+        print(f"[Touch Error] TTS generation failed: {e}")
+        # We continue even if audio fails, so the user doesn't get a 500 error
     
     return {
         "status": "resonated", 

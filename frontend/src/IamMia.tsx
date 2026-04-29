@@ -82,6 +82,8 @@ export default function IamMia() {
         </div>
         
         <textarea
+          id="memory-editor"
+          name="memory-editor"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           className="flex-1 w-full bg-black/40 text-white/90 p-6 outline-none resize-none custom-scrollbar font-mono text-sm leading-relaxed"

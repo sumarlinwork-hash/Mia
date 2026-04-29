@@ -41,7 +41,7 @@ function App() {
 
   return (
     <ThemeProvider>
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <div className="relative min-h-screen bg-background overflow-hidden flex">
           
           {config && (

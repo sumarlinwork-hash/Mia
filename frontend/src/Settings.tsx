@@ -504,6 +504,8 @@ export default function Settings() {
                       End Point <span title="Kosongkan jika menggunakan endpoint default (hanya untuk Custom/On-Premise)" className="cursor-help"><Info size={12} /></span>
                     </label>
                     <input 
+                      id="provider-endpoint"
+                      name="provider-endpoint"
                       type="text" value={newProvider.base_url} 
                       onChange={e => setNewProvider({...newProvider, base_url: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
@@ -561,6 +563,8 @@ export default function Settings() {
               <div>
                 <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-4">UI Transparency: {Math.round(config.appearance.ui_opacity * 100)}%</label>
                 <input 
+                  id="ui-transparency"
+                  name="ui-transparency"
                   type="range" min="0.1" max="1" step="0.05"
                   value={config.appearance.ui_opacity}
                   onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, ui_opacity: parseFloat(e.target.value) } })}

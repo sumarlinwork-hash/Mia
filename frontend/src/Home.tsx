@@ -732,7 +732,18 @@ export default function Home() {
           <div className={`flex items-center gap-3 p-3 rounded-full border border-white/20 backdrop-blur-xl shadow-2xl transition-all ${isThinking ? 'thinking-pulse border-primary shadow-[0_0_20px_rgba(0,255,204,0.3)]' : 'focus-within:border-primary/50'}`} style={{ backgroundColor: `rgba(0, 0, 0, ${uiOpacity + 0.1})` }}>
             <button onClick={() => setShowAttachMenu(!showAttachMenu)} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${showAttachMenu ? 'text-primary' : 'text-white/60'}`}><Paperclip size={20} /></button>
             
-            <input ref={inputRef} type="text" value={input} onChange={handleInputChange} onKeyDown={handleKeyDown} placeholder={isThinking ? "MIA is thinking..." : "Message MIA..."} className="flex-1 bg-transparent border-none outline-none font-sans text-lg text-white" disabled={isThinking} />
+            <input 
+              id="chat-input"
+              name="chat-input"
+              ref={inputRef} 
+              type="text" 
+              value={input} 
+              onChange={handleInputChange} 
+              onKeyDown={handleKeyDown} 
+              placeholder={isThinking ? "MIA is thinking..." : "Message MIA..."} 
+              className="flex-1 bg-transparent border-none outline-none font-sans text-lg text-white" 
+              disabled={isThinking} 
+            />
             
             <button onClick={handleMic} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${isRecording ? 'text-secondary animate-pulse' : 'text-white/60 hover:text-primary'}`}><Mic size={20} /></button>
             
