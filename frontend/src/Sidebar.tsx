@@ -101,8 +101,8 @@ export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
               <Shield size={10} /> {isPro ? "Intelligence Hub" : "Intimacy Orchestrator"}
             </div>
             <div className="space-y-3">
-              <SidebarStat label="Arousal" value={emotion.arousal} color="bg-rose-500" />
               <SidebarStat label="Attention Echo" value={emotion.echo} color="bg-blue-400" />
+              <SidebarStat label="Arousal" value={emotion.arousal} color="bg-rose-500" />
               <SidebarStat label="Warmth" value={emotion.warmth} color="bg-orange-400" />
             </div>
           </div>

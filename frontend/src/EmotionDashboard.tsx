@@ -74,10 +74,7 @@ const EmotionDashboard: React.FC = () => {
   const stats = [
     { label: 'Attention Echo', value: emotion.echo, color: 'text-blue-400', icon: RefreshCw },
     { label: 'Arousal', value: emotion.arousal, color: 'text-rose-500', icon: Zap },
-    { label: 'Inactive / Reserved', value: 0, color: 'text-white/10', icon: User },
-    { label: 'Inactive / Reserved', value: 0, color: 'text-white/10', icon: Shield },
     { label: 'Warmth', value: emotion.warmth, color: 'text-orange-400', icon: Thermometer },
-    { label: 'Inactive / Reserved', value: 0, color: 'text-white/10', icon: AlertCircle },
   ];
 
   return (
