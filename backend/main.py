@@ -101,6 +101,26 @@ class SkillSaveRequest(BaseModel):
     name: str
     code: str
 
+@app.get("/api/graph/snapshot/{graph_id}")
+async def get_graph_snapshot(graph_id: str):
+    snapshot = brain_orchestrator.get_graph_snapshot(graph_id)
+    if not snapshot:
+        return {"error": "Graph not found"}, 404
+    return snapshot
+
+@app.websocket("/ws/graph/{graph_id}")
+async def websocket_graph_stream(websocket: WebSocket, graph_id: str):
+    await websocket.accept()
+    print(f"[WS] Client connected to graph: {graph_id}")
+    try:
+        async for update in brain_orchestrator.subscribe_to_graph(graph_id):
+            await websocket.send_json(update)
+    except WebSocketDisconnect:
+        print(f"[WS] Client disconnected from graph: {graph_id}")
+    except Exception as e:
+        print(f"[WS Error] {e}")
+        await websocket.close()
+
 @app.post("/api/skills/save")
 async def save_skill(req: SkillSaveRequest):
     return skill_manager.save_skill(req.name, req.code)

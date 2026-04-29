@@ -34,6 +34,15 @@ Menjamin ketersediaan MIA 100% tanpa gangguan:
 
 ---
 
+### 🛒 5. Discovery Marketplace (The Ecosystem)
+Perluas kemampuan MIA melalui ekosistem aplikasi yang dinamis:
+- **Preview System (Sandbox)**: Uji coba fitur aplikasi secara instan ("Coba") sebelum instalasi dengan guardrail respons maksimal 2 kalimat untuk efisiensi.
+- **Simple Builder (60s Creation)**: Buat aplikasi kustom dalam < 60 detik menggunakan template cerdas dan *Quality Gate* otomatis.
+- **Social Proof & Visibility**: Sistem rekomendasi spesial dan lencana popularitas (misal: "1.2k Pengguna") berbasis threshold data nyata.
+- **Clarity Layer (Jargon-Free)**: Antarmuka yang ramah pengguna dengan translasi istilah teknis ke Bahasa Indonesia yang intuitif.
+
+---
+
 ## 🎨 Antarmuka & Estetika (The Aura)
 - **Emotion Dashboard**: Visualisasi 5 dimensi emosi dengan grafik real-time dan kontrol modul orkestrasi.
 - **Zen Mode**: Mode minimalis dengan transparansi tinggi dan efek *blur* yang dioptimalkan agar latar belakang tetap jernih.

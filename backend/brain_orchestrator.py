@@ -4,7 +4,8 @@ from config import load_config, save_config, ProviderConfig
 import httpx
 from agent_tools import agent_tools
 from core.routing_service import routing_service
-from core.graph_engine import GraphExecutor, SkillGraph
+from core.graph_engine import GraphExecutor, ExecutionGraph, NodeStatus, ExecutionMode
+from core.graph_compiler import GraphCompiler
 from core.emotion_manager import emotion_manager
 from core.cost_manager import cost_manager
 import json
@@ -14,6 +15,21 @@ class BrainOrchestrator:
     def __init__(self):
         self.client = httpx.AsyncClient(timeout=60.0)
         self.response_history = [] # For semantic repetition check
+        self.compiler = GraphCompiler(tool_registry=agent_tools.get_tool_names())
+        self.active_graphs: Dict[str, ExecutionGraph] = {}
+        self.graph_timestamps: Dict[str, float] = {}
+
+    def _cleanup_old_graphs(self):
+        """
+        Memory Lifecycle Manager: Remove graphs older than 1 hour.
+        """
+        now = time.time()
+        ttl = 3600 # 1 hour
+        to_delete = [gid for gid, ts in self.graph_timestamps.items() if now - ts > ttl]
+        for gid in to_delete:
+            print(f"[Memory] Cleaning up old graph: {gid}")
+            del self.active_graphs[gid]
+            del self.graph_timestamps[gid]
 
     def _build_system_prompt(self, config, is_intimate: bool = False) -> str:
         """
@@ -164,30 +180,30 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 
                 final_response = response
                 
-                # Step 8: Parse Tool Calls
-                tool_match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
-                if not tool_match:
-                    break # No more tools requested, we are done
-                
-                try:
-                    tool_data = json.loads(tool_match.group(1))
-                    if tool_data.get("action") == "os_control":
+                # Step 8: Parse and Execute Graph Workflow (DAG-native)
+                if "```json" in response:
+                    try:
+                        # NEW: execute_graph_workflow replaces execute_tools
+                        graph_handle = await self.execute_graph_workflow(response)
+                        graph_id = graph_handle["graph_id"]
+                        
+                        graph = self.active_graphs.get(graph_id)
+                        if graph:
+                            # Run and wait for result (Sequential for now, but background-friendly)
+                            result_context = await self._run_graph_workflow_sync(graph)
+                            
+                            # Update context for next LLM turn
+                            execution_summary = json.dumps(result_context, indent=2)
+                            current_context = f"{current_context}\n\n[SYSTEM NOTIFICATION]: Graph '{graph_id}' executed.\nResults: {execution_summary}"
+                            current_step += 1
+                        else:
+                            break
+                    except Exception as graph_err:
+                        print(f"[Graph Error] {graph_err}")
+                        current_context += f"\n\n[SYSTEM ERROR]: Graph execution failed: {str(graph_err)}"
                         current_step += 1
-                        print(f"[Brain] Step {current_step}/{max_steps}: Executing {tool_data.get('method')}")
-                        
-                        result_text, new_image = await self._execute_tool(tool_data)
-                        
-                        if new_image:
-                            current_images.append(new_image)
-                        
-                        # Feed back to LLM for next step
-                        current_context = f"{current_context}\n\n[SYSTEM NOTIFICATION]: Tool '{tool_data.get('method')}' executed.\nResult: {result_text}\n(You can now continue your response or use another tool if needed.)"
-                    else:
-                        break # Not an os_control action
-                except Exception as tool_err:
-                    print(f"[Tool Error] {tool_err}")
-                    current_context += f"\n\n[SYSTEM ERROR]: Tool execution failed: {str(tool_err)}\n(Please try a different approach or fix the parameters.)"
-                    current_step += 1 # Continue to allow LLM to acknowledge error and self-heal
+                else:
+                    break
 
             latency = int((time.time() - start_time) * 1000)
             await self._update_metrics(name, True, latency)
@@ -199,8 +215,77 @@ If you use a tool, I will execute it and provide the result in the next turn.
             raw_error = str(e)
             print(f"[Brain Error] Provider {name} failed: {raw_error}")
             
-            # --- START PRODUCTION FALLBACK CHAIN ---
-            return await self._fallback_execute(visited_providers, system_prompt, current_context, clean_prompt, current_images, raw_error)
+    async def execute_graph_workflow(self, llm_output: str) -> Dict[str, Any]:
+        """
+        Transforms LLM output into a graph and initiates metadata.
+        """
+        self._cleanup_old_graphs()
+        print("[Brain] Compiling Execution Graph...")
+        graph = self.compiler.compile(llm_output)
+        self.active_graphs[graph.id] = graph
+        self.graph_timestamps[graph.id] = time.time()
+        
+        return {
+            "graph_id": graph.id,
+            "replay_id": graph.graph_root_hash,
+            "status": graph.status
+        }
+
+    async def _run_graph_workflow_sync(self, graph: ExecutionGraph) -> Dict[str, Any]:
+        """
+        Helper to run graph and return context.
+        """
+        executor = GraphExecutor(agent_tools)
+        return await executor.execute_graph(graph, {})
+
+    def get_graph_snapshot(self, graph_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Recovery Endpoint: Returns full graph snapshot for frontend rehydration.
+        """
+        graph = self.active_graphs.get(graph_id)
+        if graph:
+            return graph.dict()
+        return None
+
+    async def subscribe_to_graph(self, graph_id: str):
+        """
+        True Event-Driven Stream using asyncio.Queue.
+        """
+        graph = self.active_graphs.get(graph_id)
+        if not graph:
+            return
+
+        # Wait for logger to be attached
+        for _ in range(10):
+            if hasattr(graph, '_logger') and graph._logger:
+                break
+            await asyncio.sleep(0.5)
+        
+        if not hasattr(graph, '_logger') or not graph._logger:
+            return
+
+        logger = graph._logger
+        
+        # Stream past events
+        for event in logger.events:
+            yield {
+                "graph_id": graph_id,
+                "event": event.dict(),
+                "execution_state": graph.status,
+                "event_type": "update"
+            }
+
+        # Stream future events
+        while True:
+            event = await logger.queue.get()
+            yield {
+                "graph_id": graph_id,
+                "event": event.dict(),
+                "execution_state": graph.status,
+                "event_type": "update"
+            }
+            if event.type in ["GRAPH_COMPLETE", "GRAPH_ABORT"]:
+                break
 
     async def _execute_tool(self, data: dict) -> tuple[str, dict | None]:
         import base64

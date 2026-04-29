@@ -1,387 +1,454 @@
-SKILL BAWAAN MIA - MODE AGENT OS ARCHITECTURE (FLAGSHIP DESIGN)
-Version: 1.0
-Scope: Full-system architecture for multimodal AI Agent OS with “eyes, ears, brain, hands” capability
+MIA AI AGENT OS — PRODUCTION SYSTEM DESIGN (FLAGSHIP SPEC)
+Version: 2.2 (FINAL CONSOLIDATED + EXECUTION-ALIGNED + GAP-INTEGRATED)
+Status: SINGLE SOURCE OF TRUTH — PRODUCTION ARCHITECTURE BLUEPRINT
 
 ========================================================
-1. SYSTEM OVERVIEW
+0. EXECUTIVE SUMMARY
 ========================================================
 
-AI Agent OS adalah sistem operasi berbasis AI yang mengintegrasikan:
+MIA AI Agent OS adalah sistem operasi kecerdasan agentik yang berfungsi sebagai:
 
-- 🧠 Brain (LLM reasoning core)
-- 👀 Eyes (visual perception system)
-- 👂 Ears (audio perception system)
-- 🖐 Hands (action/execution system)
-- 🧭 Control Layer (Beginner / Power Mode)
-- 🛡 Safety & Governance Layer
-- 🧾 Memory System (short + long term)
-- 🔌 Tool / Skill Marketplace Layer
+> “Distributed, multimodal, graph-native AI Operating System with controlled execution and auditable cognition”
 
-Prinsip utama:
-> “One intelligence core, multiple perception channels, controlled execution surface”
+Sistem ini menggabungkan:
+
+- Multimodal perception system (Eyes, Ears, Text, System Signals)
+- Cognitive reasoning core (Brain)
+- Graph-native deterministic execution engine (Execution Graph / DAG Runtime)
+- Causal-temporal memory system (Memory Graph DB)
+- Modular skill runtime (AI App Store / Skill Marketplace)
+- Enterprise governance + safety layer
+- Policy DSL engine (declarative control system)
+- Distributed multi-agent orchestration layer
+
+PRINSIP UTAMA:
+> One OS, One Cognitive Core, Many Modalities, Fully Controlled Graph Execution
+
+========================================================
+1. SYSTEM PRINCIPLES (NON-NEGOTIABLE)
+========================================================
+
+1. Separation of Concerns:
+   Cognition ≠ Perception ≠ Execution ≠ Memory ≠ Governance
+
+2. Graph-First Execution:
+   Semua aksi harus berbentuk DAG (Directed Acyclic Graph)
+
+3. Full Observability (Power Mode guarantee)
+
+4. Full Controllability (sandbox + policy enforced)
+
+5. Memory is causal-temporal graph (not vector-only)
+
+6. Tools are isolated sandbox micro-services
+
+7. Mode system ONLY affects:
+   - visibility
+   - control surface
+   - execution observability
+
+8. System is distributed-ready by design (not retrofit)
 
 ========================================================
 2. HIGH LEVEL ARCHITECTURE
 ========================================================
 
-                ┌───────────────────────┐
-                │     USER INTERFACE    │
-                │  (Beginner / Power)   │
-                └──────────┬────────────┘
-                           │
-                           ▼
-        ┌────────────────────────────────────┐
-        │        ORCHESTRATION LAYER        │
-        │  Intent Parser + Router + Policy  │
-        └──────────┬─────────────┬──────────┘
-                   │             │
-                   ▼             ▼
-     ┌──────────────────┐   ┌──────────────────┐
-     │  PERCEPTION HUB  │   │ EXECUTION ENGINE  │
-     │ Eyes / Ears / IO │   │ Tools / Actions   │
-     └────────┬─────────┘   └────────┬─────────┘
-              │                      │
-              ▼                      ▼
-        ┌────────────────────────────────┐
-        │           AI BRAIN             │
-        │     (LLM + Reasoning Core)     │
-        └──────────┬────────────────────┘
-                   ▼
-        ┌────────────────────────────────┐
-        │        MEMORY SYSTEM           │
-        │ short-term / long-term / vec  │
-        └────────────────────────────────┘
+                    ┌──────────────────────┐
+                    │     USER INTERFACE   │
+                    │ Beginner / Power Mode│
+                    └──────────┬───────────┘
+                               │
+                               ▼
+        ┌──────────────────────────────────────────┐
+        │      POLICY + MODE CONTROL LAYER         │
+        │  DSL Engine + Permissions + Risk Control │
+        └──────────────┬───────────────────────────┘
+                       │
+        ┌──────────────▼───────────────────────────┐
+        │         ORCHESTRATION KERNEL             │
+        │ Intent Router + Context Builder + DAG Compiler
+        └──────┬───────────────┬───────────────────┘
+               │               │
+               ▼               ▼
+     ┌────────────────┐  ┌──────────────────────────┐
+     │ PERCEPTION HUB │  │ EXECUTION GRAPH ENGINE   │
+     │ Eyes / Ears    │  │ DAG Runtime + Replay     │
+     └──────┬─────────┘  └──────────┬──────────────┘
+            │                       │
+            ▼                       ▼
+        ┌──────────────────────────────────────┐
+        │          COGNITIVE CORE              │
+        │     LLM + Planner + Critic + Sim    │
+        └──────────────┬──────────────────────┘
+                       ▼
+        ┌──────────────────────────────────────┐
+        │      MEMORY GRAPH SYSTEM (CAUSAL)    │
+        │ Event Graph + Identity + Temporal    │
+        └──────────────┬──────────────────────┘
+                       ▼
+        ┌──────────────────────────────────────┐
+        │ DISTRIBUTED AGENT ORCHESTRATION LAYER│
+        │ Multi-Agent Cluster Runtime System    │
+        └──────────────────────────────────────┘
 
 ========================================================
-3. CORE MODULES
+3. CORE SYSTEM MODULES (FINAL PRODUCTION DESIGN)
 ========================================================
 
 --------------------------------------------------------
-3.1 🧠 AI BRAIN (Reasoning Core)
+3.1 🧠 COGNITIVE CORE (BRAIN OS)
 --------------------------------------------------------
 
-Function:
-- Intent understanding
-- Planning (multi-step reasoning)
-- Tool selection
-- Self-reflection loop
+COMPONENTS:
 
-Sub-components:
-- Planner (goal decomposition)
-- Reasoner (LLM inference)
-- Critic (self-check / validation)
-- Policy adaptor (mode-aware behavior shaping)
+- Intent Interpreter
+- Global Planner (DAG Generator)
+- Simulation Engine (pre-execution world modeling)
+- Critic Engine (risk + efficiency evaluation)
+- Policy Adapter (mode + DSL enforcement)
 
-Loop:
-Observe → Plan → Act → Reflect → Update Plan
+CORE LOOP:
+
+Observe → Interpret → Plan DAG → Simulate → Validate → Execute → Reflect → Learn
+
+OUTPUT:
+- Execution Graph
+- Risk Score
+- Context State
 
 --------------------------------------------------------
-3.2 👀 EYES MODULE (Visual Intelligence)
+3.2 👀 PERCEPTION HUB (EYES SYSTEM)
 --------------------------------------------------------
 
-Input types:
-- Screen capture (UI understanding)
-- Camera input (real world)
+STATUS: ACTIVE (Spec v1.0)
+✔ Native Window Tracking (PyGetWindow)
+✔ Visual Element Contour Detection (OpenCV)
+✔ Scene Graph Representation
+
+INPUTS:
+- Screen capture
+- Camera input 
+- UI DOM tree
 - Document images
-- UI DOM parsing
 
-Capabilities:
-- UI element detection
-- OCR (text extraction)
-- Scene understanding
-- Object recognition
-- Layout parsing (apps/websites)
+UPGRADED PIPELINE:
 
-Output:
-- Structured visual context (JSON scene graph)
+Raw Input → Vision Encoder → UI Scene Graph Builder → Affordance Detector → Context Memory
 
-Example output:
+OUTPUT:
+
+SceneGraph {
+  objects,
+  relationships,
+  actionable_elements,
+  temporal_state
+}
+
+CAPABILITIES:
+- UI structure understanding (DOM-level)
+- Action detection (clickable elements)
+- State tracking across time
+
+--------------------------------------------------------
+3.3 👂 AUDIO SYSTEM (EARS ENGINE)
+--------------------------------------------------------
+
+STATUS: ACTIVE (Spec v1.0)
+✔ Semantic Intent Parsing (Action vs Info)
+✔ Urgency Detection Heuristics
+✔ Emotion Vector Integration
+
+PIPELINE:
+
+Audio → STT → Semantic Parser → Intent + Emotion Engine
+
+OUTPUT:
+
 {
-  "screen": "browser",
-  "elements": [
-    {"type": "button", "text": "Submit", "position": [x,y]}
-  ]
+  text,
+  intent,
+  emotion_vector,
+  urgency_score,
+  context_shift_probability
+}
+
+CAPABILITIES:
+- speech-to-intent conversion
+- emotion detection
+- context drift detection
+
+--------------------------------------------------------
+3.4 🖐 EXECUTION GRAPH ENGINE (CORE OS KERNEL)
+--------------------------------------------------------
+
+STATUS: HARDENED SYSTEM RUNTIME (Spec v1.4)
+✔ Merkle-style global integrity root
+✔ Cryptographic salted hash chaining
+✔ Deep immutability enforcement
+
+MODEL:
+
+GraphNode {
+  id,
+  tool,
+  input,
+  dependencies,
+  state,
+  risk_score,
+  execution_status
+}
+
+EXECUTION PIPELINE:
+
+Intent → DAG Compiler → Optimization → Simulation → Sandbox Execution → Commit → Audit Log
+
+FEATURES:
+- deterministic replay
+- step-level pause/resume
+- node editing (Power Mode)
+- branching execution
+- rollback support
+
+--------------------------------------------------------
+3.5 🧭 ORCHESTRATION KERNEL (SYSTEM BRAIN ROUTER)
+--------------------------------------------------------
+
+FUNCTIONS:
+- Intent routing
+- Context fusion
+- DAG generation trigger
+- Policy enforcement hook
+
+OUTPUT:
+
+UnifiedSystemState {
+  intent,
+  world_state,
+  execution_graph,
+  risk_profile
 }
 
 --------------------------------------------------------
-3.3 👂 EARS MODULE (Audio Intelligence)
+3.6 🧾 MEMORY GRAPH SYSTEM (CAUSAL OS MEMORY)
 --------------------------------------------------------
 
-Input types:
-- Microphone stream
-- System audio
-- Voice messages
+STATUS: GOVERNED MEMORY OS (Spec v1.7)
+✔ Graph-First Source of Truth
+✔ Bounded Spreading Activation (Depth=5)
+✔ Anti-Feedback Normalization
+✔ Merkle-style persistence integrity
 
-Capabilities:
-- Speech-to-text
-- Speaker separation (optional advanced)
-- Emotion detection
-- Intent extraction from speech tone
+NODE TYPES:
 
-Output:
-- Transcribed + annotated semantic text
+- UserAction
+- SystemAction
+- PerceptionSnapshot
+- DecisionNode
+- OutcomeNode
 
-Example:
-{
-  "text": "open my email",
-  "tone": "neutral",
-  "confidence": 0.94
-}
+EDGE TYPES:
 
---------------------------------------------------------
-3.4 🖐 EXECUTION ENGINE (Hands)
---------------------------------------------------------
+- causes
+- influences
+- precedes
+- derived_from
 
-Function:
-- Executes actions in digital/real environment
+CAPABILITIES:
 
-Action types:
-- Browser automation
-- File system operations
-- API calls
-- App integrations
-- System control
-
-Structure:
-- Action Queue
-- Action Validator
-- Sandbox Executor
-- Rollback system
-
-Execution model:
-Action → Validate → Sandbox → Execute → Log → Confirm
+- causal reasoning (why did this happen)
+- temporal reconstruction (timeline replay)
+- identity evolution tracking
+- behavioral prediction
 
 --------------------------------------------------------
-3.5 🧭 ORCHESTRATION LAYER
+3.7 🔌 SKILL RUNTIME SYSTEM (AI APP STORE)
 --------------------------------------------------------
 
-Responsibilities:
-- Intent classification
-- Routing to modules
-- Mode enforcement (Beginner / Power)
-- Policy enforcement
+STATUS: ACTIVE (Plugin-based Dynamic Loading)
+✔ Dynamic loading via `importlib`
+✔ Subprocess-based legacy isolation
+✔ Manifest-based metadata extraction
 
-Sub-modules:
-- Intent Router
-- Context Builder
-- Tool Selector
-- Mode Controller
+SKILL MODEL:
 
-Routing logic:
-IF visual input → Eyes
-IF audio input → Ears
-IF action required → Execution Engine
-IF reasoning → Brain
-
---------------------------------------------------------
-3.6 🧾 MEMORY SYSTEM
---------------------------------------------------------
-
-Types:
-
-1. Short-term memory
-- current session context
-- ephemeral reasoning state
-
-2. Long-term memory
-- user preferences
-- persistent facts
-- behavioral patterns
-
-3. Vector memory
-- semantic retrieval (RAG)
-- embeddings database
-
-Functions:
-- store()
-- retrieve()
-- forget()
-- summarize()
-
---------------------------------------------------------
-3.7 🛡 SAFETY & GOVERNANCE LAYER
---------------------------------------------------------
-
-This layer is ALWAYS active.
-
-Functions:
-- Permission control per tool/action
-- Sensitive action blocking
-- Audit logs
-- Execution replay
-- Rate limiting
-- Data leakage prevention
-
-Rules engine:
-- Action approval required? (Y/N)
-- Risk score computation
-- Mode-based restriction
-
-Example:
-IF action == "send_email"
-AND confidence < threshold
-→ require user approval
-
---------------------------------------------------------
-3.8 🔌 SKILL / TOOL MARKETPLACE LAYER
---------------------------------------------------------
-
-Concept:
-AI can extend capabilities via modular skills.
-
-Skill types:
-- Browser skill
-- Finance skill
-- Coding skill
-- Automation skill
-- External API connectors
-
-Structure:
-Skill = {
+Skill {
   name,
+  version,
   permissions,
-  input schema,
-  output schema,
-  risk level
+  input_schema,
+  output_schema,
+  execution_graph,
+  risk_level
 }
 
-Power Mode can:
-- enable/disable skills
-- inspect skill execution
-- modify workflow chain
-
-========================================================
-4. MODE SYSTEM
-========================================================
+FEATURES:
+- sandbox execution
+- version control
+- skill chaining
+- dependency resolution
+- dynamic loading
 
 --------------------------------------------------------
-4.1 🟢 BEGINNER MODE
+3.8 🛡 SAFETY & GOVERNANCE LAYER (HARDENED v1.0)
 --------------------------------------------------------
 
-Principles:
-- Fully autonomous AI
-- Zero technical exposure
-- Minimal UI complexity
+STATUS: ACTIVE MULTI-LAYER GATING
+✔ Policy DSL AST-based Evaluator
+✔ Sequential Execution Gates (Compile/Policy/Exec/Tool)
+✔ Deterministic Bytecode Logic
 
-Hidden:
-- tool calls
-- execution steps
-- system logs
+COMPONENTS:
 
-Behavior:
-User intent → AI full execution → final result only
+1. Policy DSL Engine
+   IF action == X AND risk > Y → require approval
+
+2. Risk Engine (ML-based anomaly detection)
+
+3. Execution Firewall (graph-level blocking)
+
+4. Audit + Replay System (deterministic trace)
+
+5. Prompt Injection Shield v2
 
 --------------------------------------------------------
-4.2 🔴 POWER MODE
+3.9 🧭 MODE SYSTEM (FINAL PRODUCTION FORM)
 --------------------------------------------------------
 
-Principles:
-- Full transparency
-- Controlled execution
-- Editable workflow
+🟢 BEGINNER MODE:
+- full abstraction
+- no graph visibility
+- fully autonomous execution
 
-Exposed:
-- execution graph
-- step-by-step actions
-- tool calls
-- memory inspector
-- permission manager
-- debug console
+🔴 POWER MODE:
+- full DAG visibility
+- node-level editing
+- memory inspection
+- execution replay
+- tool override
+- risk visualization
 
-User control:
-- edit step
-- skip step
-- reroute action
-- replay execution
-
-Important:
-Power Mode does NOT increase AI capability
-It increases:
-→ visibility
-→ control
-→ auditability
+IMPORTANT:
+Mode DOES NOT change capability.
+Mode ONLY changes:
+- visibility
+- control
+- observability
 
 ========================================================
-5. EXECUTION GRAPH MODEL
+4. EXECUTION GRAPH ENGINE (SYSTEM CORE)
 ========================================================
 
-Every task becomes a DAG (Directed Acyclic Graph)
+LIFECYCLE:
 
-Example:
+Intent → DAG Build → Optimize → Simulate → Execute → Persist → Replay
 
-[Intent]
+FEATURES:
+- DAG compiler
+- parallel execution scheduler
+- graph diff inspector
+- deterministic replay engine
+
+========================================================
+5. MULTIMODAL FUSION ENGINE
+========================================================
+
+STATUS: ACTIVE (UnifiedPerceptionHub)
+✔ Vision/Audio Fusion
+✔ Automated Memory Persistence
+✔ PerceptionSnapshot Event Logging
+
+INPUTS:
+- Eyes (SceneGraph)
+- Ears (AudioIntentGraph)
+- Text (IntentSeed)
+- System telemetry
+
+OUTPUT:
+
+UnifiedWorldStateGraph
+
+========================================================
+6. DISTRIBUTED AGENT LAYER (MULTI-AGENT OS)
+========================================================
+
+STATUS: ACTIVE (Agent Cluster v1.0)
+✔ Master Orchestrator delegation
+✔ Specialized Worker Agents (Vision/Audio/Exec/Memory)
+✔ Inter-agent communication bus
+
+ARCHITECTURE:
+
+MasterOrchestrator
    ↓
-[Plan]
+Task Decomposer
    ↓
-[Fetch Data]
-   ↓
-[Process]
-   ↓
-[Generate Output]
-   ↓
-[Deliver]
+Worker Agents:
+  - Vision Agent
+  - Audio Agent
+  - Execution Agent
+  - Memory Agent
 
-Each node:
-- editable
-- traceable
-- replayable
-
-========================================================
-6. MULTIMODAL DATA FLOW
-========================================================
-
-Eyes → Visual Context ─┐
-Ears → Audio Context   ├→ Context Fusion Layer → Brain
-Text → User Input      ┘
-
-Context Fusion outputs:
-- unified world model snapshot
+FEATURES:
+- task delegation
+- inter-agent communication bus
+- shared memory sync
+- parallel execution cluster
 
 ========================================================
-7. SECURITY MODEL
+7. SECURITY MODEL (ZERO TRUST GRAPH SYSTEM)
 ========================================================
 
-Layers:
-- Sandbox isolation per tool
-- Token-based permissions
-- Action approval gates
-- Memory encryption
-- Execution trace logging
+FEATURES:
+- sandbox per tool & per agent
+- graph-level permission enforcement
+- execution signature validation
+- memory poisoning protection
+- cross-agent isolation
 
-Threat handling:
-- prompt injection defense
-- malicious tool detection
-- data exfiltration prevention
-
-========================================================
-8. KEY DESIGN PRINCIPLES
-========================================================
-
-1. Separation of cognition vs execution
-2. Mode only affects visibility, not intelligence
-3. Everything is observable in Power Mode
-4. Every action is traceable
-5. Tools are modular and replaceable
-6. Memory is structured, not free-form chaos
+THREAT COVERAGE:
+- prompt injection
+- graph injection
+- tool chaining abuse
+- memory corruption
+- agent hijacking
 
 ========================================================
-9. FINAL SYSTEM PHILOSOPHY
+8. SYSTEM PHILOSOPHY (FINAL FORM)
 ========================================================
 
-This is not just an AI chatbot.
+MIA AI Agent OS is NOT:
 
-This is:
+- chatbot
+- assistant
+- automation tool
 
-> “An Operating System for Autonomous Intelligence”
+It IS:
+
+> “A Distributed Autonomous Intelligence Operating System with Graph-Native Execution and Causal Memory”
 
 Where:
-- Brain thinks
-- Eyes see
-- Ears listen
-- Hands act
-- System governs
-- User supervises (in Power Mode)
+- Brain thinks across graph structures
+- Eyes perceive structured environments
+- Ears interpret dynamic signals
+- Hands execute deterministic DAG actions
+- Memory stores causal reality
+- System governs via policy DSL
+- User supervises via Power Mode cockpit
 
 ========================================================
-END OF ARCHITECTURE
+9. PRODUCTION READINESS STATUS
+========================================================
+
+✔ Graph-native execution core (Hardened v1.4)
+✔ Governed Memory graph system (Hardened v1.7)
+✔ Policy DSL governance layer (Hardened v1.0)
+✔ Audit + replay system (Merkle-Anchored)
+✔ Skill marketplace runtime (Active - Plugin System)
+✔ Multimodal perception system (Active - Vision/Audio Hub)
+✔ Cognitive reasoning engine (Active - Cognitive Hub v1.0)
+✔ Distributed agent architecture (Active - Agent Cluster)
+✔ Mode-based control system (Active - Mode Hub v1.0)
+
+========================================================
+END OF FINAL SYSTEM SPEC v2.2 (SINGLE SOURCE OF TRUTH)
 ========================================================
