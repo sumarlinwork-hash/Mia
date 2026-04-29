@@ -22,7 +22,7 @@ export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
     { name: isPro ? "Task Engine" : "Crone (Tasks)", icon: <Activity size={22} />, path: "/crone" },
     { name: isPro ? "Memory Store" : "I'm_Mia (Memory)", icon: <Brain size={22} />, path: "/iam-mia" },
     { name: isPro ? "Resonance Hub" : "Emotion Dashboard", icon: <Heart size={22} />, path: "/emotion" },
-    { name: isPro ? "Skill Marketplace" : "Discovery Marketplace", icon: <Zap size={22} />, path: "/skills" },
+    { name: isPro ? "Marketplace Aplikasi" : "Discovery Marketplace", icon: <Zap size={22} />, path: "/skills" },
     { name: "Settings", icon: <Settings2 size={22} />, path: "/settings" },
   ];
 

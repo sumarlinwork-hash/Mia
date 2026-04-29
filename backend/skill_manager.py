@@ -69,13 +69,30 @@ class SkillManager:
                     # Only register to self.plugins if it's in the SKILLS_DIR
                     if self.SKILLS_DIR in path:
                         self.plugins[skill_id] = skill_instance
+                    
+                    # Try to get metadata from Skill instance or module manifest/metadata
+                    manifest = getattr(module, "manifest", getattr(module, "metadata", {}))
                         
                     return {
                         "id": skill_id,
-                        "name": getattr(skill_instance, "name", skill_id.replace("_", " ").title()),
-                        "description": getattr(skill_instance, "description", "Dynamic plugin skill."),
-                        "category": getattr(skill_instance, "category", "Plugin"),
+                        "name": getattr(skill_instance, "name", manifest.get("name", skill_id.replace("_", " ").title())),
+                        "description": getattr(skill_instance, "description", manifest.get("description", "Dynamic plugin skill.")),
+                        "category": getattr(skill_instance, "category", manifest.get("category", "Plugin")),
+                        "execution_mode": manifest.get("execution_mode", "instant"),
                         "type": "plugin",
+                        "created_at": datetime.fromtimestamp(os.path.getctime(path)).isoformat()
+                    }
+
+                # Check for manifest/metadata even if no Skill class
+                manifest = getattr(module, "manifest", getattr(module, "metadata", {}))
+                if manifest:
+                    return {
+                        "id": skill_id,
+                        "name": manifest.get("name", skill_id.replace("_", " ").title()),
+                        "description": manifest.get("description", "Module-based skill."),
+                        "category": manifest.get("category", "App"),
+                        "execution_mode": manifest.get("execution_mode", "instant"),
+                        "type": "module",
                         "created_at": datetime.fromtimestamp(os.path.getctime(path)).isoformat()
                     }
 
@@ -89,16 +106,19 @@ class SkillManager:
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 tree = ast.parse(f.read())
-            docstring = ast.get_docstring(tree) or "Legacy subprocess skill."
+            docstring = ast.get_docstring(tree) or "Legacy script."
+            
+            # Note: execution_mode is NOT read from docstrings as per requirements
             return {
                 "id": skill_id,
                 "name": skill_id.replace("_", " ").title(),
                 "description": docstring,
+                "execution_mode": "instant", # Default fallback
                 "type": "legacy",
                 "created_at": datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()
             }
         except:
-            return {"id": skill_id, "type": "legacy", "description": "Legacy script."}
+            return {"id": skill_id, "type": "legacy", "description": "Legacy script.", "execution_mode": "instant"}
 
     def install_skill(self, skill_id):
         """Install a skill by copying from marketplace to skills directory."""

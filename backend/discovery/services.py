@@ -99,6 +99,52 @@ class PermissionPolicyEngine:
         }
 
 
+class AppBuilderService:
+    def __init__(self):
+        self.templates_path = os.path.join(os.path.dirname(__file__), "templates.json")
+
+    def get_templates(self) -> List[Dict[str, Any]]:
+        try:
+            if os.path.exists(self.templates_path):
+                with open(self.templates_path, "r", encoding="utf-8") as f:
+                    return json.load(f).get("templates", [])
+            return []
+        except Exception:
+            return []
+
+    async def generate_from_template(self, template_id: str, app_name: str, prompt: str) -> Dict[str, Any]:
+        templates = self.get_templates()
+        template = next((t for t in templates if t["id"] == template_id), None)
+        
+        if not template:
+            raise ValueError(f"Template {template_id} not found")
+
+        # In a real implementation, this would call the LLM via BrainOrchestrator
+        # For Sprint 2, we return a synthesized manifest and mock logic
+        
+        generated_id = app_name.lower().replace(" ", "_")
+        
+        # Mocking the AI's "light LLM call" result
+        return {
+            "manifest": {
+                "id": generated_id,
+                "name": app_name,
+                "version": "1.0.0",
+                "description": f"{template['name']} untuk {prompt}",
+                "author": "MIA User",
+                "category": template["name"],
+                "capabilities": template["capabilities"],
+                "required_permissions": template["permissions"],
+                "execution_mode": template["execution_mode"],
+                "tags": [template_id, "generated"],
+                "pricing": "free",
+                "rating": 5.0,
+                "compatibility": {"mia_version": ">=1.0.0"}
+            },
+            "logic": f"class {app_name.replace(' ', '')}App:\n    def __init__(self):\n        self.purpose = '{prompt}'\n\n    async def execute(self, args):\n        return f'Eksekusi {app_name} sebagai {template['name']}...'"
+        }
+
+
 class UpdateEngine:
     def _norm(self, version: str) -> List[int]:
         chunks = [c for c in version.split(".") if c != ""]

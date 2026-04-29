@@ -35,7 +35,7 @@ const COMMANDS = [
   { cmd: '/code', desc: 'Write or execute code', icon: <Code size={16} /> },
   { cmd: '/vision', desc: 'Analyze image/screen', icon: <Eye size={16} /> },
   { cmd: '/memorize', desc: 'Save to long-term memory', icon: <Database size={16} /> },
-  { cmd: '/skill', desc: 'Execute a specific skill runbook', icon: <Zap size={16} /> },
+  { cmd: '/aplikasi', desc: 'Jalankan aplikasi spesifik', icon: <Zap size={16} /> },
   { cmd: '/deep-research', desc: 'Deep dive multi-step research', icon: <Sparkles size={16} /> },
   { cmd: '/plan', desc: 'Create implementation plan', icon: <CheckSquare size={16} /> },
   { cmd: '/clear', desc: 'Clear chat history', icon: <XCircle size={16} /> },
@@ -222,7 +222,7 @@ export default function Home() {
   // --- 6. PLAIN VALUES ---
   const paletteMenuItems = [
     { icon: <Heart size={18} className={intimacyActive ? "text-pink-500 fill-pink-500" : ""}/>, name: intimacyActive ? "Deactivate Soulmate" : "Activate Soulmate", desc: "Phase Utama Keintiman", action: toggleIntimacy },
-    { icon: <Zap size={18}/>, name: "Skills Manager", desc: "View MIA's abilities", link: "/settings" },
+    { icon: <Zap size={18}/>, name: "Kelola Aplikasi", desc: "Lihat kemampuan MIA", link: "/settings" },
     { icon: <ImageIcon size={18}/>, name: "Change Background", desc: "Appearance settings", link: "/settings" },
     { icon: <Database size={18}/>, name: "Clear Memory", desc: "Reset chat history", action: () => { setInput("/clear"); sendMessage(); setShowPalette(false); } },
     { icon: <XCircle size={18}/>, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }

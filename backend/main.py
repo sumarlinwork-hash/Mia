@@ -21,6 +21,7 @@ from tts_service import tts_service
 from stt_service import stt_service
 from skill_manager import skill_manager
 from core.local_runtime import local_event_bus
+from discovery.services import AppBuilderService
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,6 +36,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MIA Backend API", lifespan=lifespan)
 intimacy_mode = False  # Global state for Intimacy Mode
+app_builder = AppBuilderService()
 
 # Setup CORS for React Frontend
 app.add_middleware(
@@ -99,6 +101,21 @@ async def save_skill(req: SkillSaveRequest):
 @app.post("/api/skills/test/{skill_id}")
 async def test_skill(skill_id: str, args: dict = {}):
     return await skill_manager.execute_skill(skill_id, args)
+
+# --- APP BUILDER ENDPOINTS ---
+
+@app.get("/api/apps/templates")
+async def get_app_templates():
+    return app_builder.get_templates()
+
+class AppGenerateRequest(BaseModel):
+    template_id: str
+    app_name: str
+    prompt: str
+
+@app.post("/api/apps/generate")
+async def generate_app(req: AppGenerateRequest):
+    return await app_builder.generate_from_template(req.template_id, req.app_name, req.prompt)
 
 @app.post("/api/skill/execute")
 async def execute_skill(skill_id: str, args: dict = {}):

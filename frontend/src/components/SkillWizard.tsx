@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { X, ChevronRight, ChevronLeft, Shield, Sparkles, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import labels from '../utils/labels';
 
-interface SkillData {
+interface AppData {
   name: string;
   description: string;
   category: string;
@@ -10,12 +11,12 @@ interface SkillData {
   logic: string;
 }
 
-interface SkillWizardProps {
+interface AppWizardProps {
   onClose: () => void;
-  onComplete: (skillData: SkillData) => void;
+  onComplete: (appData: AppData) => void;
 }
 
-const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {
+const AppWizard: React.FC<AppWizardProps> = ({ onClose, onComplete }) => {
   const [step, setStep] = useState(1);
   const [data, setData] = useState({
     name: '',
@@ -25,8 +26,8 @@ const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {
     logic: ''
   });
 
-  const categories = ['Creativity', 'Media', 'Interaction', 'Utility', 'Productivity'];
-  const permissions = ['File Read', 'Internet Access', 'Memory Access', 'System Control'];
+  const categories = ['Kreativitas', 'Media', 'Interaksi', 'Utilitas', 'Produktivitas'];
+  const permissions = ['Akses File', 'Akses Internet', 'Akses Memori', 'Kontrol Sistem'];
 
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
@@ -36,18 +37,18 @@ const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {
       case 1:
         return (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-            <h2 className="text-2xl font-bold text-white mb-6">Identity & Purpose</h2>
+            <h2 className="text-2xl font-bold text-white mb-6">Identitas & Tujuan</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] uppercase tracking-widest text-white/40 mb-2">Skill Name</label>
+                <label className="block text-[10px] uppercase tracking-widest text-white/40 mb-2">Nama Aplikasi</label>
                 <input 
                   type="text" value={data.name} onChange={e => setData({...data, name: e.target.value})}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                  placeholder="e.g. YouTube Summarizer"
+                  placeholder="Contoh: YouTube Summarizer"
                 />
               </div>
               <div>
-                <label className="block text-[10px] uppercase tracking-widest text-white/40 mb-2">Category</label>
+                <label className="block text-[10px] uppercase tracking-widest text-white/40 mb-2">Kategori</label>
                 <div className="flex flex-wrap gap-2">
                   {categories.map(c => (
                     <button 
@@ -60,11 +61,11 @@ const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] uppercase tracking-widest text-white/40 mb-2">Description</label>
+                <label className="block text-[10px] uppercase tracking-widest text-white/40 mb-2">Deskripsi</label>
                 <textarea 
                   value={data.description} onChange={e => setData({...data, description: e.target.value})}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary h-24"
-                  placeholder="What does this skill do?"
+                  placeholder="Apa kegunaan aplikasi ini?"
                 />
               </div>
             </div>
@@ -73,8 +74,8 @@ const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {
       case 2:
         return (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-            <h2 className="text-2xl font-bold text-white mb-6">Permissions</h2>
-            <p className="text-white/40 text-sm mb-6">Select the resources this skill needs to access.</p>
+            <h2 className="text-2xl font-bold text-white mb-6">Izin Akses</h2>
+            <p className="text-white/40 text-sm mb-6">Pilih sumber daya yang perlu diakses oleh aplikasi ini.</p>
             <div className="space-y-3">
               {permissions.map(p => (
                 <div 
@@ -94,14 +95,14 @@ const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {
       case 3:
         return (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-            <h2 className="text-2xl font-bold text-white mb-6">Logic Synthesis</h2>
+            <h2 className="text-2xl font-bold text-white mb-6">Sintesis Logika</h2>
             <div className="p-6 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col items-center text-center">
               <Sparkles className="text-primary mb-4 animate-pulse" size={48} />
-              <h3 className="text-lg font-bold text-white mb-2">MIA is Thinking...</h3>
-              <p className="text-sm text-white/40 mb-6">I am synthesizing the Python code based on your requirements.</p>
+              <h3 className="text-lg font-bold text-white mb-2">MIA sedang Berpikir...</h3>
+              <p className="text-sm text-white/40 mb-6">Saya sedang menyusun kode Python berdasarkan kebutuhan Anda.</p>
               <div className="w-full bg-black/40 rounded-xl p-4 font-mono text-[10px] text-primary/60 text-left overflow-hidden h-40">
                 <div className="animate-typing">
-                  {`class ${data.name.replace(/\s+/g, '')}Skill(ToolAdapter):\n  async def execute(self, args):\n    # Synthesizing logic...\n    pass`}
+                  {`class ${data.name.replace(/\s+/g, '')}App(ToolAdapter):\n  async def execute(self, args):\n    # Menyusun logika...\n    pass`}
                 </div>
               </div>
             </div>
@@ -113,13 +114,13 @@ const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {
             <div className="w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center text-primary mx-auto mb-6">
               <Check size={40} />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-2">Skill Ready!</h2>
-            <p className="text-white/40 mb-8">The {data.name} skill has been successfully synthesized and is ready for deployment.</p>
+            <h2 className="text-3xl font-bold text-white mb-2">Aplikasi Siap!</h2>
+            <p className="text-white/40 mb-8">Aplikasi {data.name} telah berhasil disusun dan siap untuk diterapkan.</p>
             <button 
               onClick={() => onComplete(data)}
               className="w-full bg-primary text-black font-bold py-4 rounded-2xl hover:scale-[1.02] transition-transform shadow-[0_0_20px_rgba(0,255,204,0.3)]"
             >
-              DEPLOY TO KERNEL
+              TERAPKAN KE KERNEL
             </button>
           </motion.div>
         );
@@ -153,14 +154,14 @@ const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {
                 onClick={step === 1 ? onClose : prevStep}
                 className="px-6 py-3 rounded-xl text-white/40 font-bold hover:text-white transition-colors flex items-center gap-2"
               >
-                <ChevronLeft size={18} /> {step === 1 ? 'Cancel' : 'Back'}
+                <ChevronLeft size={18} /> {step === 1 ? 'Batal' : 'Kembali'}
               </button>
               <button 
                 onClick={nextStep}
                 disabled={step === 1 && !data.name}
                 className="px-8 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                Next <ChevronRight size={18} />
+                Lanjutkan <ChevronRight size={18} />
               </button>
             </div>
           )}
@@ -170,4 +171,4 @@ const SkillWizard: React.FC<SkillWizardProps> = ({ onClose, onComplete }) => {
   );
 };
 
-export default SkillWizard;
+export default AppWizard;
