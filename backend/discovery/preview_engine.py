@@ -48,25 +48,30 @@ class PreviewEngine:
         """
 
         if mode == "static":
+            # FAST PATH: Direct return, no LLM pipeline or complex logic
             return self._static_preview(template)
 
         elif mode == "template":
             return self._template_preview(template, user_input)
 
         elif mode == "light_llm":
-            # Check rate limit
+            # Check rate limit (Session-scoped)
             if self._is_rate_limited(session_id):
-                return {
-                    "status": "error",
-                    "error": f"Preview limit reached ({self.MAX_LLM_REQUESTS_PER_SESSION} attempts)",
-                    "mode": "light_llm",
-                }
+                fallback = self._template_preview(template, user_input)
+                fallback["is_fallback"] = True
+                fallback["error"] = f"Limit tercapai ({self.MAX_LLM_REQUESTS_PER_SESSION} percobaan)"
+                return fallback
 
             try:
-                return await self._llm_preview(template, user_input, session_id)
+                result = await self._llm_preview(template, user_input, session_id)
+                result["is_fallback"] = False
+                return result
             except Exception as e:
                 # Fallback to template mode if LLM fails
-                return self._template_preview(template, user_input)
+                fallback = self._template_preview(template, user_input)
+                fallback["is_fallback"] = True
+                fallback["error"] = "LLM unavailable, using template"
+                return fallback
 
         else:
             return self._static_preview("default")
@@ -160,8 +165,15 @@ class PreviewEngine:
             response = re.sub(r"```json\n(.*?)\n```", "",
                               response, flags=re.DOTALL).strip()
 
+            # Enforce 2-sentence constraint (Backend Guardrail)
+            sentences = re.split(r'(?<=[.!?])\s+', response)
+            if len(sentences) > 2:
+                response = " ".join(sentences[:2])
+                if not response.endswith(('.', '!', '?')):
+                    response += "..."
+
             if not response:
-                response = "App preview is currently unavailable. Try a different query."
+                response = "Aplikasi preview sedang tidak tersedia. Coba kueri lain."
 
         except Exception as e:
             print(f"[PreviewEngine] LLM Fallback active. Error: {e}")

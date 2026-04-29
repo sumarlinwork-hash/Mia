@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Shield, Key, CheckCircle } from 'lucide-react';
-import labels from '../utils/labels';
+import { App } from '../utils/viewModel';
 
 interface SetupFlowProps {
-  app: any;
+  app: App;
   onClose: () => void;
   onComplete: () => void;
 }

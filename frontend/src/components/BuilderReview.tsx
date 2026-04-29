@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
 import { X, Check, Edit2, Shield, Info, Terminal } from 'lucide-react';
+import permissionDict from '../utils/permissionDictionary.json';
 
 interface AppManifest {
   id: string;
@@ -87,11 +87,14 @@ const BuilderReview: React.FC<BuilderReviewProps> = ({ data, onClose, onDeploy }
               <section>
                 <label className="block text-[10px] uppercase tracking-widest text-white/40 font-bold mb-2">Izin yang Dibutuhkan</label>
                 <div className="flex flex-wrap gap-2">
-                  {manifest.required_permissions.map(p => (
-                    <div key={p} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold">
-                      <Shield size={10} /> {p}
-                    </div>
-                  ))}
+                  {manifest.required_permissions.map(p => {
+                    const label = permissionDict[p as keyof typeof permissionDict] || `Akses ${p}`;
+                    return (
+                      <div key={p} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold">
+                        <Shield size={10} /> {label}
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             </div>

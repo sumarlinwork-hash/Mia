@@ -122,6 +122,19 @@ if exist "frontend\package.json" (
     echo [SKIP] Folder frontend atau package.json tidak ditemukan.
 )
 
+echo.
+echo [FINAL STEP] Memeriksa Konfigurasi Lingkungan (.env)...
+if not exist ".env" (
+    echo [WARNING] File .env tidak ditemukan!
+    echo Menciptakan .env dari template...
+    echo OPENAI_API_KEY=your_key_here > .env
+    echo GOOGLE_API_KEY=your_key_here >> .env
+    echo GROQ_API_KEY=your_key_here >> .env
+    echo [INFO] Silakan isi kunci API Anda di file .env agar fitur Discovery ^& Preview berfungsi.
+) else (
+    echo File .env sudah tersedia. Pastikan kunci API Anda valid.
+)
+
 :end
 echo.
 echo ===================================================

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, ChevronRight, ChevronLeft, Shield, Sparkles, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import labels from '../utils/labels';
 
 interface AppData {
   name: string;

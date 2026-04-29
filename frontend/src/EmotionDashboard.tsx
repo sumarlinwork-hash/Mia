@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Shield, Zap, Smile, User, Thermometer, AlertCircle, RefreshCw } from 'lucide-react';
+import { Heart, Shield, Zap, User, Thermometer, AlertCircle, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useConfig } from './hooks/useConfig';
 
@@ -62,11 +62,11 @@ const EmotionDashboard: React.FC = () => {
   const [pulseLevel, setPulseLevel] = useState(0);
 
   useEffect(() => {
-    const handlePulse = (e: any) => {
+    const handlePulse = (e: CustomEvent<number>) => {
       setPulseLevel(e.detail);
     };
-    window.addEventListener('heartbeatPulse', handlePulse);
-    return () => window.removeEventListener('heartbeatPulse', handlePulse);
+    window.addEventListener('heartbeatPulse', handlePulse as EventListener);
+    return () => window.removeEventListener('heartbeatPulse', handlePulse as EventListener);
   }, []);
 
   const bpm = 60 + (emotion.arousal * 0.6);

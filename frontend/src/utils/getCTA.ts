@@ -1,5 +1,5 @@
 import labels from './labels';
-import { AppState } from './stateMapper';
+import type { AppState } from './stateMapper';
 
 export interface CTA {
   primary: string;

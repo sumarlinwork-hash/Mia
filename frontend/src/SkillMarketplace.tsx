@@ -5,10 +5,11 @@ import AppExecutor from './components/SkillExecutor';
 import SetupFlow from './components/SetupFlow';
 import SimpleBuilder from './components/SimpleBuilder';
 import BuilderReview from './components/BuilderReview';
+import PreviewModal from './components/PreviewModal';
 import { motion, AnimatePresence } from 'framer-motion';
+import { mapTelemetry } from './utils/telemetryMapper';
+import viewModel, { App } from './utils/viewModel';
 import labels from './utils/labels';
-import mapState from './utils/stateMapper';
-import getCTA from './utils/getCTA';
 
 export interface App {
   id: string;
@@ -22,7 +23,22 @@ export interface App {
   error?: string | null;
   execution_mode?: 'instant' | 'setup_required';
   has_preview?: boolean;
+  preview?: Record<string, unknown>;
   input_schema?: Record<string, string>;
+  downloads?: number;
+  executions?: number;
+  trust_score?: number;
+  recommendation_reason?: string;
+}
+
+export interface AppManifest {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  capabilities: string[];
+  required_permissions: string[];
+  execution_mode: string;
 }
 
 const SkillMarketplace: React.FC = () => {
@@ -34,7 +50,9 @@ const SkillMarketplace: React.FC = () => {
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showSimpleBuilder, setShowSimpleBuilder] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
-  const [generatedAppData, setGeneratedAppData] = useState<{ manifest: any, logic: string } | null>(null);
+  const [generatedAppData, setGeneratedAppData] = useState<{ manifest: AppManifest, logic: string } | null>(null);
+  const [previewingApp, setPreviewingApp] = useState<App | null>(null);
+  const [recommendations, setRecommendations] = useState<App[]>([]);
   
   const [executingApp, setExecutingApp] = useState<App | null>(null);
   const [settingUpApp, setSettingUpApp] = useState<App | null>(null);
@@ -59,9 +77,17 @@ const SkillMarketplace: React.FC = () => {
       });
   }, []);
 
+  const fetchRecommendations = useCallback(() => {
+    fetch('/api/apps/recommendations')
+      .then(res => res.json())
+      .then(data => setRecommendations(data))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetchApps();
-  }, [fetchApps]);
+    fetchRecommendations();
+  }, [fetchApps, fetchRecommendations]);
 
   const handleInstall = async (id: string) => {
     try {
@@ -113,13 +139,13 @@ const SkillMarketplace: React.FC = () => {
       const result = await res.json();
       setGeneratedAppData(result);
       setShowSimpleBuilder(false);
-    } catch (err) {
+    } catch {
       addToast("Gagal menyusun aplikasi", "error");
       setShowSimpleBuilder(false);
     }
   };
 
-  const handleDeployApp = async (manifest: any) => {
+  const handleDeployApp = async (manifest: AppManifest) => {
     try {
       // In a real flow, this would save to disk and refresh marketplace
       const res = await fetch('/api/skills/save', {
@@ -138,7 +164,7 @@ const SkillMarketplace: React.FC = () => {
       } else {
         addToast("Gagal menerapkan aplikasi ke kernel", "error");
       }
-    } catch (err) {
+    } catch {
       addToast("Error saat deployment", "error");
     }
   };
@@ -175,6 +201,58 @@ const SkillMarketplace: React.FC = () => {
         </div>
       </header>
 
+      {/* Recommendations Carousel */}
+      <AnimatePresence>
+        {recommendations.length > 0 && !search && (
+          <motion.section 
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="mb-12"
+          >
+            <div className="flex items-center gap-2 mb-6">
+              <Sparkles className="text-primary" size={20} />
+              <h2 className="text-xl font-bold text-white">Rekomendasi Spesial</h2>
+            </div>
+            
+            <div className="flex gap-6 overflow-x-auto pb-6 -mx-4 px-4 custom-scrollbar scroll-smooth">
+              {recommendations.map((rawApp) => {
+                const app = viewModel.transform(rawApp);
+                return (
+                  <motion.div 
+                    key={app.id}
+                    whileHover={{ scale: 1.02 }}
+                    onClick={() => setPreviewingApp(rawApp)}
+                    className="flex-shrink-0 w-80 p-6 rounded-[2.5rem] bg-gradient-to-br from-white/10 to-transparent border border-white/10 cursor-pointer relative overflow-hidden group"
+                  >
+                    <div className="absolute top-0 right-0 p-4">
+                      <div className="px-3 py-1 rounded-full bg-primary/20 border border-primary/30 text-[10px] text-primary font-bold uppercase tracking-widest animate-pulse">
+                        {app.recommendation_reason || "Populer"}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 mb-4 pt-4">
+                      <div className="p-3 rounded-2xl bg-white/5 text-primary group-hover:rotate-12 transition-transform">
+                        <Zap size={24} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white">{app.name}</h4>
+                        <p className="text-[10px] text-white/40 uppercase">{app.category}</p>
+                      </div>
+                    </div>
+                    
+                    <p className="text-xs text-white/40 line-clamp-2 h-8 mb-4">{app.displayDescription}</p>
+                    
+                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                      <div className="text-[10px] text-primary/60 font-bold uppercase tracking-wider">Mulai Coba</div>
+                      <ChevronRight size={14} className="text-white/20 group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
+
       <div className="flex gap-4 mb-12 overflow-x-auto pb-4 custom-scrollbar">
         {categories.map(cat => (
           <button 
@@ -203,9 +281,9 @@ const SkillMarketplace: React.FC = () => {
           </p>
         </motion.div>
 
-        {!loading ? filteredApps.map((app, i) => {
-          const state = mapState(app);
-          const cta = getCTA(state, app.has_preview);
+        {!loading ? filteredApps.map((rawApp, i) => {
+          const app = viewModel.transform(rawApp);
+          const { status, cta } = app;
           
           return (
             <motion.div
@@ -228,9 +306,30 @@ const SkillMarketplace: React.FC = () => {
                   <span className="text-[10px] font-mono text-white/20 uppercase">v1.0.4 • {app.category || labels.PLUGIN}</span>
                 </div>
               </div>
+
+              {/* Social Proof Badges */}
+              <div className="flex flex-wrap gap-2 mb-6">
+                {mapTelemetry({
+                  downloads: app.downloads || 0,
+                  executions: app.executions || 0,
+                  trust_score: app.trust_score || 0
+                }).map((proof, i) => (
+                  <span 
+                    key={i}
+                    className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${
+                      proof.type === 'trust' ? 'bg-green-500/10 border-green-500/20 text-green-400' :
+                      proof.type === 'popularity' ? 'bg-primary/10 border-primary/20 text-primary' :
+                      proof.type === 'activity' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
+                      'bg-white/5 border-white/10 text-white/40'
+                    }`}
+                  >
+                    {proof.label}
+                  </span>
+                ))}
+              </div>
               
               <p className="text-sm text-white/40 mb-8 line-clamp-3 h-12">
-                {app.description}
+                {app.displayDescription}
               </p>
 
               <div className="flex items-center justify-between pt-6 border-t border-white/5">
@@ -246,19 +345,20 @@ const SkillMarketplace: React.FC = () => {
                 <div className="flex gap-2">
                   {cta.secondary && (
                     <button 
+                      onClick={() => setPreviewingApp(rawApp)}
                       className="px-4 py-2 rounded-xl bg-white/5 text-white text-xs font-bold hover:bg-white/10 transition-all"
                     >
                       {cta.secondary}
                     </button>
                   )}
                   <button 
-                    onClick={() => handleUse(app)}
+                    onClick={() => handleUse(rawApp)}
                     disabled={cta.disabled}
                     className={`flex items-center gap-2 px-6 py-2 rounded-xl font-bold transition-all ${
                       cta.disabled ? 'bg-white/5 text-white/20' : 'bg-primary text-black hover:scale-105'
                     }`}
                   >
-                    {state === 'READY' && <Zap size={16} fill="currentColor" />}
+                    {status === 'READY' && <Zap size={16} fill="currentColor" />}
                     {cta.primary}
                   </button>
                 </div>
@@ -297,7 +397,7 @@ const SkillMarketplace: React.FC = () => {
                 >
                   <div>
                     <h4 className="text-lg font-bold text-white group-hover:text-primary transition-colors">Mode Simpel (Direkomendasikan)</h4>
-                    <p className="text-xs text-white/40">Buat aplikasi dari template dalam < 60 detik.</p>
+                    <p className="text-xs text-white/40">Buat aplikasi dari template dalam &lt; 60 detik.</p>
                   </div>
                   <ChevronRight className="text-white/20 group-hover:text-primary transition-all group-hover:translate-x-1" />
                 </button>
@@ -330,6 +430,18 @@ const SkillMarketplace: React.FC = () => {
           data={generatedAppData}
           onClose={() => setGeneratedAppData(null)}
           onDeploy={handleDeployApp}
+        />
+      )}
+
+      {previewingApp && (
+        <PreviewModal 
+          app={previewingApp}
+          onClose={() => setPreviewingApp(null)}
+          onInstall={() => {
+            const appToInstall = previewingApp;
+            setPreviewingApp(null);
+            handleUse(appToInstall);
+          }}
         />
       )}
 

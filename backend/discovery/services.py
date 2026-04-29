@@ -77,10 +77,32 @@ class RankingEngine:
         scored: List[Dict[str, Any]] = []
         for item in items:
             enriched = dict(item)
-            enriched["rank_score"] = round(self.score(
-                item, query=query, persona_tags=persona_tags), 3)
+            score = self.score(item, query=query, persona_tags=persona_tags)
+            enriched["rank_score"] = round(score, 3)
+            
+            # Dynamic Recommendation Reason
+            reason = "Pilihan Editor"
+            if persona_tags:
+                tags = set([str(t).lower() for t in item.get("tags", [])])
+                if any(t.lower() in tags for t in persona_tags):
+                    reason = "Sesuai minatmu"
+            elif item.get("downloads", 0) > 500:
+                reason = "Sangat Populer"
+            elif item.get("trust_score", 0.0) > 4.5:
+                reason = "Terpercaya"
+            
+            enriched["recommendation_reason"] = reason
             scored.append(enriched)
+            
         return sorted(scored, key=lambda x: float(x.get("rank_score", 0.0)), reverse=True)
+
+    def get_trending(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Trending = High growth (installs + executions)"""
+        for item in items:
+            # Simple trending formula
+            item["trending_score"] = (item.get("downloads", 0) * 0.4) + (item.get("executions", 0) * 0.6)
+        
+        return sorted(items, key=lambda x: x.get("trending_score", 0.0), reverse=True)[:5]
 
 
 class PermissionPolicyEngine:
@@ -136,6 +158,12 @@ class AppBuilderService:
                 "capabilities": template["capabilities"],
                 "required_permissions": template["permissions"],
                 "execution_mode": template["execution_mode"],
+                "has_preview": True,
+                "preview": {
+                    "type": "chat",
+                    "mode": "light_llm" if template["execution_mode"] == "instant" else "static",
+                    "template": template["id"]
+                },
                 "tags": [template_id, "generated"],
                 "pricing": "free",
                 "rating": 5.0,

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronRight, ChevronLeft, Sparkles, Bot, PenTool, Workflow, BarChart3, Rocket } from 'lucide-react';
-import labels from '../utils/labels';
 
 interface Template {
   id: string;

@@ -22,6 +22,7 @@ from stt_service import stt_service
 from skill_manager import skill_manager
 from core.local_runtime import local_event_bus
 from discovery.services import AppBuilderService
+from discovery.preview_engine import preview_engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -74,7 +75,13 @@ async def get_installed_skills():
 
 @app.get("/api/skills/marketplace")
 async def get_marketplace_skills():
-    return skill_manager.scan_skills(directory=skill_manager.MARKETPLACE_DIR)
+    apps = skill_manager.scan_skills(directory=skill_manager.MARKETPLACE_DIR)
+    # Add mock telemetry for Social Proof
+    for app in apps:
+        app["downloads"] = 1000 if "chatbot" in app["id"] else 42
+        app["executions"] = 5400
+        app["trust_score"] = 4.7
+    return apps
 
 @app.post("/api/skills/install/{skill_id}")
 async def install_skill(skill_id: str):
@@ -116,6 +123,58 @@ class AppGenerateRequest(BaseModel):
 @app.post("/api/apps/generate")
 async def generate_app(req: AppGenerateRequest):
     return await app_builder.generate_from_template(req.template_id, req.app_name, req.prompt)
+
+@app.post("/api/apps/{id}/preview")
+async def preview_app(id: str, req: dict = {}):
+    user_input = req.get("user_input", "")
+    session_id = req.get("session_id", "default_session")
+    
+    # Get app manifest to find preview mode
+    apps = skill_manager.scan_skills(directory=skill_manager.MARKETPLACE_DIR)
+    app = next((a for a in apps if a["id"] == id), None)
+    
+    mode = "static"
+    template = "default"
+    
+    if app and "preview" in app:
+        mode = app["preview"].get("mode", "static")
+        template = app["preview"].get("template", "default")
+    
+    return await preview_engine.run_preview(
+        app_id=id,
+        user_input=user_input,
+        mode=mode,
+        template=template,
+        session_id=session_id
+    )
+
+# --- DISCOVERY & GROWTH ENDPOINTS ---
+
+@app.get("/api/apps/recommendations")
+async def get_recommendations():
+    from discovery.services import RankingEngine
+    ranker = RankingEngine()
+    apps = skill_manager.scan_skills(directory=skill_manager.MARKETPLACE_DIR)
+    
+    # Enrich apps with mock metrics for demo
+    for app in apps:
+        app["downloads"] = 120 if app["id"] == "chatbot-plus" else 45
+        app["trust_score"] = 4.8
+        app["executions"] = 1200
+        
+    return ranker.rank(apps, persona_tags=["productivity", "ai"])[:3]
+
+@app.get("/api/apps/trending")
+async def get_trending():
+    from discovery.services import RankingEngine
+    ranker = RankingEngine()
+    apps = skill_manager.scan_skills(directory=skill_manager.MARKETPLACE_DIR)
+    
+    for app in apps:
+        app["downloads"] = 250
+        app["executions"] = 5000
+        
+    return ranker.get_trending(apps)
 
 @app.post("/api/skill/execute")
 async def execute_skill(skill_id: str, args: dict = {}):
