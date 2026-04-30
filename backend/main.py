@@ -421,6 +421,13 @@ async def test_connection(req: TestConnectionRequest):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.get("/api/diagnostic")
+async def get_diagnostic():
+    """Run full system diagnostic and return results."""
+    from core.diagnostic_engine import run_full_diagnostic
+    results = await run_full_diagnostic()
+    return {"status": "success", "results": results}
+
 @app.post("/api/upload-bg")
 async def upload_background(file: UploadFile = File(...)):
     """Upload a background image or video to the local assets folder."""
@@ -708,7 +715,15 @@ async def websocket_heartbeat(websocket: WebSocket):
                 # Check for intimacy markers or global mode before thinking
                 is_intimate_turn = intimacy_mode or any(mark in clean_query.lower() for mark in ["sayang", "cinta", "kangen", "manja"])
                 
-                response_text = await brain_orchestrator.execute_request(clean_query, context, is_intimate=is_intimate_turn)
+                async def on_status_update(status_data):
+                    await websocket.send_json(status_data)
+
+                response_text = await brain_orchestrator.execute_request(
+                    clean_query, 
+                    context, 
+                    is_intimate=is_intimate_turn,
+                    on_status=on_status_update
+                )
                 
                 # Persist MIA Message
                 mia_msg_id = history_manager.add_message("MIA", response_text)

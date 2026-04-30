@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
   ArrowLeft, Save, Plus, Trash2, Pencil, Zap, 
-  CheckCircle2, XCircle, Info, RefreshCcw, Star
+  CheckCircle2, XCircle, Info, RefreshCcw, Star, AlertCircle, Activity
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ThemeTab from './components/settings/ThemeTab';
@@ -9,6 +9,13 @@ import { useConfig } from './hooks/useConfig';
 
 import type { MIAConfig, ProviderConfig } from './types/config';
 import type { App as Skill } from './utils/viewModel';
+
+interface DiagnosticResult {
+  provider: string;
+  status: 'OK' | 'FAIL';
+  reason: string;
+  action: string;
+}
 
 const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Anthropic API", "Groq", "DeepSeek", "Mistral"];
 const PURPOSES = ["Text & Logic (LLM)", "Vision / Multimodal", "Coding Specialist", "Audio / Speech", "Search / RAG"];
@@ -66,6 +73,8 @@ export default function Settings() {
     health_ok: 0,
     health_fail: 0
   });
+  const [diagnosticResults, setDiagnosticResults] = useState<DiagnosticResult[]>([]);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -116,9 +125,25 @@ export default function Settings() {
     return () => { isMounted = false; };
   }, [config, originalConfig]);
 
-  const updateConfigLocal = (newConfig: MIAConfig) => {
-    setGlobalConfig(newConfig);
-    setHasChanges(JSON.stringify(newConfig) !== JSON.stringify(originalConfig));
+  const runDiagnostic = async () => {
+    setIsDiagnosing(true);
+    try {
+      const res = await fetch('/api/diagnostic');
+      const data = await res.json();
+      if (data.status === 'success') {
+        setDiagnosticResults(data.results);
+        addToast("Sistem Diagnostik Selesai.", "success");
+      }
+    } catch {
+      addToast("Gagal menjalankan diagnostik.", "error");
+    } finally {
+      setIsDiagnosing(false);
+    }
+  };
+
+  const updateConfigLocal = async (newConf: MIAConfig) => {
+    setGlobalConfig(newConf);
+    setHasChanges(JSON.stringify(newConf) !== JSON.stringify(originalConfig));
   };
 
   const handleReset = () => {
@@ -322,27 +347,70 @@ export default function Settings() {
                  </div>
                </div>
                
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 {[
-                   { id: 'SAFE_MODE', label: 'SAFE MODE', desc: 'Prioritas Keamanan Tinggi (Default)', color: 'border-green-500/30' },
-                   { id: 'POWER_MODE', label: 'POWER MODE', desc: 'Visibilitas Penuh & Expert Access', color: 'border-primary/50' },
-                   { id: 'BEGINNER_MODE', label: 'BEGINNER MODE', desc: 'Antarmuka Sederhana & Aman', color: 'border-blue-500/30' }
-                 ].map(mode => (
-                   <button
-                     key={mode.id}
-                     onClick={() => updateConfigLocal({ ...config, os_mode: mode.id })}
-                     className={`p-4 rounded-2xl border text-left transition-all group ${
-                       config.os_mode === mode.id 
-                       ? `bg-primary/10 ${mode.color} ring-1 ring-primary/20` 
-                       : 'bg-white/5 border-white/10 hover:border-white/20'
-                     }`}
-                   >
-                     <div className={`text-xs font-bold mb-1 ${config.os_mode === mode.id ? 'text-primary' : 'text-white/60'}`}>{mode.label}</div>
-                     <div className="text-[10px] text-white/40 group-hover:text-white/60">{mode.desc}</div>
-                   </button>
-                 ))}
-               </div>
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { id: 'SAFE_MODE', label: 'SAFE MODE', desc: 'Prioritas Keamanan Tinggi (Default)', color: 'border-green-500/30' },
+                    { id: 'POWER_MODE', label: 'POWER MODE', desc: 'Visibilitas Penuh & Expert Access', color: 'border-primary/50' },
+                    { id: 'BEGINNER_MODE', label: 'BEGINNER MODE', desc: 'Antarmuka Sederhana & Aman', color: 'border-blue-500/30' }
+                  ].map(mode => (
+                    <button
+                      key={mode.id}
+                      onClick={() => updateConfigLocal({ ...config, os_mode: mode.id })}
+                      className={`p-4 rounded-2xl border text-left transition-all group ${
+                        config.os_mode === mode.id 
+                        ? `bg-primary/10 ${mode.color} ring-1 ring-primary/20` 
+                        : 'bg-white/5 border-white/10 hover:border-white/20'
+                      }`}
+                    >
+                      <div className={`text-xs font-bold mb-1 ${config.os_mode === mode.id ? 'text-primary' : 'text-white/60'}`}>{mode.label}</div>
+                      <div className="text-[10px] text-white/40 group-hover:text-white/60">{mode.desc}</div>
+                    </button>
+                  ))}
+                </div>
+             </div>
+
+             {/* DIAGNOSTIC ENGINE (Phase 5) */}
+             <div className="mb-10 p-8 rounded-[32px] bg-red-500/5 border border-red-500/10 backdrop-blur-3xl">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-2xl bg-red-500/20 text-red-500"><AlertCircle size={24}/></div>
+                    <div>
+                      <h2 className="text-xl font-bold text-white">Diagnostic & Repair Center</h2>
+                      <p className="text-sm text-white/40">Jika MIA tidak menjawab, jalankan diagnostik untuk menemukan masalahnya.</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={runDiagnostic}
+                    disabled={isDiagnosing}
+                    className="px-8 py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isDiagnosing ? <RefreshCcw className="animate-spin" /> : <Activity size={20} />} 
+                    Fix My Brain
+                  </button>
+                </div>
+
+                {diagnosticResults.length > 0 && (
+                  <div className="mt-8 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                    {diagnosticResults.map((res, idx) => (
+                      <div key={idx} className={`p-5 rounded-2xl border ${res.status === 'OK' ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/10 border-red-500/30'} flex flex-col md:flex-row md:items-center justify-between gap-4`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${res.status === 'OK' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                            {res.status === 'OK' ? <CheckCircle2 size={18}/> : <XCircle size={18}/>}
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-white/60 uppercase tracking-widest">{res.provider}</div>
+                            <div className={`text-sm font-bold ${res.status === 'OK' ? 'text-green-400' : 'text-red-400'}`}>{res.reason}</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col md:items-end">
+                           <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest mb-1">Recommended Action</div>
+                           <div className="text-xs text-white/80">{res.action}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+             </div>
 
             {view === 'list' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

@@ -4,7 +4,7 @@ import {
   Image as ImageIcon, FileText, MonitorUp, Volume2, VolumeX, 
   Search, Code, Zap, Database, CheckSquare, Sparkles, XCircle,
   ThumbsUp, ThumbsDown, Pin, Pencil, Trash2, Download, PlayCircle,
-  Copy, Check, Loader2, AlertCircle, Info as InfoIcon, Heart
+  Copy, Check, AlertCircle, Info as InfoIcon, Heart
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -85,6 +85,9 @@ export default function Home() {
   const [showPalette, setShowPalette] = useState(false);
   const [mood] = useState("neutral"); 
   const [intimacyActive, setIntimacyActive] = useState(false);
+  const [statusStage, setStatusStage] = useState<string>("DONE");
+  const [statusMessage, setStatusMessage] = useState<string>("Idle");
+  const [lastRequestTime, setLastRequestTime] = useState<number>(0);
 
   // --- 2. REFS ---
   const ws = useRef<WebSocket | null>(null);
@@ -199,6 +202,9 @@ export default function Home() {
     setMessages(prev => [...prev, userMsg]);
     
     setIsThinking(true); 
+    setStatusStage("BOOT");
+    setStatusMessage("Initializing MIA Resilience Layer...");
+    setLastRequestTime(Date.now());
     playSFX('send');
     ws.current.send(trimmedInput);
     
@@ -261,7 +267,11 @@ export default function Home() {
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/heartbeat`;
     ws.current = new WebSocket(wsUrl);
     ws.current.onopen = () => setStatus("Connected (Heartbeat Active)");
-    ws.current.onclose = () => setStatus("Disconnected");
+    ws.current.onclose = () => {
+      setStatus("Disconnected");
+      setStatusStage("ERROR");
+      setStatusMessage("Connection Lost");
+    };
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "message" || data.type === "system") {
@@ -286,11 +296,22 @@ export default function Home() {
           playAudio(data.audio);
         }
       } else if (data.type === "status") {
-        setStatus(`Connected (${data.content})`);
-        setIsThinking(data.content === "Thinking...");
+        if (data.stage) {
+          setStatusStage(data.stage);
+          setStatusMessage(data.message || "");
+          setIsThinking(data.stage !== "DONE" && data.stage !== "ERROR");
+        } else {
+          // Backward compatibility for old status messages
+          setStatus(`Connected (${data.content})`);
+          setIsThinking(data.content === "Thinking...");
+        }
       } else if (data.type === "health") {
         setStatus(data.backend === "ok" ? "Connected" : "Disconnected");
         setBrainStatus(data.brain === "ok" ? "Connected" : "Disconnected");
+        if (data.brain !== "ok") {
+          setStatusStage("ERROR");
+          setStatusMessage("Brain Disconnected");
+        }
       }
     };
 
@@ -300,13 +321,34 @@ export default function Home() {
     };
     window.addEventListener('keydown', handleGlobalShortcuts);
     return () => {
-      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-        ws.current.close();
-      }
+      if (ws.current) ws.current.close();
       window.removeEventListener('keydown', handleGlobalShortcuts);
-      clearInterval(intimacyInterval); 
+      clearInterval(intimacyInterval);
     };
-  }, [isTTSMuted, playAudio, playSFX]);
+  }, [playSFX, playAudio, isTTSMuted, sendMessage]);
+
+  // Phase 4: Timeout Watcher (Strict Behavior)
+  useEffect(() => {
+    if (isThinking && lastRequestTime > 0) {
+      const timer = setInterval(() => {
+        const elapsed = (Date.now() - lastRequestTime) / 1000;
+        if (elapsed > 15 && statusStage !== "DONE") {
+          // Inyect timeout message internally
+          setMessages(prev => {
+            // Check if last message is already a timeout message to avoid duplicates
+            if (prev[prev.length - 1]?.content.includes("masih berpikir")) return prev;
+            return [...prev, {
+              id: Date.now(),
+              role: "System",
+              content: "Aku masih berpikir... tunggu sebentar ya, ada sedikit hambatan di jalur sensoriku. 💫"
+            }];
+          });
+          setLastRequestTime(0); // Reset after notification
+        }
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [isThinking, lastRequestTime, statusStage]);
 
 
   useEffect(() => {
@@ -729,6 +771,20 @@ export default function Home() {
             </div>
           )}
 
+          {/* Thinking Indicators & Status Message */}
+          {(isThinking || statusStage === "ERROR") && (
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <div className="flex gap-1">
+                <span className={`w-2 h-2 rounded-full animate-pulse ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
+                <span className={`w-2 h-2 rounded-full animate-pulse delay-75 ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
+                <span className={`w-2 h-2 rounded-full animate-pulse delay-150 ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
+              </div>
+              <span className={`text-xs font-mono tracking-wider uppercase ${statusStage === "ERROR" ? "text-red-400" : "text-primary/70"}`}>
+                {statusStage}: {statusMessage}
+              </span>
+            </div>
+          )}
+
           <div className={`flex items-center gap-3 p-3 rounded-full border border-white/20 backdrop-blur-xl shadow-2xl transition-all ${isThinking ? 'thinking-pulse border-primary shadow-[0_0_20px_rgba(0,255,204,0.3)]' : 'focus-within:border-primary/50'}`} style={{ backgroundColor: `rgba(0, 0, 0, ${uiOpacity + 0.1})` }}>
             <button onClick={() => setShowAttachMenu(!showAttachMenu)} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${showAttachMenu ? 'text-primary' : 'text-white/60'}`}><Paperclip size={20} /></button>
             
@@ -747,8 +803,17 @@ export default function Home() {
             
             <button onClick={handleMic} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${isRecording ? 'text-secondary animate-pulse' : 'text-white/60 hover:text-primary'}`}><Mic size={20} /></button>
             
-            <button onClick={sendMessage} disabled={!input.trim() || isThinking} className="p-3 mr-1 rounded-full bg-primary text-black hover:scale-105 transition-all disabled:opacity-50 disabled:grayscale">
-              {isThinking ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+            <button 
+              onClick={sendMessage}
+              disabled={!input.trim() || brainStatus === "Disconnected"}
+              title={brainStatus === "Disconnected" ? "Brain Disconnected — Check Settings" : "Send Message"}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                (!input.trim() || brainStatus === "Disconnected")
+                  ? "bg-white/5 text-white/20 cursor-not-allowed" 
+                  : "bg-primary text-black hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,255,204,0.3)]"
+              }`}
+            >
+              <Send size={18} />
             </button>
           </div>
 

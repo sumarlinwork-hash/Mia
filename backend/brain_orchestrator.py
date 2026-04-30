@@ -8,9 +8,9 @@ from core.graph_engine import GraphExecutor, ExecutionGraph, NodeStatus, Executi
 from core.graph_compiler import GraphCompiler
 from core.emotion_manager import emotion_manager
 from core.cost_manager import cost_manager
-import json
 import re
-from typing import Dict, List, Any, Optional
+import random
+from typing import Dict, List, Any, Optional, Callable
 
 class BrainOrchestrator:
     def __init__(self):
@@ -122,12 +122,18 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 
         return clean_text, images
 
-    async def execute_request(self, prompt: str, context: str = "", is_intimate: bool = False) -> str:
+    async def execute_request(self, prompt: str, context: str = "", is_intimate: bool = False, on_status: Optional[Callable] = None) -> str:
         """
         Full 9-Step Execution Pipeline with Vision Support.
         """
+        async def emit(stage: str, message: str):
+            if on_status:
+                await on_status({"type": "status", "stage": stage, "message": message, "timestamp": int(time.time() * 1000)})
+
+        await emit("BOOT", "Initializing MIA Resilience Layer...")
         config = load_config()
         
+        await emit("RETRIEVING", "Searching context and memories...")
         clean_prompt, images = self._parse_and_load_images(prompt)
 
         # Step 3: Build System Prompt from Personality + SOUL.md
@@ -138,8 +144,10 @@ If you use a tool, I will execute it and provide the result in the next turn.
             purpose = "intimacy" if is_intimate else "llm"
             name, p = await self.select_best_provider(prompt, purpose=purpose)
             print(f"[Brain] Using provider: {name} ({p.protocol}) [Mode: {purpose}]")
+            await emit("THINKING", f"MIA is thinking via {name}...")
         except Exception as e:
-            return f"[ERROR] {str(e)}"
+            await emit("FALLBACK", "Primary provider failed. Switching to fallback...")
+            return await self._fallback_execute(visited_providers, system_prompt, current_context, clean_prompt, current_images, str(e), on_status)
 
         # Step 7: Call the API with real dispatch (Flagship Multi-step Loop)
         start_time = time.time()
@@ -210,11 +218,51 @@ If you use a tool, I will execute it and provide the result in the next turn.
             await self._update_metrics(name, True, latency)
             
             # Step 9: Realism Layer
+            await emit("DONE", "Response generated.")
             return await self._apply_realism(final_response, config)
         except Exception as e:
             await self._update_metrics(name, False, 0)
             raw_error = str(e)
             print(f"[Brain Error] Provider {name} failed: {raw_error}")
+            await emit("FALLBACK", "Connection lost. Attempting recovery...")
+            return await self._fallback_execute(visited_providers, system_prompt, current_context, clean_prompt, current_images, raw_error, on_status)
+
+    def _local_heart_fallback(self, error: str) -> str:
+        """
+        TIER-3: Local Heart Fallback. NO API CALLS. 
+        Returns a context-aware local response based on emotional state.
+        """
+        try:
+            responses_path = os.path.join(os.path.dirname(__file__), "core", "local_responses.json")
+            if not os.path.exists(responses_path):
+                return "MIA_SYSTEM_ALERT::LOCAL_DB_MISSING"
+            
+            with open(responses_path, "r", encoding="utf-8") as f:
+                local_db = json.load(f)
+            
+            s = emotion_manager.get_state()
+            warmth = s.get("warmth", 50)
+            
+            if warmth >= 70:
+                bucket = "high_warmth"
+            elif warmth <= 40:
+                bucket = "low_warmth"
+            else:
+                bucket = "neutral"
+                
+            return random.choice(local_db[bucket])
+        except Exception as inner_err:
+            print(f"[Critical Fail] Local Heartbeat failed: {inner_err}")
+            return "MIA_SYSTEM_ALERT::TOTAL_FAILURE"
+
+    async def _final_failsafe_response(self, error: str) -> str:
+        """
+        LAST LINE OF DEFENSE — NEVER FAIL
+        """
+        try:
+            return self._local_heart_fallback(error)
+        except:
+            return "MIA_SYSTEM_ALERT::TOTAL_FAILURE"
             
     async def execute_graph_workflow(self, llm_output: str) -> Dict[str, Any]:
         """
@@ -312,12 +360,13 @@ If you use a tool, I will execute it and provide the result in the next turn.
             return str(res), None
         return "Unknown tool method.", None
 
-    async def _fallback_execute(self, visited: list[str], system_prompt: str, context: str, prompt: str, images: list, last_error: str) -> str:
+    async def _fallback_execute(self, visited: list[str], system_prompt: str, context: str, prompt: str, images: list, last_error: str, on_status: Optional[Callable] = None) -> str:
         """Recursive fallback chain: find next best provider until success or exhaustion."""
         try:
             # Select next best provider, excluding those already tried
             name, p = await routing_service.select_best_provider(purpose="llm", exclude=visited)
-            print(f"[Brain] Fallback attempting: {name}...")
+            if on_status:
+                await on_status({"type": "status", "stage": "FALLBACK", "message": f"Trying alternate brain path: {name}...", "timestamp": int(time.time() * 1000)})
             
             visited.append(name)
             start_time = time.time()
@@ -333,18 +382,19 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 if not config.is_production_mode:
                     response = f"{response}\n\n*MIA System: Menggunakan jalur alternatif ({name}).*"
                 
+                if on_status:
+                    await on_status({"type": "status", "stage": "DONE", "message": "Recovered via fallback.", "timestamp": int(time.time() * 1000)})
                 return await self._apply_realism(response, config)
             except Exception as e:
                 await self._update_metrics(name, False, 0)
                 print(f"[Brain] Fallback {name} failed: {e}")
-                return await self._fallback_execute(visited, system_prompt, context, prompt, images, str(e))
+                return await self._fallback_execute(visited, system_prompt, context, prompt, images, str(e), on_status)
                 
         except Exception:
             # Exhaustion: No more providers found or all failed
-            return (
-                "MIA sedang mengalami gangguan pusat kendali sementara, tapi aku tetap di sini untuk kamu. 💫\n"
-                "Sepertinya seluruh jalur pikiran saya sedang terputus. Mohon tunggu beberapa saat atau periksa koneksi internet."
-            )
+            if on_status:
+                await on_status({"type": "status", "stage": "ERROR", "message": "All brain paths exhausted.", "timestamp": int(time.time() * 1000)})
+            return await self._final_failsafe_response(last_error)
 
     async def _call_api(self, p: ProviderConfig, system_prompt: str, context: str, user_message: str, images: list) -> str:
         """
