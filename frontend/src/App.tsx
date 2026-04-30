@@ -8,6 +8,7 @@ import IamMia from './IamMia';
 import Crone from './Crone';
 import EmotionDashboard from './EmotionDashboard';
 import SkillMarketplace from './SkillMarketplace';
+import ResilienceDashboard from './ResilienceDashboard';
 import ZenModeOverlay from './components/ZenModeOverlay';
 import ResonantOrchestrator from './components/ResonantOrchestrator';
 
@@ -90,6 +91,7 @@ function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/emotion" element={<EmotionDashboard />} />
               <Route path="/skills" element={<SkillMarketplace />} />
+              <Route path="/resilience" element={<ResilienceDashboard />} />
             </Routes>
           </main>
 

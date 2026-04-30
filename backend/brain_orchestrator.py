@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 from config import load_config, save_config, ProviderConfig
@@ -10,6 +11,7 @@ from core.emotion_manager import emotion_manager
 from core.cost_manager import cost_manager
 import re
 import random
+import json
 from typing import Dict, List, Any, Optional, Callable
 
 class BrainOrchestrator:
@@ -124,6 +126,29 @@ If you use a tool, I will execute it and provide the result in the next turn.
 
     async def execute_request(self, prompt: str, context: str = "", is_intimate: bool = False, on_status: Optional[Callable] = None) -> str:
         """
+        Hardened Entry Point: Enforces Global Timeout (Contract Section 0.3)
+        """
+        try:
+            return await asyncio.wait_for(
+                self._execute_pipeline(prompt, context, is_intimate, on_status),
+                timeout=25.0
+            )
+        except asyncio.TimeoutError:
+            print("[Critical] Global Pipeline Timeout (25s) reached.")
+            if on_status:
+                await on_status({
+                    "type": "status", 
+                    "stage": "ERROR", 
+                    "message": "Global Timeout: Sistem terlalu lama merespons.", 
+                    "timestamp": int(time.time() * 1000)
+                })
+            return await self._final_failsafe_response("MIA_SYSTEM_ALERT::GLOBAL_TIMEOUT")
+        except Exception as e:
+            print(f"[Critical] Unexpected error in execute_request: {e}")
+            return await self._final_failsafe_response(str(e))
+
+    async def _execute_pipeline(self, prompt: str, context: str = "", is_intimate: bool = False, on_status: Optional[Callable] = None) -> str:
+        """
         Full 9-Step Execution Pipeline with Vision Support.
         """
         async def emit(stage: str, message: str):
@@ -147,7 +172,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
             await emit("THINKING", f"MIA is thinking via {name}...")
         except Exception as e:
             await emit("FALLBACK", "Primary provider failed. Switching to fallback...")
-            return await self._fallback_execute(visited_providers, system_prompt, current_context, clean_prompt, current_images, str(e), on_status)
+            return await self._fallback_execute(visited_providers, system_prompt, current_context, clean_prompt, current_images, str(e), on_status, depth=0)
 
         # Step 7: Call the API with real dispatch (Flagship Multi-step Loop)
         start_time = time.time()
@@ -199,6 +224,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
                         graph = self.active_graphs.get(graph_id)
                         if graph:
                             # Run and wait for result (Sequential for now, but background-friendly)
+                            await emit("EXECUTING", f"Executing system tools via graph: {graph_id}...")
                             result_context = await self._run_graph_workflow_sync(graph)
                             
                             # Update context for next LLM turn
@@ -225,7 +251,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
             raw_error = str(e)
             print(f"[Brain Error] Provider {name} failed: {raw_error}")
             await emit("FALLBACK", "Connection lost. Attempting recovery...")
-            return await self._fallback_execute(visited_providers, system_prompt, current_context, clean_prompt, current_images, raw_error, on_status)
+            return await self._fallback_execute(visited_providers, system_prompt, current_context, clean_prompt, current_images, raw_error, on_status, depth=0)
 
     def _local_heart_fallback(self, error: str) -> str:
         """
@@ -360,8 +386,15 @@ If you use a tool, I will execute it and provide the result in the next turn.
             return str(res), None
         return "Unknown tool method.", None
 
-    async def _fallback_execute(self, visited: list[str], system_prompt: str, context: str, prompt: str, images: list, last_error: str, on_status: Optional[Callable] = None) -> str:
+    async def _fallback_execute(self, visited: list[str], system_prompt: str, context: str, prompt: str, images: list, last_error: str, on_status: Optional[Callable] = None, depth: int = 0) -> str:
         """Recursive fallback chain: find next best provider until success or exhaustion."""
+        # [ISSUE-2] Guard against infinite recursion or excessive attempts
+        if depth >= 3:
+            print(f"[Critical] Max fallback depth reached ({depth}). Aborting.")
+            if on_status:
+                await on_status({"type": "status", "stage": "ERROR", "message": "Max recovery attempts reached.", "timestamp": int(time.time() * 1000)})
+            return await self._final_failsafe_response("MIA_SYSTEM_ALERT::EXCESSIVE_FALLBACK")
+
         try:
             # Select next best provider, excluding those already tried
             name, p = await routing_service.select_best_provider(purpose="llm", exclude=visited)
@@ -388,7 +421,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
             except Exception as e:
                 await self._update_metrics(name, False, 0)
                 print(f"[Brain] Fallback {name} failed: {e}")
-                return await self._fallback_execute(visited, system_prompt, context, prompt, images, str(e), on_status)
+                return await self._fallback_execute(visited, system_prompt, context, prompt, images, str(e), on_status, depth=depth + 1)
                 
         except Exception:
             # Exhaustion: No more providers found or all failed

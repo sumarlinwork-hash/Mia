@@ -23,6 +23,7 @@ export default function Sidebar({ onToggleZen, isZenMode }: SidebarProps) {
     { name: isPro ? "Memory Store" : "I'm_Mia (Memory)", icon: <Brain size={22} />, path: "/iam-mia" },
     { name: isPro ? "Resonance Hub" : "Emotion Dashboard", icon: <Heart size={22} />, path: "/emotion" },
     { name: isPro ? "Marketplace Aplikasi" : "Discovery Marketplace", icon: <Zap size={22} />, path: "/skills" },
+    { name: isPro ? "Resilience Audit" : "System Resilience", icon: <Shield size={22} />, path: "/resilience" },
     { name: "Settings", icon: <Settings2 size={22} />, path: "/settings" },
   ];
 

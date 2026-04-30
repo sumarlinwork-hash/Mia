@@ -779,9 +779,14 @@ export default function Home() {
                 <span className={`w-2 h-2 rounded-full animate-pulse delay-75 ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
                 <span className={`w-2 h-2 rounded-full animate-pulse delay-150 ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
               </div>
-              <span className={`text-xs font-mono tracking-wider uppercase ${statusStage === "ERROR" ? "text-red-400" : "text-primary/70"}`}>
-                {statusStage}: {statusMessage}
+              <span className={`text-xs font-mono tracking-wider uppercase ${statusStage === "ERROR" || brainStatus !== "Connected" ? "text-red-400" : "text-primary/70"}`}>
+                {brainStatus !== "Connected" ? "BRAIN DISCONNECTED" : `${statusStage}: ${statusMessage}`}
               </span>
+              {brainStatus !== "Connected" && (
+                <Link to="/resilience" className="text-[10px] font-black bg-red-500 text-black px-2 py-0.5 rounded animate-pulse hover:bg-white transition-colors">
+                  FIX MY BRAIN
+                </Link>
+              )}
             </div>
           )}
 
@@ -796,19 +801,19 @@ export default function Home() {
               value={input} 
               onChange={handleInputChange} 
               onKeyDown={handleKeyDown} 
-              placeholder={isThinking ? "MIA is thinking..." : "Message MIA..."} 
+              placeholder={brainStatus !== "Connected" ? "Brain Disconnected — Check System Resilience" : isThinking ? "MIA is thinking..." : "Message MIA..."} 
               className="flex-1 bg-transparent border-none outline-none font-sans text-lg text-white" 
-              disabled={isThinking} 
+              disabled={isThinking || brainStatus !== "Connected"} 
             />
             
             <button onClick={handleMic} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${isRecording ? 'text-secondary animate-pulse' : 'text-white/60 hover:text-primary'}`}><Mic size={20} /></button>
             
             <button 
               onClick={sendMessage}
-              disabled={!input.trim() || brainStatus === "Disconnected"}
-              title={brainStatus === "Disconnected" ? "Brain Disconnected — Check Settings" : "Send Message"}
+              disabled={!input.trim() || brainStatus !== "Connected"}
+              title={brainStatus !== "Connected" ? "Brain Disconnected — Check Resilience Audit" : "Send Message"}
               className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                (!input.trim() || brainStatus === "Disconnected")
+                (!input.trim() || brainStatus !== "Connected")
                   ? "bg-white/5 text-white/20 cursor-not-allowed" 
                   : "bg-primary text-black hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,255,204,0.3)]"
               }`}
