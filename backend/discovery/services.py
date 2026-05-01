@@ -80,18 +80,27 @@ class RankingEngine:
             score = self.score(item, query=query, persona_tags=persona_tags)
             enriched["rank_score"] = round(score, 3)
             
-            # Dynamic Recommendation Reason
+            # Dynamic Recommendation Reason (Wired to Emotion Engine)
+            from core.emotion_manager import emotion_manager
+            state = emotion_manager.get_state()
+            mood = state.get("mood", "Stable")
+            
             reason = "Pilihan Editor"
-            if persona_tags:
+            if mood == "Playful":
+                reason = "Hehe, cobain ini deh! 😉"
+            elif mood in ["Intense", "Glow", "Affectionate"]:
+                reason = "Aku ingin kamu mencoba ini... ❤️"
+            elif persona_tags:
                 tags = set([str(t).lower() for t in item.get("tags", [])])
                 if any(t.lower() in tags for t in persona_tags):
                     reason = "Sesuai minatmu"
             elif item.get("downloads", 0) > 500:
                 reason = "Sangat Populer"
-            elif item.get("trust_score", 0.0) > 4.5:
-                reason = "Terpercaya"
             
             enriched["recommendation_reason"] = reason
+            
+            # EBARF Awareness Metadata
+            enriched["ebarf_status"] = "OPTIMIZED" if item.get("pricing") == "free" else "PREMIUM"
             scored.append(enriched)
             
         return sorted(scored, key=lambda x: float(x.get("rank_score", 0.0)), reverse=True)

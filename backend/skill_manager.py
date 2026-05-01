@@ -157,7 +157,21 @@ class SkillManager:
         return {"status": "error", "message": "Skill not found."}
 
     async def execute_skill(self, skill_id, args=None):
-        """Execute a skill (plugin or legacy) with caching."""
+        """
+        SHAD-CSA Phase 6: Resilient Skill Execution.
+        Wired to EBARF for budget monitoring and resource safety.
+        """
+        from shad_csa.economy.economic_control import ecf
+        
+        # 1. Economic Safety Check (EBARF)
+        # Cost per skill run is 10.0 compute units
+        if not ecf.allocate("compute", amount=10.0):
+            return {
+                "status": "error", 
+                "message": "ECONOMIC_SCARCITY: Anggaran komputasi tidak mencukupi untuk menjalankan skill ini.",
+                "code": "BUDGET_EXCEEDED"
+            }
+
         # Caching logic
         cache_key = f"{skill_id}:{json.dumps(args, sort_keys=True)}"
         if cache_key in self.execution_cache:
@@ -165,25 +179,29 @@ class SkillManager:
             if datetime.now() - timestamp < self.cache_ttl:
                 return result
 
-        # Plugin execution
-        if skill_id in self.plugins:
-            try:
+        try:
+            # 2. Execution Logic
+            if skill_id in self.plugins:
                 plugin = self.plugins[skill_id]
-                # Support both async and sync execute
                 import inspect
                 if inspect.iscoroutinefunction(plugin.execute):
                     output = await plugin.execute(args or {})
                 else:
                     output = plugin.execute(args or {})
-                
                 res = {"status": "success", "output": output}
-                self.execution_cache[cache_key] = (res, datetime.now())
-                return res
-            except Exception as e:
-                return {"status": "error", "message": str(e)}
+            else:
+                res = await self._execute_legacy(skill_id, args)
+            
+            self.execution_cache[cache_key] = (res, datetime.now())
+            return res
 
-        # Legacy execution fallback
-        return await self._execute_legacy(skill_id, args)
+        except Exception as e:
+            # Resilience Mapping
+            return {
+                "status": "error", 
+                "message": f"SYSTEM_HEALING_SIGNAL: {str(e)}",
+                "code": "EXECUTION_FAILURE"
+            }
 
     async def _execute_legacy(self, skill_id, args):
         filepath = os.path.join(self.SKILLS_DIR, f"{skill_id}.py")

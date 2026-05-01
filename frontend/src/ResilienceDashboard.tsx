@@ -15,6 +15,7 @@ interface DiagnosticResult {
 
 const ResilienceDashboard: React.FC = () => {
   const [results, setResults] = useState<DiagnosticResult[]>([]);
+  const [invariants, setInvariants] = useState<any[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [systemHealth, setSystemHealth] = useState<number>(100);
@@ -25,14 +26,23 @@ const ResilienceDashboard: React.FC = () => {
       const res = await fetch('/api/diagnostic');
       const data = await res.json();
       if (data.status === 'success') {
-        setResults(data.results as DiagnosticResult[]);
+        const providerResults = data.results.providers || [];
+        const invariantResults = data.results.invariants || [];
+        
+        setResults(providerResults);
+        setInvariants(invariantResults);
         setLastScan(new Date().toLocaleTimeString());
         
-        // Calculate health score
-        const total = data.results.length;
-        const failed = data.results.filter((r: DiagnosticResult) => r.status === 'FAIL').length;
-        const score = total > 0 ? Math.round(((total - failed) / total) * 100) : 100;
-        setSystemHealth(score);
+        // Calculate health score (weighted)
+        const total = providerResults.length;
+        const failed = providerResults.filter((r: DiagnosticResult) => r.status === 'FAIL').length;
+        const baseScore = total > 0 ? ((total - failed) / total) * 100 : 100;
+        
+        // Invariants penalty if any are INACTIVE
+        const inactiveInvariants = invariantResults.filter((i: any) => i.status !== 'ACTIVE').length;
+        const finalScore = Math.max(0, Math.round(baseScore - (inactiveInvariants * 10)));
+        
+        setSystemHealth(finalScore);
       }
     } catch (err) {
       console.error("Diagnostic failed", err);
@@ -46,13 +56,6 @@ const ResilienceDashboard: React.FC = () => {
     const interval = setInterval(runDiagnostic, 30000); // Auto-scan every 30s
     return () => clearInterval(interval);
   }, [runDiagnostic]);
-
-  const invariants = [
-    { name: "NO SILENT FAILURE", status: "ACTIVE", desc: "BrainOrchestrator guaranteed output" },
-    { name: "SINGLE EXIT POINT", status: "ACTIVE", desc: "Strict execution flow contract" },
-    { name: "TIMEOUT BOUNDARY", status: "ACTIVE", desc: "Max 25s latency enforcement" },
-    { name: "LOCAL HEART FALLBACK", status: "ACTIVE", desc: "Tier-3 redundancy ready" }
-  ];
 
   return (
     <div className="p-6 lg:p-10 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
