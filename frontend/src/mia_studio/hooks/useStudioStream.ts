@@ -58,33 +58,39 @@ export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamRetu
   }, [currentSessionId]);
 
   const processEvents = useCallback((items: StudioEvent[]) => {
-    const processedGraphEvents: StudioEvent[] = [];
-    const processedLogs: string[] = [];
-
-    items.forEach(data => {
-      if (data.project_id && data.project_id !== currentProjectId) return;
-      if (data.sequence_id !== -1 && data.sequence_id <= lastSequenceRef.current) return;
-      if (data.sequence_id !== -1) lastSequenceRef.current = data.sequence_id;
-      if (data.execution_id !== activeIdRef.current && data.type !== 'HEARTBEAT') return;
-      if (data.type === 'HEARTBEAT') return;
-
-      if (['GRAPH_START', 'NODE_START', 'NODE_END'].includes(data.type)) {
-        processedGraphEvents.push(data);
-      }
-      if (data.type === 'INFO' || data.type === 'ERROR' || data.type === 'EXECUTION_END') {
-        const timestamp = new Date(data.timestamp * 1000).toLocaleTimeString();
-        const msg = `[${timestamp}] ${data.type}: ${data.payload.message || JSON.stringify(data.payload)}`;
-        processedLogs.push(msg);
-      }
+    if (!items.length) return;
+    
+    // Finding #3: Set-based reconciliation (Deduplication & Order Resilience)
+    setLogs(prev => {
+        // We use string logs here, but we can dedupe by simple string comparison or timestamp
+        const newLogs: string[] = [];
+        items.forEach(data => {
+            if (data.project_id && data.project_id !== currentProjectId) return;
+            if (data.type === 'LOG' || data.type === 'INFO' || data.type === 'ERROR' || data.type === 'EXECUTION_END') {
+                const timestamp = new Date(data.timestamp * 1000).toLocaleTimeString();
+                const msg = `[${timestamp}] ${data.type}: ${data.payload.message || JSON.stringify(data.payload)}`;
+                newLogs.push(msg);
+            }
+        });
+        return [...prev, ...newLogs].slice(-maxLogLines);
     });
 
-    if (processedGraphEvents.length > 0) {
-      setGraphEvents(prev => [...prev, ...processedGraphEvents].slice(-500));
-    }
-    if (processedLogs.length > 0) {
-      setLogs(prev => [...prev, ...processedLogs].slice(-maxLogLines));
-    }
-  }, [currentProjectId, activeIdRef, maxLogLines]);
+    setGraphEvents(prev => {
+        const eventMap = new Map(prev.map(e => [e.sequence_id, e]));
+        
+        items.forEach(data => {
+            if (data.project_id && data.project_id !== currentProjectId) return;
+            if (!['LOG', 'INFO', 'ERROR', 'EXECUTION_END', 'BATCH', 'HEARTBEAT'].includes(data.type)) {
+                eventMap.set(data.sequence_id, data);
+                if (data.sequence_id > lastSequenceRef.current) {
+                    lastSequenceRef.current = data.sequence_id;
+                }
+            }
+        });
+        
+        return Array.from(eventMap.values()).sort((a, b) => a.sequence_id - b.sequence_id);
+    });
+  }, [currentProjectId, maxLogLines]);
 
   const connect = useCallback((executionId: string) => {
     if (!currentSessionId) return;
@@ -100,12 +106,12 @@ export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamRetu
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
-    ws.onmessage = async (event) => {
-      const msgData: any = JSON.parse(event.data);
+    ws.onmessage = async (event: MessageEvent) => {
+      const msgData = JSON.parse(event.data);
       
       // GAP-11: Sync Checkpoint & Reconciliation
       if (msgData.type === 'BATCH') {
-        const { dropped_count, last_seq, events } = msgData.payload;
+        const { dropped_count, events } = msgData.payload;
         
         if (dropped_count > 0) {
             setDroppedCount(dropped_count);
@@ -123,11 +129,11 @@ export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamRetu
     };
 
     ws.onerror = (err) => console.error("[StudioStream] WS Error:", err);
-  }, [disconnect, clear, maxLogLines, currentProjectId, currentSessionId]);
+  }, [disconnect, clear, currentSessionId, fetchDelta, processEvents]);
 
   useEffect(() => {
     return () => disconnect();
   }, [disconnect]);
 
-  return { logs, graphEvents, connect, disconnect, clear };
+  return { logs, graphEvents, connect, disconnect, clear, droppedCount };
 };

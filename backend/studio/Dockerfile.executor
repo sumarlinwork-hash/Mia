@@ -1,0 +1,19 @@
+# [4.1] Studio-Executor sandbox container
+FROM python:3.11-slim
+
+# STEP 4.1: Resource limits & Isolation
+# (These are enforced by docker run/compose, but we set user here)
+RUN groupadd -r studio && useradd -r -g studio studio
+
+WORKDIR /app
+
+# [4.1] Minimal environment
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# [4.1] Network isolation rules would be applied via --network none
+# but we need to at least drop privileges
+USER studio
+
+# Entry point for execution
+ENTRYPOINT ["python"]

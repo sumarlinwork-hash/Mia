@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Play, Square, Save, ShieldCheck } from 'lucide-react';
+import { Play, Square, Save, Shield } from 'lucide-react';
 import { useExecution } from '../hooks/useExecution';
 import { useStudioStream } from '../hooks/useStudioStream';
 import { useProject } from '../hooks/useProject';
@@ -12,6 +12,9 @@ import { GraphViewer } from './GraphViewer';
 import { StudioFileTree } from './StudioFileTree';
 import { StudioTabs } from './StudioTabs';
 import { ImpactModal } from './ImpactModal';
+import { StudioTopbar } from './StudioTopbar';
+import { StudioSidebar } from './StudioSidebar';
+import { StudioBottomBar } from './StudioBottomBar';
 import clsx from 'clsx';
 
 export const StudioPage: React.FC = () => {
@@ -189,119 +192,141 @@ export const StudioPage: React.FC = () => {
   const activeFile = tabs.activeTab ? fileStore.files[tabs.activeTab] : null;
 
   return (
-    <div className="flex h-screen bg-[#050505] text-white overflow-hidden font-sans selection:bg-blue-500/30">
-      {/* Sidebar Control */}
-      <div className="w-16 flex flex-col items-center py-6 border-r border-white/5 bg-[#0a0a0a]/50 backdrop-blur-xl z-20">
-        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center mb-8 shadow-lg shadow-blue-500/20">
-          <ShieldCheck size={24} className="text-white" />
-        </div>
-
-        <div className="flex flex-col gap-6">
-          <button 
-            onClick={handleRun}
-            disabled={execution.state !== 'IDLE' && execution.state !== 'COMPLETED' && execution.state !== 'ERROR'}
-            className={clsx(
-              "w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300",
-              execution.state === 'RUNNING' ? "bg-white/5 text-white/20 cursor-not-allowed" : "bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white"
-            )}
-            title="Run Project"
-          >
-            <Play size={20} fill={execution.state === 'RUNNING' ? "none" : "currentColor"} />
-          </button>
-
-          <button 
-            onClick={() => execution.stopCode(sessionId)}
-            disabled={execution.state !== 'RUNNING'}
-            className={clsx(
-              "w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300",
-              execution.state !== 'RUNNING' ? "bg-white/5 text-white/20 cursor-not-allowed" : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-            )}
-            title="Force Stop"
-          >
-            <Square size={20} fill={execution.state !== 'RUNNING' ? "none" : "currentColor"} />
-          </button>
-
-          <div className="w-8 h-px bg-white/5 my-2" />
-
-          <button 
-            onClick={handleSaveActive}
-            className={clsx(
-              "w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 relative",
-              activeFile?.isDirty ? "bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white" : "bg-white/5 text-white/40"
-            )}
-            title="Save Active Tab"
-          >
-            <Save size={20} />
-            {activeFile?.isDirty && <div className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#0a0a0a] animate-pulse" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Phase 3: File Explorer (View Layer) */}
-      <StudioFileTree 
-        files={project.files} 
-        onFileClick={handleFileOpen} 
-        onFileRename={handleFileRename}
-        onFileDelete={handleFileDelete}
-        activePath={tabs.activeTab || undefined} 
+    <div className="flex flex-col h-screen bg-[#050505] text-white overflow-hidden font-sans selection:bg-blue-500/30">
+      {/* Top Bar */}
+      <StudioTopbar 
+        projectName={project.metadata?.name || "Untitled Project"} 
+        systemStatus="HEALTHY" 
       />
 
-      {/* Main Workspace */}
-      <div className="flex-1 flex flex-col relative">
-        {/* Tab System */}
-        <StudioTabs 
-          tabs={tabs.openTabs} 
-          activeTab={tabs.activeTab} 
-          onTabClick={tabs.setActiveTab} 
-          onTabClose={tabs.closeTab} 
-        />
+      <div className="flex-1 flex overflow-hidden">
+        {/* Integrated Sidebar & Explorer */}
+        <StudioSidebar title="Explorer">
+          <StudioFileTree 
+            files={project.files} 
+            onFileClick={handleFileOpen} 
+            onFileRename={handleFileRename}
+            onFileDelete={handleFileDelete}
+            activePath={tabs.activeTab || undefined} 
+          />
+        </StudioSidebar>
 
-        {/* Content Area */}
-        <div className="flex-1 flex overflow-hidden p-6 gap-6">
-          {/* Left: Editor */}
-          <div className="flex-1 flex flex-col gap-4">
-            <div className="flex-1 relative">
-              {tabs.activeTab ? (
-                <MonacoEditor 
-                  code={activeFile?.content || ""} 
-                  onChange={val => fileStore.updateFile(tabs.activeTab!, val || '')} 
-                  isLoading={project.isLoading} 
-                />
-              ) : (
-                <div className="flex-1 flex items-center justify-center bg-[#0a0a0a]/30 rounded-xl border border-white/5 text-white/10 uppercase tracking-tighter text-4xl font-bold select-none">
-                  MIA Architect
-                </div>
+        {/* Main Workspace */}
+        <div className="flex-1 flex flex-col relative min-w-0">
+          {/* Tab System */}
+          <StudioTabs 
+            tabs={tabs.openTabs} 
+            activeTab={tabs.activeTab} 
+            onTabClick={tabs.setActiveTab} 
+            onTabClose={tabs.closeTab} 
+          />
+
+          {/* Action Bar (Refactored from old sidebar) */}
+          <div className="h-10 border-b border-white/5 bg-[#0a0a0a]/30 flex items-center px-4 gap-4">
+             <button 
+              onClick={handleRun}
+              disabled={execution.state !== 'IDLE' && execution.state !== 'COMPLETED' && execution.state !== 'ERROR'}
+              className={clsx(
+                "flex items-center gap-2 px-3 py-1 rounded-md transition-all duration-300 text-xs font-bold uppercase tracking-tight",
+                execution.state === 'RUNNING' ? "bg-white/5 text-white/20 cursor-not-allowed" : "bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white"
               )}
-            </div>
-            
-            <div className="h-1/3 min-h-[200px]">
-              <StudioTerminal logs={stream.logs} />
-            </div>
+            >
+              <Play size={14} fill={execution.state === 'RUNNING' ? "none" : "currentColor"} />
+              Run
+            </button>
+
+            <button 
+              onClick={() => execution.stopCode(sessionId)}
+              disabled={execution.state !== 'RUNNING'}
+              className={clsx(
+                "flex items-center gap-2 px-3 py-1 rounded-md transition-all duration-300 text-xs font-bold uppercase tracking-tight",
+                execution.state !== 'RUNNING' ? "bg-white/5 text-white/20 cursor-not-allowed" : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+              )}
+            >
+              <Square size={14} fill={execution.state !== 'RUNNING' ? "none" : "currentColor"} />
+              Stop
+            </button>
+
+            <div className="w-px h-4 bg-white/10" />
+
+            <button 
+              onClick={handleSaveActive}
+              className={clsx(
+                "flex items-center gap-2 px-3 py-1 rounded-md transition-all duration-300 text-xs font-bold uppercase tracking-tight relative",
+                activeFile?.isDirty ? "bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white" : "bg-white/5 text-white/40"
+              )}
+            >
+              <Save size={14} />
+              Save
+              {activeFile?.isDirty && <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />}
+            </button>
           </div>
 
-          {/* Right: Graph */}
-          <div className="w-1/3 min-w-[350px] flex flex-col gap-4">
-             <GraphViewer events={stream.graphEvents} />
-             
-             {/* Project Info Card */}
-             <div className="p-4 bg-white/5 border border-white/5 rounded-lg">
-                <h4 className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-3">Project: {project.metadata?.name}</h4>
-                <div className="space-y-2">
-                   <div className="flex justify-between text-xs">
-                      <span className="text-white/40">Entry Point</span>
-                      <span className="text-blue-400 font-mono">{project.metadata?.entry_point}</span>
-                   </div>
-                   <div className="flex justify-between text-xs">
-                      <span className="text-white/40">Status</span>
-                      <span className={clsx("font-bold", execution.state === 'RUNNING' ? "text-green-500" : "text-white/60")}>
-                        {execution.state}
-                      </span>
-                   </div>
-                </div>
-             </div>
+          {/* Content Area */}
+          <div className="flex-1 flex overflow-hidden p-4 gap-4">
+            {/* Left: Editor & Terminal */}
+            <div className="flex-1 flex flex-col gap-4 min-w-0">
+              <div className="flex-1 relative bg-[#0a0a0a]/50 rounded-lg border border-white/5 overflow-hidden">
+                {tabs.activeTab ? (
+                  <MonacoEditor 
+                    code={activeFile?.content || ""} 
+                    onChange={val => fileStore.updateFile(tabs.activeTab!, val || '')} 
+                    isLoading={project.isLoading} 
+                  />
+                ) : (
+                  <div className="flex-1 h-full flex items-center justify-center text-white/5 uppercase tracking-tighter text-4xl font-black select-none italic">
+                    MIA ARCHITECT
+                  </div>
+                )}
+              </div>
+              
+              <div className="h-[30%] min-h-[150px]">
+                <StudioTerminal logs={stream.logs} />
+              </div>
+            </div>
+
+            {/* Right Panel: Graph & Info */}
+            <div className="w-80 flex flex-col gap-4 flex-shrink-0">
+              <div className="flex-1 bg-[#0a0a0a]/50 rounded-lg border border-white/5 overflow-hidden">
+                <GraphViewer events={stream.graphEvents} />
+              </div>
+               
+               {/* Hardened Project Metadata Card */}
+               <div className="p-4 bg-blue-500/[0.03] border border-blue-500/10 rounded-lg backdrop-blur-sm">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Live Synchronization</h4>
+                  </div>
+                  
+                  <div className="space-y-3">
+                     <div className="flex flex-col gap-1">
+                        <span className="text-[9px] text-white/30 uppercase font-bold">Project Authority</span>
+                        <span className="text-xs text-white/80 font-mono truncate bg-white/5 px-2 py-1 rounded">{project.metadata?.name}</span>
+                     </div>
+                     <div className="flex flex-col gap-1">
+                        <span className="text-[9px] text-white/30 uppercase font-bold">Active Kernel State</span>
+                        <span className={clsx(
+                          "text-[10px] font-black px-2 py-0.5 rounded-full w-fit",
+                          execution.state === 'RUNNING' ? "bg-green-500/20 text-green-400" : 
+                          execution.state === 'ERROR' ? "bg-red-500/20 text-red-400" : "bg-white/10 text-white/60"
+                        )}>
+                          {execution.state}
+                        </span>
+                     </div>
+                  </div>
+               </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Bottom Bar */}
+      <StudioBottomBar 
+        branch="architecture-v2" 
+        errors={execution.state === 'ERROR' ? 1 : 0} 
+        isSecure={true}
+      />
+
       <ImpactModal 
         isOpen={impactModal.isOpen}
         onClose={() => setImpactModal(p => ({ ...p, isOpen: false }))}
@@ -313,4 +338,5 @@ export const StudioPage: React.FC = () => {
       />
     </div>
   );
+
 };

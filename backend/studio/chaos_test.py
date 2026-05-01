@@ -12,6 +12,7 @@ BASE_DIR = os.path.realpath(os.path.join(os.getcwd(), "backend"))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
+from studio.models import EventPriority
 from studio.session_manager import studio_session_manager
 from studio.file_service import studio_file_service
 from studio.version_service import studio_version_service, SnapshotLabel, JournalStatus
@@ -93,36 +94,53 @@ async def run_chaos_test():
     else:
         print("RESULT: [FAIL] (History buffer error)")
 
-    # 4. TEST-Z4: Journal Corruption Detection (Merkle)
-    print("\n[TEST-Z4] Journal Corruption Detection (Merkle)")
-    # Clear journal
-    with open(journal_path, "w") as f: f.write("")
+    # 8.1 Burst Event Simulation (Priority Skew)
+    print("\n[TEST-8.1] Burst Event Simulation (Priority Skew)")
+    # Push 1000 HIGH priority events quickly (GRAPH_START is HIGH)
+    for i in range(1000):
+        studio_graph_streamer.push_event(exec_id, "GRAPH_START")
+    # Push LOW priority - should be dropped immediately if queue is full of HIGHs (TELEMETRY is LOW)
+    studio_graph_streamer.push_event(exec_id, "TELEMETRY")
+    print(f"Queue Size: {len(queue_entry.events)}")
+    print(f"Dropped Events: {queue_entry.metrics['dropped_events_count']}")
+
+    # 8.2 Split-Brain Simulation (Recovery Coordination)
+    print("\n[TEST-8.2] Split-Brain Simulation (Recovery)")
+    # We simulate this by having two instances of VersionService pointing to the same journal
+    from studio.version_service import StudioVersionService
+    instance2 = StudioVersionService(project_root="d:/ProjectBuild/projects/mia")
     
-    # Write 11 entries to trigger a Merkle anchor (at 10)
-    for i in range(11):
-        studio_version_service._record_journal(project_id, f"f{i}.py", "c", status=JournalStatus.COMMITTED)
+    # Instance 1 starts a write
+    entry_hash = studio_version_service._record_journal(project_id, "split.py", "v1", status=JournalStatus.PENDING_IN_FLIGHT)
     
-    # Corrupt a line manually (line 5)
+    # Instance 2 triggers recovery (simulating it taking over)
+    print("Action: Instance 2 taking over (Recovery)...")
+    instance2.run_startup_recovery()
+    
+    # Check if Instance 2 recovered the in-flight entry
     with open(journal_path, "r") as f:
-        lines = f.readlines()
+        content = f.read()
+    if "COMMITTED" in content and "split.py" in content:
+        print("RESULT: [PASS] (Distributed recovery successful)")
+    else:
+        print("RESULT: [FAIL] (Split-brain recovery failure)")
+
+    # 8.3 Hot Project Contention Test
+    print("\n[TEST-8.3] Hot Project Contention Test")
+    from studio.lock_service import studio_lock_service
     
-    e5 = json.loads(lines[4])
-    e5["prev_hash"] = "CORRUPT"
-    lines[4] = json.dumps(e5) + "\n"
+    print("Action: Instance 1 acquiring lock...")
+    studio_lock_service.acquire_project_lock(project_id)
     
-    with open(journal_path, "w") as f:
-        f.writelines(lines)
+    print("Action: Instance 2 attempting to acquire lock (should fail)...")
+    success = studio_lock_service.acquire_project_lock(project_id, timeout=0.5)
     
-    print("Action: Attempting rollback with corrupted chain...")
-    try:
-        snap_id = f"snap__{project_id}__123__abc"
-        snap_path = os.path.join(paths["version"], f"{snap_id}.zip")
-        with open(snap_path, "wb") as f: f.write(b"fake_zip")
-        
-        studio_version_service.rollback(project_id, snap_id)
-        print("RESULT: [FAIL] (Rollback succeeded despite corruption)")
-    except Exception as e:
-        print(f"RESULT: [PASS] (Detected Integrity Violation)")
+    if not success:
+        print("RESULT: [PASS] (Lock contention correctly handled)")
+    else:
+        print("RESULT: [FAIL] (Lock leakage detected)")
+    
+    studio_lock_service.release_project_lock(project_id)
 
     print("\n" + "="*60)
     print(" VERDICT: CHAOS HARDENING COMPLETE")

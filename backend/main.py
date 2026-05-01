@@ -30,6 +30,7 @@ from studio import (
     StudioVersionService, StudioProjectService, studio_graph_streamer, 
     studio_version_service, studio_project_service
 )
+from studio.metrics_service import studio_metrics
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -179,6 +180,23 @@ async def websocket_studio_graph_stream(websocket: WebSocket, execution_id: str,
 @app.post("/api/skills/save")
 async def save_skill(req: SkillSaveRequest):
     return skill_manager.save_skill(req.name, req.code)
+
+@app.get("/metrics")
+async def get_metrics():
+    """STEP 2.2: Prometheus Metrics Exporter."""
+    from fastapi.responses import Response
+    return Response(content=studio_metrics.get_prometheus_metrics(), media_type="text/plain")
+
+@app.get("/api/studio/graph/delta/{execution_id}")
+async def get_studio_delta(execution_id: str, from_seq: int, to_seq: int, session_id: str = Query(...)):
+    """STEP 5.2: Event Cursor Reconciliation / Delta Fetch."""
+    try:
+        # P11: Verify session before giving delta
+        # (In a real system, we'd check if session has access to this execution)
+        delta = studio_graph_streamer.get_delta(execution_id, from_seq, to_seq)
+        return delta
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # --- MIA ARCHITECT STUDIO API (Phase 4 Hardening) ---
 

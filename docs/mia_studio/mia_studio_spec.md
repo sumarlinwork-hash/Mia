@@ -400,9 +400,36 @@ MIA-AS dianggap 100% selesai jika:
 ✔ Semua perubahan reversible
 ✔ Tidak ada silent failure
 ✔ User bisa coding end-to-end tanpa keluar dari Studio
+✔ Sistem memiliki "Self-Healing Control Loop" otonom (SHAD-CSA)
 
 ============================================================
-7. STRICT DEVELOPMENT RULE
+8. SELF-HEALING AUTONOMOUS DISTRIBUTED CONTROL SYSTEM (SHAD-CSA)
+============================================================
+
+MIA-AS mengimplementasikan sistem kontrol terdistribusi loop-tertutup untuk menjamin ketahanan sistem operasi di atas infrastruktur yang tidak stabil.
+
+### 8.1. Arsitektur Komponen (Stateless Core)
+Seluruh komponen bersifat stateless, mengandalkan **Journal Store + Control Ledger** sebagai sumber kebenaran tunggal.
+
+*   **Control Plane**: Mengatur alur kerja `OBSERVE → DETECT → DIAGNOSE → DECIDE → EXECUTE → VERIFY`.
+*   **Diagnostics Layer**: Mengklasifikasikan anomali menjadi tipe kegagalan (Corruption, Lock-Storm, Drift).
+*   **Healing Layer**: Melakukan tindakan korektif (Replay, Rollback, Node-Isolation, Load-Shedding).
+*   **Safety Guard**: Memberlakukan "Kill-Switch" otomatis jika pemulihan gagal melebihi ambang batas.
+
+### 8.2. Core Control Loop (The Tick)
+Sistem beroperasi dalam siklus deterministik:
+1.  **Observe**: Mengumpulkan snapshot telemetry (Lock state, Queue depth, Journal hashes).
+2.  **Detect**: Membandingkan state aktual dengan kebijakan integritas (Policies).
+3.  **Heal**: Memilih jalur pemulihan termurah (Cheapest safe path).
+4.  **Consensus**: Melakukan rekonsiliasi state antar node setelah pemulihan.
+
+### 8.3. Resilience Invariants (Non-Negotiable)
+*   ✔ **Zero Silent Corruption**: Setiap hash mismatch harus memicu isolasi seketika.
+*   ✔ **Bounded Recovery**: Biaya pemulihan harus dibatasi waktu dan sumber daya.
+*   ✔ **Deterministic Conflict Resolution**: Pemulihan antar node harus menghasilkan state yang identik.
+
+============================================================
+9. STRICT DEVELOPMENT RULE
 ==========================
 
 * DILARANG lompat phase

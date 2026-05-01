@@ -97,14 +97,10 @@ const TreeNode: React.FC<{
 
 export const StudioFileTree: React.FC<FileTreeProps> = ({ files, onFileClick, onFileRename, onFileDelete, activePath }) => {
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a]/50 backdrop-blur-md border-r border-white/5 w-64 shrink-0 overflow-y-auto custom-scrollbar">
-      <div className="h-14 flex items-center px-6 border-b border-white/5 shrink-0">
-        <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Explorer</span>
-      </div>
-      
-      <div className="py-4">
+    <div className="flex flex-col h-full bg-transparent overflow-y-auto custom-scrollbar">
+      <div className="py-2">
         {files.length === 0 ? (
-          <div className="px-6 py-4 text-[10px] text-white/20 italic">No files found</div>
+          <div className="px-4 py-4 text-[10px] text-white/20 italic text-center">No files found</div>
         ) : (
           files.map(node => (
             <TreeNode 
@@ -112,7 +108,7 @@ export const StudioFileTree: React.FC<FileTreeProps> = ({ files, onFileClick, on
               node={node} 
               level={0} 
               onFileClick={onFileClick} 
-              onFileRename={onFileRename}
+              onFileRename={onFileRename} 
               onFileDelete={onFileDelete}
               activePath={activePath} 
             />
@@ -122,3 +118,4 @@ export const StudioFileTree: React.FC<FileTreeProps> = ({ files, onFileClick, on
     </div>
   );
 };
+

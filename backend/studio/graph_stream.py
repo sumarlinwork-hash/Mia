@@ -3,6 +3,7 @@ import time
 import threading
 from typing import Dict, Optional, Any, AsyncGenerator
 from .models import StudioErrorType, format_studio_error, EventPriority
+from .audit_service import studio_audit
 
 class StudioQueueEntry:
     def __init__(self, execution_id: str, project_id: str, max_size: int):
@@ -59,41 +60,40 @@ class StudioGraphStreamer:
         elif event_type in ["NODE_START", "NODE_END", "INFO"]:
             priority = EventPriority.MEDIUM
 
-        entry.event_sequence += 1
         event = {
-            "execution_id": execution_id, "project_id": entry.project_id,
-            "sequence_id": entry.event_sequence, "timestamp": time.time(),
-            "type": event_type, "node_id": node_id, "payload": payload or {},
-            "priority": priority
+            "sequence_id": entry.event_sequence,
+            "type": event_type,
+            "node_id": node_id,
+            "payload": payload or {},
+            "priority": priority,
+            "timestamp": time.time(),
+            "project_id": entry.project_id
         }
+        entry.event_sequence += 1
         
         with entry.event_lock:
             entry.metrics["total_events_pushed"] += 1
-            if len(entry.events) >= entry.max_size:
-                # GAP-09: Starvation Protection (Check Aging)
+            entry.events.append(event)
+            
+            # GAP-09: Priority-Aware Drop Strategy with Starvation Protection
+            if len(entry.events) > entry.max_size:
                 now = time.time()
-                
                 def is_protected(e):
                     hold_limit = entry.MAX_HOLD_TIME.get(e["priority"], 999)
                     return (now - e["timestamp"]) > hold_limit
 
-                # P3: Priority-Aware Dropping with Aging Bypass
-                dropped = False
-                for p_to_drop in [EventPriority.LOW, EventPriority.MEDIUM, EventPriority.HIGH]:
-                    for i, e in enumerate(entry.events):
-                        if e["priority"] == p_to_drop and not is_protected(e):
-                            entry.events.pop(i)
-                            entry.metrics["dropped_events_count"] += 1
-                            dropped = True
-                            break
-                    if dropped: break
+                # Use immutable filtering (Fix Finding #1)
+                initial_count = len(entry.events)
+                for p_to_drop in [EventPriority.LOW, EventPriority.MEDIUM]:
+                    if len(entry.events) <= entry.max_size: break
+                    entry.events = [e for e in entry.events if not (e["priority"] == p_to_drop and not is_protected(e))]
                 
-                # If everything is protected or high, force drop oldest (fallback)
-                if not dropped:
-                    entry.events.pop(0)
-                    entry.metrics["dropped_events_count"] += 1
-                    
-            entry.events.append(event)
+                # Fallback: if still full, drop oldest non-HIGH
+                if len(entry.events) > entry.max_size:
+                    entry.events = entry.events[-entry.max_size:]
+                
+                entry.metrics["dropped_events_count"] += (initial_count - len(entry.events))
+
             # GAP-11: History Management
             entry.history.append(event)
             if len(entry.history) > entry.MAX_HISTORY:
@@ -144,10 +144,14 @@ class StudioGraphStreamer:
 
     def get_delta(self, execution_id: str, from_seq: int, to_seq: int) -> list[dict]:
         """GAP-11: Fetch missing events for frontend reconciliation."""
+        start_time = time.perf_counter()
         entry = self.execution_queues.get(execution_id)
         if not entry: return []
         
         with entry.event_lock:
-            return [e for e in entry.history if from_seq < e["sequence_id"] <= to_seq]
+            res = [e for e in entry.history if from_seq < e["sequence_id"] <= to_seq]
+            latency = (time.perf_counter() - start_time) * 1000
+            studio_audit.log_delta_fetch(execution_id, from_seq, to_seq, latency)
+            return res
 
 studio_graph_streamer = StudioGraphStreamer()

@@ -5,9 +5,24 @@ import time
 import hashlib
 import threading
 import zipfile
+import tempfile
 from typing import List, Dict, Optional
 from .models import SnapshotLabel, StudioErrorType, format_studio_error, JournalStatus
 from .dependency_service import studio_dependency_service
+from .graph_stream import studio_graph_streamer
+from .audit_service import studio_audit, AuditCategory
+
+def calculate_merkle_root(hashes: List[str]) -> str:
+    """[Finding #2] Helper to calculate Merkle Root from a list of hashes."""
+    if not hashes: return ""
+    if len(hashes) == 1: return hashes[0]
+    
+    new_level = []
+    for i in range(0, len(hashes), 2):
+        left = hashes[i]
+        right = hashes[i+1] if i+1 < len(hashes) else left
+        new_level.append(hashlib.sha256((left + right).encode()).hexdigest())
+    return calculate_merkle_root(new_level)
 
 GENESIS_HASH = hashlib.sha256("MIA_AS_JOURNAL_V1".encode()).hexdigest()
 MERKLE_WINDOW = 10 # P6: Merkle anchor every 10 entries
@@ -29,6 +44,9 @@ class StudioVersionService:
         self.current_snapshot_id: Dict[str, str] = {}
         self._file_owners: Dict[str, Dict[str, str]] = {}
         self.JOURNAL_LIMIT = 100
+        self._failure_count: Dict[str, int] = {}
+        self._safe_mode: Dict[str, bool] = {}
+        self.FAILURE_THRESHOLD = 5 # P10: Safe mode after 5 consecutive failures
         
         # P4-Z5: Cold Start Recovery
         self.run_startup_recovery()
@@ -136,10 +154,12 @@ class StudioVersionService:
                 
                 # GAP-08: Transactional Anchor on COMMIT
                 if new_status == JournalStatus.COMMITTED:
-                    # Anchor for THIS transaction
-                    h = hashlib.sha256()
-                    h.update(entry["entry_hash"].encode())
-                    entry["merkle"] = h.hexdigest()
+                    # Finding #2: True Merkle Tree Structure
+                    # Instead of linear chain, use batched grouping if it's a boundary
+                    batch_hashes = [e["entry_hash"] for e in all_entries[-(MERKLE_WINDOW):]]
+                    if entry["entry_hash"] not in batch_hashes: batch_hashes.append(entry["entry_hash"])
+                    
+                    entry["merkle"] = calculate_merkle_root(batch_hashes)
                     entry["merkle_type"] = "TRANSACTIONAL"
 
                 raw = f"{entry['seq']}|{entry['path']}|{entry['blob']}|{entry['prev_hash']}|{entry['status']}|{entry.get('merkle','')}|{entry.get('graph_v','')}|{entry.get('fp','')}"
@@ -156,102 +176,131 @@ class StudioVersionService:
             if f"snap__{project_id}__" not in snapshot_id:
                 raise Exception(format_studio_error(StudioErrorType.SECURITY, "Snapshot namespace mismatch"))
             
-            # P4-Z4: Replay Validator (Strict Hash Chain + P6: Merkle Verification)
-            index_path = os.path.join(paths["journal"], "journal.jsonl")
-            if os.path.exists(index_path):
-                expected_prev = GENESIS_HASH
-                entries = []
-                with open(index_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        e = json.loads(line.strip())
-                        raw = f"{e['seq']}|{e['path']}|{e['blob']}|{e['prev_hash']}|{e['status']}|{e.get('merkle','')}|{e.get('graph_v','')}|{e.get('fp','')}"
-                        actual_hash = hashlib.sha256(raw.encode()).hexdigest()
-                        
-                        if actual_hash != e["entry_hash"] or e["prev_hash"] != expected_prev:
-                            # P6: Attempt recovery from last valid Merkle anchor if possible
-                            print(f"[Z4] Integrity Violation at SEQ {e['seq']}. Attempting partial recovery...")
-                            break 
+            try:
+                # P4-Z4: Replay Validator (Strict Hash Chain + P6: Merkle Verification)
+                index_path = os.path.join(paths["journal"], "journal.jsonl")
+                if os.path.exists(index_path):
+                    expected_prev = GENESIS_HASH
+                    entries = []
+                    gv = studio_dependency_service.get_graph_version()
+                    studio_audit.log_replay_start(project_id, snapshot_id, 0, gv) # count will be updated in steps
+                    
+                    with open(index_path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            step_start = time.perf_counter()
+                            e = json.loads(line.strip())
+                            raw = f"{e['seq']}|{e['path']}|{e['blob']}|{e['prev_hash']}|{e['status']}|{e.get('merkle','')}|{e.get('graph_v','')}|{e.get('fp','')}"
+                            actual_hash = hashlib.sha256(raw.encode()).hexdigest()
                             
-                        # GAP-10: Deterministic Replay Validation
-                        current_gv = studio_dependency_service.get_graph_version()
-                        if e.get("graph_v") and e["graph_v"] != current_gv:
-                            print(f"[GAP-10] Replay Skip: Graph version mismatch at SEQ {e['seq']}")
-                            # Depending on policy, we might break or skip. Here we break for safety.
-                            break
-                            
-                        if e["seq"] % MERKLE_WINDOW == 0 and e.get("merkle_type") == "PERIODIC":
-                            # Validate Periodic Merkle anchor
-                            anchors = [ent["entry_hash"] for ent in entries[-(MERKLE_WINDOW-1):]]
-                            v_merkle = hashlib.sha256("".join(anchors).encode()).hexdigest()
-                            if v_merkle != e.get("merkle"):
-                                raise Exception(format_studio_error(StudioErrorType.INTEGRITY_VIOLATION, f"Merkle Anchor Mismatch at SEQ {e['seq']}"))
-                        
-                        if e.get("merkle_type") == "TRANSACTIONAL":
-                            # Validate Transactional Anchor
-                            if hashlib.sha256(e["entry_hash"].encode()).hexdigest() != e.get("merkle"):
-                                # This is wrong because entry_hash includes merkle. 
-                                # Wait, GAP-08 logic needs careful hash ordering.
-                                pass # Simplified for now
+                            latency = (time.perf_counter() - step_start) * 1000
+                            if actual_hash != e["entry_hash"] or e["prev_hash"] != expected_prev:
+                                # P6: Attempt recovery from last valid Merkle anchor if possible
+                                print(f"[Z4] Integrity Violation at SEQ {e['seq']}. Attempting partial recovery...")
+                                studio_audit.log_replay_step(e["seq"], latency, False, "INTEGRITY_VIOLATION")
+                                break 
                                 
-                        expected_prev = actual_hash
-                        entries.append(e)
+                            # GAP-10: Deterministic Replay Validation
+                            current_gv = studio_dependency_service.get_graph_version()
+                            if e.get("graph_v") and e["graph_v"] != current_gv:
+                                print(f"[GAP-10] Replay Skip: Graph version mismatch at SEQ {e['seq']}")
+                                studio_audit.log_replay_step(e["seq"], latency, False, "VERSION_MISMATCH")
+                                break
+                                
+                            studio_audit.log_replay_step(e["seq"], latency, True)
+                                
+                            if e["seq"] % MERKLE_WINDOW == 0 and e.get("merkle_type") == "PERIODIC":
+                                # Validate Periodic Merkle anchor
+                                anchors = [ent["entry_hash"] for ent in entries[-(MERKLE_WINDOW-1):]]
+                                v_merkle = hashlib.sha256("".join(anchors).encode()).hexdigest()
+                                if v_merkle != e.get("merkle"):
+                                    raise Exception(format_studio_error(StudioErrorType.INTEGRITY_VIOLATION, f"Merkle Anchor Mismatch at SEQ {e['seq']}"))
+                            
+                            if e.get("merkle_type") == "TRANSACTIONAL":
+                                # Validate Transactional Anchor
+                                if hashlib.sha256(e["entry_hash"].encode()).hexdigest() != e.get("merkle"):
+                                    # This is wrong because entry_hash includes merkle. 
+                                    # Wait, GAP-08 logic needs careful hash ordering.
+                                    pass # Simplified for now
+                                    
+                            expected_prev = actual_hash
+                            entries.append(e)
 
-            snap_path = os.path.join(paths["version"], f"{snapshot_id}.zip")
-            if not os.path.exists(snap_path):
-                raise Exception(format_studio_error(StudioErrorType.FS_ERROR, "Snapshot file missing"))
-                
-            shutil.rmtree(paths["draft"])
-            os.makedirs(paths["draft"], exist_ok=True)
-            with zipfile.ZipFile(snap_path, 'r') as zipf: zipf.extractall(paths["draft"])
-            self._file_owners[project_id] = {}
-            studio_dependency_service.rebuild_graph()
+                snap_path = os.path.join(paths["version"], f"{snapshot_id}.zip")
+                if not os.path.exists(snap_path):
+                    raise Exception(format_studio_error(StudioErrorType.FS_ERROR, "Snapshot file missing"))
+                    
+                shutil.rmtree(paths["draft"])
+                os.makedirs(paths["draft"], exist_ok=True)
+                with zipfile.ZipFile(snap_path, 'r') as zipf: zipf.extractall(paths["draft"])
+                self._file_owners[project_id] = {}
+                studio_dependency_service.rebuild_graph()
+                self._failure_count[project_id] = 0 # Reset
+            except Exception as e:
+                self._failure_count[project_id] = self._failure_count.get(project_id, 0) + 1
+                if self._failure_count[project_id] >= self.FAILURE_THRESHOLD:
+                    self._safe_mode[project_id] = True
+                raise e
 
     def write_draft_file(self, project_id: str, path: str, content: str, session_id: str):
         """P4-Z1 & P4-Z2: Exception-Safe Atomic Write with Post-Write Verification (P2)."""
         paths = self._get_paths(project_id)
         with self._get_lock(project_id):
-            self._verify_ownership(project_id, path, session_id)
-            if self._is_snapshotting.get(project_id, False):
-                raise Exception(format_studio_error(StudioErrorType.VERSION_ERROR, "SYSTEM_BUSY"))
-            
-            self._check_disk_space()
-            
-            # GAP-10: Deterministic Context
-            gv = studio_dependency_service.get_graph_version()
-            fp = studio_dependency_service.get_execution_fingerprint(project_id)
-            
-            # P1: Transaction Classification (IN_FLIGHT)
-            entry_hash = self._record_journal(project_id, path, content, status=JournalStatus.PENDING_IN_FLIGHT, graph_v=gv, fp=fp)
+            if self._safe_mode.get(project_id, False):
+                raise Exception(format_studio_error(StudioErrorType.SECURITY, "SYSTEM_IN_SAFE_MODE: Write blocked due to persistent corruption"))
             
             try:
-                abs_path = os.path.join(paths["draft"], path)
-                os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+                self._verify_ownership(project_id, path, session_id)
+                if self._is_snapshotting.get(project_id, False):
+                    raise Exception(format_studio_error(StudioErrorType.VERSION_ERROR, "SYSTEM_BUSY"))
                 
-                # Z1.2: Atomic Write
-                fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(abs_path), suffix=".tmp")
+                self._check_disk_space()
+                
+                # GAP-10: Deterministic Context
+                gv = studio_dependency_service.get_graph_version()
+                fp = studio_dependency_service.get_execution_fingerprint(project_id)
+                
+                # P1: Transaction Classification (IN_FLIGHT)
+                entry_hash = self._record_journal(project_id, path, content, status=JournalStatus.PENDING_IN_FLIGHT, graph_v=gv, fp=fp)
+                
                 try:
-                    with os.fdopen(fd, 'w', encoding="utf-8") as f:
-                        f.write(content)
-                        f.flush(); os.fsync(f.fileno())
+                    abs_path = os.path.join(paths["draft"], path)
+                    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
                     
-                    # P2: Post-Write Verification
-                    written_hash = self._calculate_hash(temp_path)
-                    target_hash = hashlib.sha256(content.encode()).hexdigest()
-                    if written_hash != target_hash:
-                        # GAP-13: HARD ABORT
-                        print(f"[GAP-13] HARD ABORT: Hash mismatch on {path}")
-                        raise Exception(format_studio_error(StudioErrorType.INTEGRITY_VIOLATION, "Post-write hash mismatch (HARD ABORT)"))
+                    # Z1.2: Atomic Write
+                    fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(abs_path), suffix=".tmp")
+                    try:
+                        with os.fdopen(fd, 'w', encoding="utf-8") as f:
+                            f.write(content)
+                            f.flush(); os.fsync(f.fileno())
+                        
+                        # P2: Post-Write Verification
+                        written_hash = self._calculate_hash(temp_path)
+                        target_hash = hashlib.sha256(content.encode()).hexdigest()
+                        if written_hash != target_hash:
+                            # GAP-13: HARD ABORT
+                            print(f"[GAP-13] HARD ABORT: Hash mismatch on {path}")
+                            studio_audit.log_event(AuditCategory.HARD_ABORT, "POST_WRITE_HASH_MISMATCH", {
+                                "project_id": project_id, "path": path, "expected": target_hash, "actual": written_hash
+                            })
+                            raise Exception(format_studio_error(StudioErrorType.INTEGRITY_VIOLATION, "Post-write hash mismatch (HARD ABORT)"))
+                        
+                        os.replace(temp_path, abs_path)
+                    finally:
+                        if os.path.exists(temp_path): os.remove(temp_path)
                     
-                    os.replace(temp_path, abs_path)
-                finally:
-                    if os.path.exists(temp_path): os.remove(temp_path)
-                
-                self._update_journal_status(project_id, entry_hash, JournalStatus.COMMITTED)
-            except Exception as e:
-                print(f"[Z2] Write failed, reverting... {e}")
-                # P1: Mark as UNCONFIRMED if it failed during write
-                self._update_journal_status(project_id, entry_hash, JournalStatus.PENDING_UNCONFIRMED)
-                raise e
+                    self._update_journal_status(project_id, entry_hash, JournalStatus.COMMITTED)
+                    self._failure_count[project_id] = 0 # Reset on success
+                except Exception as e:
+                    print(f"[Z2] Write failed, reverting... {e}")
+                    # P1: Mark as UNCONFIRMED if it failed during write
+                    self._update_journal_status(project_id, entry_hash, JournalStatus.PENDING_UNCONFIRMED)
+                    raise e
+            except Exception as outer_e:
+                # Track failure for Scenario 10 Kill Switch
+                self._failure_count[project_id] = self._failure_count.get(project_id, 0) + 1
+                if self._failure_count[project_id] >= self.FAILURE_THRESHOLD:
+                    self._safe_mode[project_id] = True
+                raise outer_e
 
     def take_snapshot(self, project_id: str, label: SnapshotLabel) -> str:
         paths = self._get_paths(project_id)
@@ -337,6 +386,34 @@ class StudioVersionService:
         with open(index_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
+    def compact_journal(self, project_id: str):
+        """[7.2] Journal compaction job. 
+        Removes COMMITTED entries before the last 100 or the last Merkle anchor.
+        """
+        paths = self._get_paths(project_id)
+        index_path = os.path.join(paths["journal"], "journal.jsonl")
+        if not os.path.exists(index_path): return
+        
+        with open(index_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        
+        if len(lines) < 200: return # Only compact if reasonably large
+        
+        # Keep the tail (e.g., last 100 entries)
+        keep_threshold = len(lines) - 100
+        
+        # Find the last Merkle anchor before threshold
+        compaction_point = 0
+        for i, line in enumerate(lines[:keep_threshold]):
+            entry = json.loads(line)
+            if entry.get("merkle_type") in ["PERIODIC", "TRANSACTIONAL"]:
+                compaction_point = i
+        
+        if compaction_point > 0:
+            print(f"[7.2] Compacting journal for {project_id} at seq {json.loads(lines[compaction_point])['seq']}")
+            with open(index_path, "w", encoding="utf-8") as f:
+                f.writelines(lines[compaction_point:])
+
     def run_startup_recovery(self):
         """P4-Z1.3 & P4-Z5: Startup Recovery Routine (GAP-12: Hash Classification)."""
         print("[Z5] Initializing Cold Start Recovery...")
@@ -389,13 +466,16 @@ class StudioVersionService:
                                     print(f"[Z1] RECOVERING IN-FLIGHT: {project_id}:{entry['path']}")
                                     entry["status"] = JournalStatus.COMMITTED.value
                                     dirty = True
+                                    studio_audit.log_recovery(project_id, "In-flight found", "IN_FLIGHT")
                                 else:
                                     print(f"[Z1] DISCARDING STALE IN-FLIGHT: {project_id}:{entry['path']}")
                                     dirty = True
+                                    studio_audit.log_recovery(project_id, "Stale in-flight", "ORPHANED")
                                     continue
                             elif status == JournalStatus.PENDING_UNCONFIRMED.value:
                                 print(f"[Z1] DISCARDING UNCONFIRMED: {project_id}:{entry['path']}")
                                 dirty = True
+                                studio_audit.log_recovery(project_id, "Unconfirmed discard", "UNCONFIRMED")
                                 continue
                             valid_lines.append(json.dumps(entry) + "\n")
                     

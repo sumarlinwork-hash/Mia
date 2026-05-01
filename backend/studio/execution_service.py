@@ -8,6 +8,7 @@ from typing import Dict, Optional
 from datetime import datetime
 from .models import ExecutionEntry, ExecutionStatus, StudioErrorType, format_studio_error
 from .graph_stream import studio_graph_streamer
+from .audit_service import studio_audit, AuditCategory
 
 class StudioExecutionService:
     def __init__(self, log_dir: str = "backend/studio/logs"):
@@ -70,6 +71,11 @@ class StudioExecutionService:
 
         studio_graph_streamer.create_queue(execution_id, project_id)
         studio_graph_streamer.push_event(execution_id, "GRAPH_START", payload={"project_id": project_id})
+        
+        # Phase 5: Audit execution start
+        studio_audit.log_event(AuditCategory.WRITE, "EXECUTION_START", {
+            "execution_id": execution_id, "project_id": project_id, "session_id": session_id
+        })
 
         thread = threading.Thread(target=self._execute_thread, args=(execution_id, temp_file, timeout))
         thread.daemon = True
@@ -124,6 +130,11 @@ class StudioExecutionService:
             studio_graph_streamer.push_event(execution_id, "EXECUTION_END", payload={
                 "status": final_status,
                 "project_id": entry.project_id
+            })
+            
+            # Phase 5: Audit execution end
+            studio_audit.log_event(AuditCategory.WRITE, "EXECUTION_END", {
+                "execution_id": execution_id, "project_id": entry.project_id, "status": final_status
             })
             
             studio_graph_streamer.destroy_queue(execution_id)
