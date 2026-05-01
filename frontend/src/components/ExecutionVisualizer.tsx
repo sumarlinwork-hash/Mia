@@ -30,7 +30,7 @@ export const ExecutionVisualizer: React.FC<ExecutionVisualizerProps> = ({ graphI
 
   const fetchSnapshot = useCallback(async () => {
     try {
-      const resp = await fetch(`http://localhost:8000/api/graph/snapshot/${graphId}`);
+      const resp = await fetch(`/api/graph/snapshot/${graphId}`);
       if (resp.ok) {
         const snapshot = await resp.json();
         setGraph(snapshot);
@@ -44,7 +44,8 @@ export const ExecutionVisualizer: React.FC<ExecutionVisualizerProps> = ({ graphI
   const connectStream = useCallback(() => {
     if (wsRef.current) wsRef.current.close();
 
-    const ws = new WebSocket(`ws://localhost:8000/ws/graph/${graphId}`);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/graph/${graphId}`);
     wsRef.current = ws;
 
     ws.onopen = () => {

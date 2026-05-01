@@ -73,12 +73,13 @@ class MIAConfig(BaseModel):
     is_production_mode: bool = False
     os_mode: str = "SAFE_MODE" # SAFE_MODE, POWER_MODE, BEGINNER_MODE
     
-    # ARE (Affective Resonance Engine) Parameters
+    # ARE (Affective Resonance Engine) Parameters - Synchronized with SSOT v5
     care_pulse_enabled: bool = True
     resonant_skin_enabled: bool = True
     bio_sync_enabled: bool = True
-    respect_decay_rate: float = 0.05
-    reassurance_build_rate: float = 0.1
+    warmth_decay_rate: float = 0.001
+    arousal_decay_rate: float = 0.0005
+    echo_decay_rate: float = 0.002
     imperfect_response_chance: float = 0.05
     
     providers: Dict[str, ProviderConfig] = {}

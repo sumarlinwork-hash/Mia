@@ -4,7 +4,7 @@ import { useFileStore } from '../context/FileStoreContext';
 export const useDraft = () => {
   const { currentProjectId, currentSessionId, setFileBase, getFile, isInitialised } = useFileStore();
   const [isSaving, setIsSaving] = useState(false);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadFile = useCallback(async (path: string) => {
     if (!isInitialised || !currentSessionId) return;

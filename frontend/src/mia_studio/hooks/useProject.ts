@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { StudioEvent, UseStudioStreamReturn } from './useStudioStream';
 
 interface FileNode {
   name: string;
@@ -44,23 +45,6 @@ export const useProject = (projectId: string = "default_project") => {
     }
   }, [projectId]);
 
-  // P3-K: Listen for System Events to reconcile state
-  useEffect(() => {
-    const ws = new WebSocket(`ws://${window.location.host}/ws/studio/events/${projectId}`);
-    
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log("[useProject] System Event Received:", data.type);
-      
-      if (["STRUCTURE_UPDATED", "FILE_RENAMED", "FILE_DELETED", "FILE_CREATED"].includes(data.type)) {
-        // Reconcile file tree
-        fetchFiles();
-      }
-    };
-
-    return () => ws.close();
-  }, [projectId, fetchFiles]);
-
   useEffect(() => {
     fetchMetadata();
     fetchFiles();
@@ -68,3 +52,29 @@ export const useProject = (projectId: string = "default_project") => {
 
   return { metadata, files, isLoading, error, refresh: fetchFiles };
 };
+
+// Patch B: Centralized Event Subscription
+export function useProjectEvents(resilienceStream: UseStudioStreamReturn, projectRefresh: () => void) {
+  useEffect(() => {
+    if (!resilienceStream?.onEvent) return;
+
+    const handler = (event: StudioEvent) => {
+      if (!event?.type) return;
+
+      const shouldRefresh = [
+        "STRUCTURE_UPDATED", 
+        "FILE_RENAMED", 
+        "FILE_DELETED", 
+        "FILE_CREATED"
+      ].includes(event.type);
+
+      if (shouldRefresh) {
+        console.log(`[useProjectEvents] Triggering refresh due to: ${event.type}`);
+        projectRefresh();
+      }
+    };
+
+    resilienceStream.onEvent(handler);
+    return () => resilienceStream.offEvent(handler);
+  }, [resilienceStream, projectRefresh]);
+}

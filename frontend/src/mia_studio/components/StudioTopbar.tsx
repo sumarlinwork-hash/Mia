@@ -41,6 +41,8 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
             <Search size={14} className="text-white/20 group-hover:text-white/40 transition-colors" />
           </div>
           <input 
+            id="topbar-search-input"
+            name="search"
             type="text" 
             placeholder="Search commands or files... (Ctrl + P)"
             className="w-full bg-white/[0.03] border border-white/5 rounded-md py-1.5 pl-10 pr-4 text-xs text-white/80 placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:bg-white/[0.05] transition-all"

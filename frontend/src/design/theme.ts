@@ -21,9 +21,9 @@ export const theme = {
       glow: 'rgba(0, 255, 102, 0.4)',
     },
     rose: {
-      primary: '#ff007f',
-      primaryHover: '#ff3399',
-      glow: 'rgba(255, 0, 127, 0.4)',
+      primary: '#fd007fff',
+      primaryHover: '#fc5dacff',
+      glow: 'rgba(252, 45, 148, 0.4)',
     }
   },
   glass: {

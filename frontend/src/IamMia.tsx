@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Save, FileText, CheckCircle } from 'lucide-react';
+import { useConfig } from './hooks/useConfig';
 
 export default function IamMia() {
+  const { config } = useConfig();
   const [files, setFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [content, setContent] = useState("");
@@ -47,7 +49,10 @@ export default function IamMia() {
   return (
     <div className="h-[calc(100vh-4rem)] flex gap-6 font-mono p-4">
       {/* File Explorer Sidebar */}
-      <div className="w-64 bg-surface-variant/50 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex flex-col shadow-2xl">
+      <div 
+        className="w-64 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex flex-col shadow-2xl transition-all duration-500"
+        style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+      >
         <h2 className="text-xl text-primary mb-4 font-bold tracking-widest border-b border-white/10 pb-2">I'm_Mia</h2>
         <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
           {files.map(f => (
@@ -66,8 +71,14 @@ export default function IamMia() {
       </div>
 
       {/* Editor */}
-      <div className="flex-1 bg-surface-variant/50 backdrop-blur-xl border border-white/10 rounded-2xl flex flex-col shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/20">
+      <div 
+        className="flex-1 backdrop-blur-xl border border-white/10 rounded-2xl flex flex-col shadow-2xl overflow-hidden transition-all duration-500"
+        style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+      >
+        <div 
+          className="flex items-center justify-between p-4 border-b border-white/10"
+          style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.4})` }}
+        >
           <h3 className="text-white/90 font-bold flex items-center gap-2">
             <FileText size={18} className="text-primary" /> {selectedFile || "No File Selected"}
           </h3>
@@ -86,7 +97,8 @@ export default function IamMia() {
           name="memory-editor"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          className="flex-1 w-full bg-black/40 text-white/90 p-6 outline-none resize-none custom-scrollbar font-mono text-sm leading-relaxed"
+          className="flex-1 w-full text-white/90 p-6 outline-none resize-none custom-scrollbar font-mono text-sm leading-relaxed"
+          style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.3})` }}
           placeholder="Write markdown here..."
           spellCheck={false}
         />

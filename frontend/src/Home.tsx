@@ -101,6 +101,9 @@ export default function Home() {
   const analyser = useRef<AnalyserNode | null>(null);
   const animationFrame = useRef<number | null>(null);
   const playAudioRef = useRef<((src: string) => void) | null>(null);
+  const isTTSMutedRef = useRef(false);
+  const reconnectAttempts = useRef(0);
+  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // --- 3. UTILITY CALLBACKS ---
   const addToast = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info') => {
@@ -179,6 +182,7 @@ export default function Home() {
   }, [isSpeaking]);
 
   useEffect(() => { playAudioRef.current = playAudio; }, [playAudio]);
+  useEffect(() => { isTTSMutedRef.current = isTTSMuted; }, [isTTSMuted]);
 
   // --- 5. SYSTEM & CHAT LOGIC ---
   const sendMessage = useCallback(() => {
@@ -206,7 +210,19 @@ export default function Home() {
     setStatusMessage("Initializing MIA Resilience Layer...");
     setLastRequestTime(Date.now());
     playSFX('send');
-    ws.current.send(trimmedInput);
+    if (ws.current.readyState !== WebSocket.OPEN) {
+      addToast("Connection not ready. Retrying...", "error");
+      return;
+    }
+
+    try {
+      ws.current.send(trimmedInput);
+    } catch (err) {
+      console.error("[WS] Send failed:", err);
+      addToast("Failed to send message", "error");
+      setIsThinking(false);
+      return;
+    }
     
     setInput(""); 
     setShowCommands(false); 
@@ -263,79 +279,124 @@ export default function Home() {
     fetchIntimacyStatus();
     const intimacyInterval = setInterval(fetchIntimacyStatus, 5000);
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/heartbeat`;
-    ws.current = new WebSocket(wsUrl);
-    ws.current.onopen = () => setStatus("Connected (Heartbeat Active)");
-    ws.current.onclose = () => {
-      setStatus("Disconnected");
-      setStatusStage("ERROR");
-      setStatusMessage("Connection Lost");
-    };
-    ws.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "message" || data.type === "system") {
-        setIsThinking(false); 
-        playSFX('receive');
-        
-        const isError = data.content.startsWith("[SYSTEM ERROR]");
-        const role = (data.type === "system" || isError) ? "System" : "MIA";
-        const cleanContent = isError ? data.content.replace("[SYSTEM ERROR]", "").trim() : data.content;
+    const connectWS = () => {
+      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
 
-        const newMessage = { 
-          id: data.id || Date.now(), 
-          role: role, 
-          content: cleanContent, 
-          audio: data.audio 
-        };
-        
-        setMessages(prev => [...prev, newMessage]);
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.host}/ws/heartbeat`;
+      
+      console.log(`[WS] Connecting to ${wsUrl}...`);
+      const socket = new WebSocket(wsUrl);
+      ws.current = socket;
 
-        // Only play audio if it's a real MIA message (not a system error/notification)
-        if (data.audio && !isTTSMuted && role === "MIA") {
-          playAudio(data.audio);
+      socket.onopen = () => {
+        console.log("[WS] Connected");
+        setStatus("Connected (Heartbeat Active)");
+        reconnectAttempts.current = 0;
+      };
+
+      socket.onclose = () => {
+        setStatus("Disconnected");
+        setStatusStage("ERROR");
+        setStatusMessage("Connection Lost");
+        
+        // P-STABILITY: Exponential Backoff Reconnect
+        if (reconnectAttempts.current < 10) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+          console.warn(`[WS] Connection lost. Retrying in ${delay}ms... (Attempt ${reconnectAttempts.current + 1})`);
+          
+          reconnectTimeout.current = setTimeout(() => {
+            reconnectAttempts.current++;
+            connectWS();
+          }, delay);
         }
-      } else if (data.type === "status") {
-        if (data.stage) {
-          setStatusStage(data.stage);
-          setStatusMessage(data.message || "");
-          setIsThinking(data.stage !== "DONE" && data.stage !== "ERROR");
-        } else {
-          // Backward compatibility for old status messages
-          setStatus(`Connected (${data.content})`);
-          setIsThinking(data.content === "Thinking...");
+      };
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'ping') return;
+
+        if (data.type === "message" || data.type === "system") {
+          setIsThinking(false); 
+          playSFX('receive');
+          
+          const isError = data.content.startsWith("[SYSTEM ERROR]");
+          const role = (data.type === "system" || isError) ? "System" : "MIA";
+          const cleanContent = isError ? data.content.replace("[SYSTEM ERROR]", "").trim() : data.content;
+
+          const newMessage = { 
+            id: data.id || Date.now(), 
+            role: role, 
+            content: cleanContent, 
+            audio: data.audio 
+          };
+          
+          setMessages(prev => [...prev, newMessage]);
+
+          // Only play audio if it's a real MIA message (not a system error/notification)
+          if (data.audio && !isTTSMutedRef.current && role === "MIA") {
+            playAudioRef.current?.(data.audio);
+          }
+        } else if (data.type === "status") {
+          if (data.stage) {
+            setStatusStage(data.stage);
+            setStatusMessage(data.message || "");
+            setIsThinking(data.stage !== "DONE" && data.stage !== "ERROR");
+          } else {
+            // Backward compatibility for old status messages
+            setStatus(`Connected (${data.content})`);
+            setIsThinking(data.content === "Thinking...");
+          }
+        } else if (data.type === "health") {
+          setStatus(data.backend === "ok" ? "Connected" : "Disconnected");
+          setBrainStatus(data.brain === "ok" ? "Connected" : "Disconnected");
+          if (data.brain !== "ok") {
+            setStatusStage("ERROR");
+            setStatusMessage("Brain Disconnected");
+          }
         }
-      } else if (data.type === "health") {
-        setStatus(data.backend === "ok" ? "Connected" : "Disconnected");
-        setBrainStatus(data.brain === "ok" ? "Connected" : "Disconnected");
-        if (data.brain !== "ok") {
-          setStatusStage("ERROR");
-          setStatusMessage("Brain Disconnected");
-        }
-      }
+      };
     };
+
+    connectWS();
 
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setShowPalette(prev => !prev); playSFX('pop'); }
       if (e.key === 'Escape') setShowPalette(false);
     };
     window.addEventListener('keydown', handleGlobalShortcuts);
+
     return () => {
-      if (ws.current) ws.current.close();
+      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+      if (ws.current) {
+        // Prevent onclose from triggering reconnect during unmount
+        ws.current.onclose = null;
+        ws.current.close();
+      }
       window.removeEventListener('keydown', handleGlobalShortcuts);
       clearInterval(intimacyInterval);
     };
-  }, [playSFX, playAudio, isTTSMuted, sendMessage]);
+  }, [playSFX]);
 
   // Phase 4: Timeout Watcher (Strict Behavior)
   useEffect(() => {
     if (isThinking && lastRequestTime > 0) {
       const timer = setInterval(() => {
         const elapsed = (Date.now() - lastRequestTime) / 1000;
-        if (elapsed > 15 && statusStage !== "DONE") {
-          // Inyect timeout message internally
+        if (elapsed > 30 && statusStage !== "DONE") {
+          setIsThinking(false);
+          setStatusStage("ERROR");
+          setStatusMessage("AI Hang Detected");
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            role: "System",
+            content: "Maaf, sepertinya aku mengalami gangguan sinkronisasi yang cukup parah. Aku sudah mereset statusku, silakan coba kirim pesan lagi. 🛠️"
+          }]);
+          setLastRequestTime(0);
+        } else if (elapsed > 12 && statusStage !== "DONE" && lastRequestTime > 0) {
+          // Inject timeout message internally
           setMessages(prev => {
-            // Check if last message is already a timeout message to avoid duplicates
             if (prev[prev.length - 1]?.content.includes("masih berpikir")) return prev;
             return [...prev, {
               id: Date.now(),
@@ -343,7 +404,7 @@ export default function Home() {
               content: "Aku masih berpikir... tunggu sebentar ya, ada sedikit hambatan di jalur sensoriku. 💫"
             }];
           });
-          setLastRequestTime(0); // Reset after notification
+          setLastRequestTime(0); // Trigger once at 12s, wait for 30s for full reset
         }
       }, 1000);
       return () => clearInterval(timer);
@@ -902,14 +963,38 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
   const [isCopied, setIsCopied] = useState(false);
   
   // Helper to determine text color based on background luminance
-  const getContrastYIQ = (hexcolor: string) => {
-    if (!hexcolor || hexcolor.startsWith('rgba')) return 'white'; // Default to white for transparent/rgba
-    hexcolor = hexcolor.replace("#", "");
-    const r = parseInt(hexcolor.substr(0,2),16);
-    const g = parseInt(hexcolor.substr(2,2),16);
-    const b = parseInt(hexcolor.substr(4,2),16);
-    const yiq = ((r*299)+(g*587)+(b*114))/1000;
-    return (yiq >= 128) ? 'black' : 'white';
+  const getContrastYIQ = (color: string) => {
+    if (!color) return 'white';
+    
+    // P-VISUAL: Transparent bubbles on dark theme ALWAYS need white text
+    if (color.includes('rgba')) return 'white';
+    
+    try {
+      let r, g, b;
+      if (color.startsWith('#')) {
+        const hex = color.replace("#", "");
+        r = parseInt(hex.substr(0, 2), 16);
+        g = parseInt(hex.substr(2, 2), 16);
+        b = parseInt(hex.substr(4, 2), 16);
+      } else if (color.startsWith('rgb')) {
+        const parts = color.match(/\d+/g);
+        if (parts && parts.length >= 3) {
+          r = parseInt(parts[0]);
+          g = parseInt(parts[1]);
+          b = parseInt(parts[2]);
+        } else {
+          return 'white';
+        }
+      } else {
+        return 'white';
+      }
+      
+      const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+      return (yiq >= 128) ? 'black' : 'white';
+    } catch (e) {
+      console.error("[Visual] Contrast calculation failed, defaulting to white", e);
+      return 'white';
+    }
   };
 
   const bubbleBg = isMIA ? config.appearance.bubble_color_mia : (isSys ? 'rgba(0,0,0,0.3)' : config.appearance.bubble_color_user);

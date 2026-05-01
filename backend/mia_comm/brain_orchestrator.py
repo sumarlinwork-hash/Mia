@@ -190,8 +190,10 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 })
             return await self._final_failsafe_response("MIA_SYSTEM_ALERT::GLOBAL_TIMEOUT")
         except Exception as e:
+            import traceback
             print(f"[Critical] Unexpected error in execute_request: {e}")
-            return await self._final_failsafe_response(str(e))
+            print(traceback.format_exc())
+            return await self._final_failsafe_response(f"MIA_SYSTEM_ERROR::{str(e)}")
 
     async def _execute_pipeline(self, prompt: str, context: str = "", is_intimate: bool = False, on_status: Optional[Callable] = None) -> str:
         """
@@ -341,11 +343,15 @@ If you use a tool, I will execute it and provide the result in the next turn.
             
             return render_result
         except Exception as e:
-            await self._update_metrics(name, False, 0)
-            raw_error = str(e)
-            print(f"[Brain Error] Provider {name} failed: {raw_error}")
+            import traceback
+            print(f"[Brain Error Pipeline] {e}")
+            print(traceback.format_exc())
+            
+            if locals().get('name'):
+                await self._update_metrics(locals()['name'], False, 0)
+            
             await emit("FALLBACK", "Connection lost. Attempting recovery...")
-            return await self._fallback_execute(visited_providers, system_prompt, current_context, clean_prompt, current_images, raw_error, on_status, depth=0)
+            return await self._fallback_execute(locals().get('visited_providers', []), system_prompt, locals().get('current_context', context), locals().get('clean_prompt', prompt), locals().get('current_images', []), str(e), on_status, depth=0)
 
     def _local_heart_fallback(self, error: str) -> str:
         """

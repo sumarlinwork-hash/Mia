@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Activity, Clock, Server, Terminal, RefreshCw } from 'lucide-react';
+import { useConfig } from './hooks/useConfig';
 
 interface CroneJob {
   id: string;
@@ -19,6 +20,7 @@ interface CroneStatus {
 }
 
 export default function Crone() {
+  const { config } = useConfig();
   const [status, setStatus] = useState<CroneStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<string>('');
@@ -59,8 +61,8 @@ export default function Crone() {
   }, []);
 
   const getStatusDot = (s: string) => {
-    if (s === 'Active') return 'bg-primary shadow-[0_0_8px_#00ffcc]';
-    if (s === 'Paused') return 'bg-warning shadow-[0_0_8px_#ffaa00]';
+    if (s === 'Active') return 'bg-primary shadow-[0_0_8px_var(--color-primary)]';
+    if (s === 'Paused') return 'bg-warning shadow-[0_0_8px_var(--color-warning)]';
     return 'bg-disabled';
   };
 
@@ -68,7 +70,7 @@ export default function Crone() {
     <div className="p-8 max-w-5xl mx-auto font-mono space-y-8 animate-fade-in">
       <div className="flex items-center justify-between border-b border-white/10 pb-4">
         <div className="flex items-center gap-4">
-          <Activity className="animate-pulse" size={32} style={{ color: '#ff007f' }} />
+          <Activity className="animate-pulse" size={32} style={{ color: 'var(--color-secondary)' }} />
           <h1 className="text-3xl font-bold text-white tracking-widest">CRONE MONITOR</h1>
         </div>
         <button
@@ -82,18 +84,24 @@ export default function Crone() {
 
       {/* Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-surface-variant/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-xl flex items-center gap-4">
-          <Server size={40} style={{ color: status?.scheduler_running ? '#00ffcc' : '#ff3333' }} />
+        <div 
+          className="backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-xl flex items-center gap-4 transition-all duration-500"
+          style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+        >
+          <Server size={40} style={{ color: status?.scheduler_running ? 'var(--color-primary)' : 'var(--color-error)' }} />
           <div>
             <div className="text-white/60 text-sm">System Status</div>
-            <div className="text-xl font-bold" style={{ color: status?.scheduler_running ? '#00ffcc' : '#ff3333' }}>
+            <div className="text-xl font-bold" style={{ color: status?.scheduler_running ? 'var(--color-primary)' : 'var(--color-error)' }}>
               {loading ? '...' : status?.scheduler_running ? 'ONLINE' : 'OFFLINE'}
             </div>
           </div>
         </div>
 
-        <div className="bg-surface-variant/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-xl flex items-center gap-4">
-          <Clock size={40} style={{ color: '#00ffcc' }} />
+        <div 
+          className="backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-xl flex items-center gap-4 transition-all duration-500"
+          style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+        >
+          <Clock size={40} style={{ color: 'var(--color-primary)' }} />
           <div>
             <div className="text-white/60 text-sm">Next Scheduled Job</div>
             <div className="text-white text-xl font-bold">
@@ -102,8 +110,11 @@ export default function Crone() {
           </div>
         </div>
 
-        <div className="bg-surface-variant/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-xl flex items-center gap-4">
-          <Terminal size={40} style={{ color: '#00ffcc' }} />
+        <div 
+          className="backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-xl flex items-center gap-4 transition-all duration-500"
+          style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+        >
+          <Terminal size={40} style={{ color: 'var(--color-primary)' }} />
           <div>
             <div className="text-white/60 text-sm">Active Jobs</div>
             <div className="text-white text-xl font-bold">
@@ -114,8 +125,14 @@ export default function Crone() {
       </div>
 
       {/* Job List */}
-      <div className="bg-surface-variant/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-xl overflow-hidden">
-        <div className="bg-black/40 p-4 border-b border-white/10 flex items-center justify-between">
+      <div 
+        className="backdrop-blur-xl border border-white/10 rounded-2xl shadow-xl overflow-hidden transition-all duration-500"
+        style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+      >
+        <div 
+          className="p-4 border-b border-white/10 flex items-center justify-between"
+          style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.8})` }}
+        >
           <span className="text-white/80 font-bold">BACKGROUND THREADS</span>
           {lastRefresh && (
             <span className="text-white/30 text-xs">Last refresh: {lastRefresh}</span>
@@ -128,16 +145,17 @@ export default function Crone() {
             status.jobs.map(job => (
               <div
                 key={job.id}
-                className={`flex flex-col md:flex-row items-center justify-between p-6 bg-white/5 border rounded-2xl hover:bg-white/10 transition-all ${
-                  job.status === 'Paused' ? 'border-white/5 opacity-60 grayscale' : 'border-white/10'
+                className={`flex flex-col md:flex-row items-center justify-between p-6 border rounded-2xl hover:bg-white/10 transition-all ${
+                  job.status === 'Paused' ? 'border-white/5 opacity-60' : 'border-white/10'
                 }`}
+                style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` }}
               >
                 <div className="flex-1 space-y-2 mb-4 md:mb-0">
                   <div className="flex items-center gap-3">
                     <div className={`w-3 h-3 rounded-full ${getStatusDot(job.status)} animate-pulse`}></div>
-                    <div className="text-white text-lg font-bold">
+                    <div className={`text-lg font-bold ${job.status === 'Active' ? 'text-primary' : 'text-white'}`}>
                       {job.name}
-                      <span className="text-white/20 text-[10px] ml-2 tracking-widest uppercase">[{job.id}]</span>
+                      <span className={`text-[10px] ml-2 tracking-widest uppercase ${job.status === 'Active' ? 'text-primary/40' : 'text-white/20'}`}>[{job.id}]</span>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                       job.color === 'success' ? 'bg-success/20 text-success border border-success/30' : 'bg-error/20 text-error border border-error/30'

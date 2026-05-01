@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useFileStore } from '../context/FileStoreContext';
 
 export interface StudioEvent {
@@ -12,13 +12,15 @@ export interface StudioEvent {
   priority: number; // P3: Event Priority
 }
 
-interface UseStudioStreamReturn {
+export interface UseStudioStreamReturn {
   logs: string[];
   graphEvents: StudioEvent[];
-  connect: (executionId: string) => void;
+  connect: (executionId: string, isSystem?: boolean) => void;
   disconnect: () => void;
   clear: () => void;
   droppedCount: number; // P4: Sync Checkpoint
+  onEvent: (cb: (event: StudioEvent) => void) => void;
+  offEvent: (cb: (event: StudioEvent) => void) => void;
 }
 
 export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamReturn => {
@@ -28,6 +30,11 @@ export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamRetu
   const [droppedCount, setDroppedCount] = useState<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
   const activeIdRef = useRef<string | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectAttemptsRef = useRef<number>(0);
+  const isConnectingRef = useRef<boolean>(false);
+  const MAX_RECONNECT = 5;
   
   // P4-X4: Sequence Guard State
   const lastSequenceRef = useRef<number>(0);
@@ -40,10 +47,20 @@ export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamRetu
   }, []);
 
   const disconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+    }
+    if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+    }
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
+    isConnectingRef.current = false;
+    reconnectAttemptsRef.current = 0;
   }, []);
 
   const fetchDelta = useCallback(async (executionId: string, from: number, to: number) => {
@@ -57,9 +74,24 @@ export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamRetu
     }
   }, [currentSessionId]);
 
+  const listenersRef = useRef<((event: StudioEvent) => void)[]>([]);
+
+  const onEvent = useCallback((cb: (event: StudioEvent) => void) => {
+    listenersRef.current.push(cb);
+  }, []);
+
+  const offEvent = useCallback((cb: (event: StudioEvent) => void) => {
+    listenersRef.current = listenersRef.current.filter(l => l !== cb);
+  }, []);
+
   const processEvents = useCallback((items: StudioEvent[]) => {
     if (!items.length) return;
     
+    // Notify listeners
+    items.forEach(item => {
+        listenersRef.current.forEach(l => l(item));
+    });
+
     // Finding #3: Set-based reconciliation (Deduplication & Order Resilience)
     setLogs(prev => {
         // We use string logs here, but we can dedupe by simple string comparison or timestamp
@@ -92,19 +124,44 @@ export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamRetu
     });
   }, [currentProjectId, maxLogLines]);
 
-  const connect = useCallback((executionId: string) => {
-    if (!currentSessionId) return;
+  const connect = useCallback((id: string, isSystem: boolean = false) => {
+    // P11: Handshake Gate (Server Stability Guard)
+    if (!currentSessionId || currentSessionId.length < 5) {
+        return;
+    }
     
     disconnect();
     clear();
-    activeIdRef.current = executionId;
+    if (isConnectingRef.current || (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING)) {
+        return;
+    }
+    
+    isConnectingRef.current = true;
+    activeIdRef.current = id;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/studio/graph/${executionId}?session_id=${currentSessionId}`;
+    
+    // P4-X: Switch between execution-graph and project-system streams
+    const endpoint = isSystem ? 'events' : 'graph';
+    const wsUrl = `${protocol}//${host}/ws/studio/${endpoint}/${id}?session_id=${currentSessionId}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
+
+    ws.onopen = () => {
+        console.log(`[StudioStream] Connected to ${endpoint}`);
+        reconnectAttemptsRef.current = 0;
+        isConnectingRef.current = false;
+        
+        // P11: Heartbeat Lease Extension
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'heartbeat' }));
+            }
+        }, 10000);
+    };
 
     ws.onmessage = async (event: MessageEvent) => {
       const msgData = JSON.parse(event.data);
@@ -128,12 +185,46 @@ export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamRetu
       }
     };
 
-    ws.onerror = (err) => console.error("[StudioStream] WS Error:", err);
+    ws.onerror = (err) => {
+        console.error("[StudioStream] WS Error:", err);
+        isConnectingRef.current = false;
+        
+        // P-STABILITY: Exponential Backoff Reconnect
+        if (reconnectAttemptsRef.current < MAX_RECONNECT) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+            console.log(`[StudioStream] Retrying in ${delay}ms (Attempt ${reconnectAttemptsRef.current + 1}/${MAX_RECONNECT})`);
+            
+            if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = setTimeout(() => {
+                reconnectAttemptsRef.current++;
+                connect(id, isSystem);
+            }, delay);
+        } else {
+            console.warn("[StudioStream] Max reconnect attempts reached. Stream offline.");
+        }
+    };
+
+    ws.onclose = () => {
+        if (!reconnectTimeoutRef.current) {
+            isConnectingRef.current = false;
+        }
+    };
   }, [disconnect, clear, currentSessionId, fetchDelta, processEvents]);
 
   useEffect(() => {
     return () => disconnect();
   }, [disconnect]);
 
-  return { logs, graphEvents, connect, disconnect, clear, droppedCount };
+  const api = useMemo(() => ({
+    logs, 
+    graphEvents, 
+    connect, 
+    disconnect, 
+    clear, 
+    droppedCount,
+    onEvent,
+    offEvent
+  }), [logs, graphEvents, connect, disconnect, clear, droppedCount, onEvent, offEvent]);
+
+  return api;
 };

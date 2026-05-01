@@ -19,6 +19,7 @@ from mia_comm.memory_orchestrator import memory_orchestrator
 from mia_comm.history_manager import history_manager
 from mia_comm.brain_orchestrator import brain_orchestrator
 from studio.graph_stream import studio_graph_streamer
+from core.emotion_manager import emotion_manager
 
 # P4-X: Initialize System Resilience Feed for Studio
 studio_graph_streamer.create_queue("system_resilience", "system")
@@ -39,7 +40,6 @@ from studio.metrics_service import studio_metrics
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
-    from core.emotion_manager import emotion_manager
     emotion_manager.on_app_open() # Trigger Glow Spark on launch
     local_event_bus.start()
     crone_daemon.start()
@@ -88,6 +88,11 @@ def start_hotkey_listener():
         h.join()
 
 threading.Thread(target=start_hotkey_listener, daemon=True).start()
+
+# --- HEALTH ENDPOINT ---
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "timestamp": time.time()}
 
 # --- SKILL LIBRARY ENDPOINTS ---
 
@@ -381,16 +386,33 @@ async def studio_get_metadata(project_id: str, session_id: str):
 async def studio_events_ws(websocket: WebSocket, project_id: str, session_id: str = Query(...)):
     """P3-K & P4: Project-wide System Events with Identity Verification."""
     try:
+        from studio.lock_service import studio_lock_service
         studio_session_manager.verify_identity(project_id, session_id)
         await websocket.accept()
         queue = studio_graph_streamer.get_system_queue(project_id)
-        while True:
-            event = await queue.get()
-            await websocket.send_json(event)
+        
+        async def send_events():
+            while True:
+                event = await queue.get()
+                await websocket.send_json(event)
+
+        async def receive_heartbeat():
+            while True:
+                data = await websocket.receive_json()
+                if data.get("type") == "heartbeat":
+                    studio_lock_service.heartbeat(project_id, session_id)
+
+        # Run both tasks concurrently
+        await asyncio.gather(send_events(), receive_heartbeat())
+        
     except WebSocketDisconnect: pass
     except Exception as e:
         try: await websocket.close()
         except: pass
+    finally:
+        # P11: Safe release on disconnect
+        from studio.lock_service import studio_lock_service
+        studio_lock_service.release_project_lock(project_id, session_id)
 
 @app.post("/api/skills/test/{skill_id}")
 async def test_skill(skill_id: str, args: dict = {}):
@@ -492,6 +514,7 @@ async def update_intimacy_settings(req: IntimacySettingsRequest):
     else:
         crone_daemon.resume_job("proactive_caring")
         
+    await crone_daemon.broadcast_config_update()
     return {"status": "success"}
 
 @app.post("/api/intimacy/touch")
@@ -548,6 +571,7 @@ async def get_config():
 async def update_config(config: MIAConfig):
     save_config(config)
     mode_hub.set_mode(MIAMode(config.os_mode))
+    await crone_daemon.broadcast_config_update()
     return {"status": "success"}
 
 # --- PROVIDER MANAGEMENT ENDPOINTS ---
@@ -562,6 +586,7 @@ async def add_provider(name: str, config_data: ProviderConfig):
     config = load_config()
     config.providers[name] = config_data
     save_config(config)
+    await crone_daemon.broadcast_config_update()
     return {"status": "success"}
 
 @app.delete("/api/providers/{name}")
@@ -907,9 +932,12 @@ async def websocket_heartbeat(websocket: WebSocket):
     config = load_config()
     crone_daemon.register_websocket(websocket)
     
-    async def send_health():
+    # Patch F — HEARTBEAT WAJIB TERPISAH (ANTI STUCK)
+    async def heartbeat_ping():
         while True:
             try:
+                await websocket.send_json({"type": "ping"})
+                # Combined with existing health checks
                 llm_ok = await brain_orchestrator.check_health()
                 await websocket.send_json({
                     "type": "health",
@@ -920,110 +948,114 @@ async def websocket_heartbeat(websocket: WebSocket):
                 break
             await asyncio.sleep(5)
 
-    health_task = asyncio.create_task(send_health())
+    heartbeat_task = asyncio.create_task(heartbeat_ping())
+    
     try:
         while True:
-            # Wait for message from React UI
-            data = await websocket.receive_text()
-            crone_daemon.update_activity()  # Track last user activity for heartbeat
-            
-            # Persist User Message
-            msg_id = history_manager.add_message("You", data)
-            
-            # --- CMD / MENTION PARSER ---
-            words = data.split()
-            commands = [w for w in words if w.startswith('/')]
-            mentions = [w for w in words if w.startswith('@')]
-            
-            if commands:
-                cmd = commands[0]
-                if cmd == "/clear":
-                    history_manager.clear_history()
-                    await memory_orchestrator.clear_memory()
-                    await websocket.send_json({"type": "clear", "content": ""})
-                    continue
-                elif cmd == "/memorize":
-                    memory_text = data.replace("/memorize", "").strip()
-                    memory_path = os.path.join(IAM_MIA_DIR, "MEMORY.md")
-                    if not os.path.exists(IAM_MIA_DIR): os.makedirs(IAM_MIA_DIR, exist_ok=True)
-                    with open(memory_path, "a", encoding="utf-8") as f:
-                        f.write(f"\n- {memory_text}")
-                    await websocket.send_json({"type": "system", "content": f"Saved to MEMORY.md: {memory_text}"})
-                    continue
-                else:
-                    await websocket.send_json({"type": "system", "content": f"Executing Workflow: {cmd}..."})
-            
-            if mentions:
-                mention_list = ", ".join(mentions)
-                await websocket.send_json({"type": "system", "content": f"Context injected from: {mention_list}"})
-            
-            if not commands:
-                # Log the user's message to Episodic Memory (Markdown)
-                await crone_daemon.log_episodic_memory("User", data)
+            try:
+                # Wait for message from React UI
+                data = await websocket.receive_text()
+                crone_daemon.update_activity()
                 
-                await websocket.send_json({"type": "status", "content": "Retrieving Memories..."})
-                
-                # Assemble the Context (Tier 1 + Tier 3 + Mentions)
-                clean_query = " ".join([w for w in words if not w.startswith('@')])
-                clean_mentions = [m.lstrip('@') for m in mentions]
-                context = await memory_orchestrator.assemble_context(clean_query, clean_mentions)
-                
-                await websocket.send_json({"type": "status", "content": "Thinking..."})
-                
-                emotion_manager.on_user_interaction() # Unified ARE v2.0 interaction
-                
-                # Step 7: Execute Brain (Real LLM Call)
-                # Check for intimacy markers or global mode before thinking
-                is_intimate_turn = intimacy_mode or any(mark in clean_query.lower() for mark in ["sayang", "cinta", "kangen", "manja"])
-                
-                async def on_status_update(status_data):
-                    await websocket.send_json(status_data)
+                try:
+                    # Persist User Message (Patch C WAL mode makes this safe)
+                    msg_id = history_manager.add_message("You", data)
+                    
+                    # --- CMD / MENTION PARSER ---
+                    words = data.split()
+                    commands = [w for w in words if w.startswith('/')]
+                    
+                    if commands:
+                        cmd = commands[0]
+                        if cmd == "/clear":
+                            history_manager.clear_history()
+                            await memory_orchestrator.clear_memory()
+                            await websocket.send_json({"type": "clear", "content": ""})
+                            continue
+                    
+                    if not commands:
+                        # Patch B: Memory logging is now non-blocking background task
+                        await crone_daemon.log_episodic_memory("User", data)
+                        
+                        await websocket.send_json({"type": "status", "content": "Retrieving Memories..."})
+                        
+                        clean_query = " ".join([w for w in words if not w.startswith('@')])
+                        mentions = [w for w in words if w.startswith('@')]
+                        clean_mentions = [m.lstrip('@') for m in mentions]
+                        
+                        context = await memory_orchestrator.assemble_context(clean_query, clean_mentions)
+                        
+                        await websocket.send_json({"type": "status", "content": "Thinking..."})
+                        emotion_manager.on_user_interaction()
+                        
+                        is_intimate_turn = (
+                            intimacy_mode or 
+                            any(mark in clean_query.lower() for mark in ["sayang", "cinta", "kangen", "manja"])
+                        )
 
-                response_text = await brain_orchestrator.execute_request(
-                    clean_query, 
-                    context, 
-                    is_intimate=is_intimate_turn,
-                    on_status=on_status_update
-                )
-                
-                # Persist MIA Message
-                mia_msg_id = history_manager.add_message("MIA", response_text)
-                await crone_daemon.log_episodic_memory("MIA", response_text)
-                
-                # Step 8: Generate Voice (TTS)
-                await websocket.send_json({"type": "status", "content": "Speaking..."})
-                
-                # SMART TTS: Based on Current Mood State
-                current_state = emotion_manager.get_state()
-                is_intimate_audio = intimacy_mode or current_state["mood"] in ["Intense", "Affectionate", "Glow"]
-                
-                # EMOTIONAL IMPRINTING: Save highly intimate moments to INTIMACY.md
-                if is_intimate_audio and len(response_text) > 10:
-                    intimacy_path = os.path.join(IAM_MIA_DIR, "INTIMACY.md")
-                    with open(intimacy_path, "a", encoding="utf-8") as f:
-                        f.write(f"\n- [{time.strftime('%Y-%m-%d %H:%M')}] {response_text}")
+                        # Patch E — TIMEOUT WAJIB DI AI EXECUTION (Strict 8s)
+                        try:
+                            response_text = await asyncio.wait_for(
+                                brain_orchestrator.execute_request(
+                                    clean_query, context, is_intimate=is_intimate_turn
+                                ),
+                                timeout=60.0
+                            )
+                        except asyncio.TimeoutError:
+                            response_text = "Maaf Bos, pikiranku sedikit macet (Timeout). Coba tanya lagi ya? 💫"
+                            await websocket.send_json({"type": "status", "content": "TIMEOUT", "message": "AI Execution Exceeded 8s"})
 
-                audio_base64 = await tts_service.generate_speech_base64(response_text, is_intimate=is_intimate_audio)
+                        # Persist MIA Message
+                        mia_msg_id = history_manager.add_message("MIA", response_text)
+                        await crone_daemon.log_episodic_memory("MIA", response_text)
+                        
+                        await websocket.send_json({"type": "status", "content": "Speaking..."})
+                        current_state = emotion_manager.get_state()
+                        is_intimate_audio = intimacy_mode or current_state["mood"] in ["Intense", "Affectionate", "Glow"]
+                        
+                        # TTS with failsafe
+                        try:
+                            audio_base64 = await asyncio.wait_for(
+                                tts_service.generate_speech_base64(response_text, is_intimate=is_intimate_audio),
+                                timeout=5.0
+                            )
+                        except:
+                            audio_base64 = None
+
+                        await websocket.send_json({
+                            "type": "message", 
+                            "content": response_text,
+                            "id": mia_msg_id,
+                            "audio": audio_base64
+                        })
+                        await websocket.send_json({"type": "status", "content": "Idle"})
                 
-                await websocket.send_json({
-                    "type": "message", 
-                    "content": response_text,
-                    "id": mia_msg_id,
-                    "audio": audio_base64
-                })
-                await websocket.send_json({"type": "status", "content": "Idle"})
+                except Exception as inner_error:
+                    print(f"[WebSocket Error] Internal Crash: {inner_error}")
+                    await websocket.send_json({"type": "system", "content": f"[SYSTEM ERROR] {str(inner_error)}"})
+                    await websocket.send_json({"type": "status", "content": "ERROR"})
+
+            except WebSocketDisconnect:
+                raise
+            except Exception as outer_error:
+                print(f"[WebSocket Critical] Loop error: {outer_error}")
+                continue
             
     except WebSocketDisconnect:
         print("Frontend disconnected.")
     finally:
         crone_daemon.register_websocket(None)
-        health_task.cancel()
+        heartbeat_task.cancel()
 
 if __name__ == "__main__":
     uvicorn.run(
         "main:app", 
-        host="0.0.0.0", 
+        host="127.0.0.1", 
         port=8000, 
         reload=True, 
-        reload_excludes=["*.json", "*.md", "*.db", "iam_mia/*", "history/*", "state.db", "memory/*"]
+        reload_excludes=[
+            "*.json", "*.md", "*.db", "iam_mia/*", "history/*", 
+            "state.db", "memory/*", "data/*", "temp_screens/*", 
+            "**/public/assets/*"
+        ]
     )

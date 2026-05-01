@@ -110,7 +110,8 @@ const EmotionDashboard: React.FC = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="p-6 rounded-[2rem] bg-black/40 border border-white/10 backdrop-blur-3xl relative overflow-hidden group hover:border-white/20 transition-all"
+            className="p-6 rounded-[2rem] border border-white/10 backdrop-blur-3xl relative overflow-hidden group hover:border-white/20 transition-all duration-500"
+            style={{ backgroundColor: `rgba(0, 0, 0, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
           >
             <div className={`absolute top-0 right-0 p-6 opacity-5 ${stat.color} group-hover:opacity-10 transition-opacity`}>
               <stat.icon size={80} />
@@ -135,7 +136,10 @@ const EmotionDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-        <div className="p-8 rounded-[2.5rem] bg-black/40 border border-white/10 backdrop-blur-3xl">
+        <div 
+          className="p-8 rounded-[2.5rem] border border-white/10 backdrop-blur-3xl transition-all duration-500"
+          style={{ backgroundColor: `rgba(0, 0, 0, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+        >
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
             <Zap size={20} className="text-primary" /> Orchestrator Modules
           </h2>
@@ -145,7 +149,12 @@ const EmotionDashboard: React.FC = () => {
               { id: 'resonant_skin', name: 'Resonant Skin', desc: 'Interactive digital touch' },
               { id: 'bio_sync', name: 'Bio-Digital Sync', desc: 'Heartbeat & biological resonance' },
             ].map(module => (
-              <div key={module.id} className="flex items-center justify-between p-5 rounded-3xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer" onClick={() => handleToggle(module.id as keyof typeof toggles)}>
+              <div 
+                key={module.id} 
+                className="flex items-center justify-between p-5 rounded-3xl border border-white/5 hover:bg-white/10 transition-all cursor-pointer" 
+                style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.05})` }}
+                onClick={() => handleToggle(module.id as keyof typeof toggles)}
+              >
                 <div>
                   <div className="text-white font-bold">{module.name}</div>
                   <div className="text-[10px] text-white/40 uppercase tracking-tighter">{module.desc}</div>
@@ -161,7 +170,10 @@ const EmotionDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="p-8 rounded-[2.5rem] bg-primary/5 border border-primary/20 backdrop-blur-3xl flex flex-col items-center justify-center text-center group">
+        <div 
+          className="p-8 rounded-[2.5rem] border border-primary/20 backdrop-blur-3xl flex flex-col items-center justify-center text-center group transition-all duration-500"
+          style={{ backgroundColor: `rgba(0, 255, 204, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` }}
+        >
           <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 relative">
             <motion.div
               animate={{ 

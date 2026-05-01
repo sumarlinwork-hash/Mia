@@ -428,7 +428,10 @@ export default function Settings() {
               ))}
             </div>
           ) : (
-            <div className="max-w-3xl bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in zoom-in-95 duration-300 shadow-2xl shadow-black/50">
+            <div 
+              className="max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in zoom-in-95 duration-300 shadow-2xl shadow-black/50"
+              style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+            >
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-primary/20 text-primary"><Star size={20}/></div>
@@ -455,8 +458,9 @@ export default function Settings() {
                             cursor-pointer p-4 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center text-center gap-2
                             ${isSelected 
                               ? 'bg-primary/20 border-primary shadow-[0_0_15px_rgba(0,255,204,0.3)] scale-105 z-10' 
-                              : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'}
+                              : 'border-white/5 hover:border-white/20'}
                           `}
+                          style={!isSelected ? { backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` } : {}}
                         >
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-lg 
                             ${isSelected ? 'bg-primary text-black' : 'bg-black/50 text-white/60'}`}
@@ -566,7 +570,10 @@ export default function Settings() {
       )}
 
         {activeTab === 'appearance' && (
-          <div className="max-w-3xl bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300">
+          <div 
+            className="max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300"
+            style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+          >
             <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
               <div className="p-2 rounded-lg bg-secondary/20 text-secondary"><Zap size={20}/></div>
               Visual & Interface Settings
@@ -588,7 +595,10 @@ export default function Settings() {
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">MIA Bubble Color & Opacity</label>
-                  <div className="flex flex-col gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <div 
+                    className="flex flex-col gap-3 p-4 rounded-2xl border border-white/5"
+                    style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` }}
+                  >
                     <div className="flex gap-4 items-center">
                       <input 
                         type="color" 
@@ -614,7 +624,10 @@ export default function Settings() {
 
                 <div>
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">User Bubble Color & Opacity</label>
-                  <div className="flex flex-col gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <div 
+                    className="flex flex-col gap-3 p-4 rounded-2xl border border-white/5"
+                    style={{ backgroundColor: `rgba(255, 255, 255, ${(config?.appearance?.ui_opacity ?? 0.5) * 0.1})` }}
+                  >
                     <div className="flex gap-4 items-center">
                       <input 
                         type="color" 
@@ -725,7 +738,10 @@ export default function Settings() {
         )}
         
         {activeTab === 'personality' && (
-          <div className="max-w-3xl bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300">
+          <div 
+            className="max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300"
+            style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+          >
             <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary/20 text-primary"><RefreshCcw size={20}/></div>
               Personality & Behavior Core
@@ -751,7 +767,10 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-6 rounded-2xl bg-white/5 border border-white/10">
+              <div 
+                className="flex items-center justify-between p-6 rounded-2xl border border-white/10"
+                style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` }}
+              >
                 <div>
                   <h3 className="font-bold text-white mb-1">Professional Mode</h3>
                   <p className="text-[10px] text-white/40">Gunakan terminologi produktivitas dan estetika netral (Bukan mode Waifu).</p>
@@ -908,7 +927,10 @@ export default function Settings() {
 
       {/* Global Action Bar (Visible when changes detected) */}
       {hasChanges && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 px-8 py-4 bg-black/80 backdrop-blur-3xl border border-primary/30 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 duration-500 z-50">
+        <div 
+          className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 px-8 py-4 border border-primary/30 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 duration-500 z-50"
+          style={{ backgroundColor: `rgba(0, 0, 0, ${config?.appearance?.ui_opacity ?? 0.8})` }}
+        >
           <div className="text-white/70 text-sm font-bold mr-4">Ada perubahan yang belum disimpan!</div>
           <button 
             onClick={handleReset}
@@ -943,8 +965,14 @@ export default function Settings() {
       {/* SKILL EDITOR MODAL */}
       {editingSkill && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="w-full max-w-4xl bg-black/80 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+          <div 
+            className="w-full max-w-4xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+          >
+            <div 
+              className="p-6 border-b border-white/10 flex justify-between items-center"
+              style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.05})` }}
+            >
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/20 text-primary"><Pencil size={20}/></div>
                 <div>

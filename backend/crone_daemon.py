@@ -112,14 +112,43 @@ class CroneDaemon:
         self._last_activity = datetime.now()
         self.last_activity = time.time()
 
+        self.start()
+
+    def _setup_memory_worker(self):
+        # Patch B — BACKGROUND MEMORY WORKER (ANTI-HANG)
+        from queue import Queue
+        import threading
+        self.memory_queue = Queue(maxsize=1000)
+        
+        def memory_worker():
+            while True:
+                task = self.memory_queue.get()
+                try:
+                    # Patch D — FILE WRITE ANTI-LOCK (MEMORY.md)
+                    role, content = task
+                    date_str = datetime.now().strftime("%Y-%m-%d")
+                    log_file = os.path.join(MEMORY_LOG_DIR, f"{date_str}.md")
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    log_entry = f"[{timestamp}] {role}: {content}\n"
+                    
+                    with open(log_file, "a", encoding="utf-8", buffering=1) as f:
+                        f.write(log_entry)
+                except Exception:
+                    pass
+                finally:
+                    self.memory_queue.task_done()
+
+        threading.Thread(target=memory_worker, daemon=True, name="MemoryWorker").start()
+
     async def log_episodic_memory(self, role: str, content: str):
-        """Called by main.py to log daily conversations."""
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        log_file = os.path.join(MEMORY_LOG_DIR, f"{date_str}.md")
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        log_entry = f"[{timestamp}] {role}: {content}\n"
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
+        """Called by main.py to log daily conversations. Non-blocking via Patch B."""
+        if not hasattr(self, "memory_queue"):
+            self._setup_memory_worker()
+            
+        try:
+            self.memory_queue.put_nowait((role, content))
+        except:
+            pass # Fail-soft: IGNORE if queue is full
 
     async def run_meta_rag_pruning(self):
         """
@@ -256,6 +285,18 @@ class CroneDaemon:
     def resume_job(self, job_id: str):
         self.scheduler.resume_job(job_id)
         return True
+
+    async def broadcast_config_update(self):
+        """Notify the UI that settings have changed so it can re-fetch config."""
+        if self._websocket_ref:
+            try:
+                await self._websocket_ref.send_json({
+                    "type": "config_update",
+                    "timestamp": time.time()
+                })
+                print("[Crone] Broadcasted config_update to UI.")
+            except Exception as e:
+                print(f"[Crone] Failed to broadcast config_update: {e}")
 
     async def trigger_job(self, job_id: str):
         job = self.scheduler.get_job(job_id)

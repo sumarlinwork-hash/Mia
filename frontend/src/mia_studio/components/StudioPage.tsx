@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { Play, Square, Save } from 'lucide-react';
 import { useExecution } from '../hooks/useExecution';
 import { useStudioStream } from '../hooks/useStudioStream';
-import { useProject } from '../hooks/useProject';
+import { useProject, useProjectEvents } from '../hooks/useProject';
 import { useTabs } from '../hooks/useTabs';
 import { useFileStore } from '../context/FileStoreContext';
 import { useDraft } from '../hooks/useDraft';
@@ -17,10 +17,11 @@ import { StudioSidebar } from './StudioSidebar';
 import { StudioBottomBar } from './StudioBottomBar';
 import { ResilienceMonitor } from './ResilienceMonitor';
 import clsx from 'clsx';
+import { useConfig } from '../../hooks/useConfig';
 
 export const StudioPage: React.FC = () => {
-  const sessionId = "session_dev_001";
-  const projectId = "default_project";
+  const { config } = useConfig();
+  const { currentProjectId, currentSessionId } = useFileStore();
 
   const [impactModal, setImpactModal] = React.useState<{
     isOpen: boolean;
@@ -38,7 +39,7 @@ export const StudioPage: React.FC = () => {
     onConfirm: () => {}
   });
 
-  const project = useProject(projectId);
+  const project = useProject(currentProjectId);
   const tabs = useTabs();
   const fileStore = useFileStore();
   const draftController = useDraft();
@@ -49,12 +50,12 @@ export const StudioPage: React.FC = () => {
 
   // Patch FE-1 & FE-3: WS Lifecycle Binding
   useEffect(() => {
-    if (execution.state === 'STARTING' && execution.executionId) {
+    if (execution.state === 'STARTING' && execution.executionId && currentSessionId) {
       stream.clear();
-      stream.connect(execution.executionId, sessionId);
+      stream.connect(execution.executionId, false); // Graph stream
       execution.setRunning();
     }
-  }, [execution, stream, sessionId]);
+  }, [execution, stream, currentSessionId]);
 
   // Handle Stream Events for State Machine
   useEffect(() => {
@@ -80,8 +81,8 @@ export const StudioPage: React.FC = () => {
 
   const handleFileOpen = async (path: string) => {
     tabs.openTab(path);
-    if (!fileStore.files[path]) {
-      await draftController.loadFile(path, sessionId);
+    if (!fileStore.files[path] && currentSessionId) {
+      await draftController.loadFile(path, currentSessionId);
     }
   };
 
@@ -90,7 +91,7 @@ export const StudioPage: React.FC = () => {
       const res = await fetch('/api/studio/file/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, path, confirmed, check_only: !confirmed })
+        body: JSON.stringify({ session_id: currentSessionId, path, confirmed, check_only: !confirmed })
       });
       const data = await res.json();
       
@@ -133,7 +134,7 @@ export const StudioPage: React.FC = () => {
       const res = await fetch('/api/studio/file/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, old_path: path, new_path: newPath, confirmed, check_only: !confirmed })
+        body: JSON.stringify({ session_id: currentSessionId, old_path: path, new_path: newPath, confirmed, check_only: !confirmed })
       });
       const data = await res.json();
       
@@ -168,19 +169,26 @@ export const StudioPage: React.FC = () => {
   };
 
   const handleSaveActive = async () => {
-    if (tabs.activeTab) {
+    if (tabs.activeTab && currentSessionId) {
       const file = fileStore.files[tabs.activeTab];
       if (file && file.isDirty) {
-        await draftController.saveFile(tabs.activeTab, file.content, sessionId);
+        await draftController.saveFile(tabs.activeTab, file.content, currentSessionId);
       }
     }
   };
 
+  const { connect: resConnect, disconnect: resDisconnect } = resilienceStream;
+
   useEffect(() => {
-    // Connect to system resilience feed on mount
-    resilienceStream.connect("system_resilience");
-    return () => resilienceStream.disconnect();
-  }, [resilienceStream]);
+    // Connect to system resilience feed on mount (P4-X: isSystem = true)
+    if (currentProjectId && currentSessionId) {
+       resConnect(currentProjectId, true);
+    }
+    return () => resDisconnect();
+  }, [resConnect, resDisconnect, currentProjectId, currentSessionId]);
+  
+  // Patch C: Integrate unified project events
+  useProjectEvents(resilienceStream, project.refresh);
 
   const handleRun = async () => {
     if (execution.state === 'RUNNING' || execution.state === 'STARTING') return;
@@ -194,7 +202,9 @@ export const StudioPage: React.FC = () => {
     // Run entry point
     const entryPath = project.metadata?.entry_point || "main.py";
     const entryFile = fileStore.files[entryPath];
-    await execution.runCode(sessionId, entryFile?.content || "");
+    if (currentSessionId) {
+       await execution.runCode(currentSessionId, entryFile?.content || "");
+    }
   };
 
   // Extract SHAD-CSA Data from resilience stream
@@ -204,7 +214,7 @@ export const StudioPage: React.FC = () => {
   const activeFile = tabs.activeTab ? fileStore.files[tabs.activeTab] : null;
 
   return (
-    <div className="flex flex-col h-screen bg-[#050505] text-white overflow-hidden font-sans selection:bg-blue-500/30">
+    <div className="flex flex-col h-screen text-white overflow-hidden font-sans selection:bg-blue-500/30">
       {/* Top Bar */}
       <StudioTopbar 
         projectName={project.metadata?.name || "Untitled Project"} 
@@ -234,7 +244,10 @@ export const StudioPage: React.FC = () => {
           />
 
           {/* Action Bar (Refactored from old sidebar) */}
-          <div className="h-10 border-b border-white/5 bg-[#0a0a0a]/30 flex items-center px-4 gap-4">
+          <div 
+            className="h-10 border-b border-white/5 flex items-center px-4 gap-4"
+            style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.4})` }}
+          >
              <button 
               onClick={handleRun}
               disabled={execution.state !== 'IDLE' && execution.state !== 'COMPLETED' && execution.state !== 'ERROR'}
@@ -278,7 +291,10 @@ export const StudioPage: React.FC = () => {
           <div className="flex-1 flex overflow-hidden p-4 gap-4">
             {/* Left: Editor & Terminal */}
             <div className="flex-1 flex flex-col gap-4 min-w-0">
-              <div className="flex-1 relative bg-[#0a0a0a]/50 rounded-lg border border-white/5 overflow-hidden">
+              <div 
+                className="flex-1 relative rounded-lg border border-white/5 overflow-hidden"
+                style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.8})` }}
+              >
                 {tabs.activeTab ? (
                   <MonacoEditor 
                     code={activeFile?.content || ""} 
@@ -299,7 +315,10 @@ export const StudioPage: React.FC = () => {
 
             {/* Right Panel: Graph & Info */}
             <div className="w-80 flex flex-col gap-4 flex-shrink-0">
-              <div className="flex-1 bg-[#0a0a0a]/50 rounded-lg border border-white/5 overflow-hidden">
+              <div 
+                className="flex-1 rounded-lg border border-white/5 overflow-hidden"
+                style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.8})` }}
+              >
                 <GraphViewer events={stream.graphEvents} />
               </div>
 

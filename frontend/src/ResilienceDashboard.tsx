@@ -4,6 +4,7 @@ import {
   CheckCircle2, Terminal, Cpu, Network, Heart,
   Settings
 } from 'lucide-react';
+import { useConfig } from './hooks/useConfig';
 
 interface DiagnosticResult {
   provider: string;
@@ -20,6 +21,7 @@ interface SystemInvariant {
 }
 
 const ResilienceDashboard: React.FC = () => {
+  const { config } = useConfig();
   const [results, setResults] = useState<DiagnosticResult[]>([]);
   const [invariants, setInvariants] = useState<SystemInvariant[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -66,7 +68,10 @@ const ResilienceDashboard: React.FC = () => {
   return (
     <div className="p-6 lg:p-10 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-black/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden">
+      <div 
+        className="flex flex-col md:flex-row md:items-center justify-between gap-6 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden transition-all duration-500"
+        style={{ backgroundColor: `rgba(0, 0, 0, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
+      >
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full -mr-20 -mt-20 animate-pulse" />
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
@@ -119,7 +124,11 @@ const ResilienceDashboard: React.FC = () => {
           </h2>
           <div className="grid grid-cols-1 gap-4">
             {invariants.map((inv, idx) => (
-              <div key={idx} className="bg-black/30 backdrop-blur-md p-5 rounded-3xl border border-white/5 group hover:border-primary/30 transition-all">
+              <div 
+                key={idx} 
+                className="backdrop-blur-md p-5 rounded-3xl border border-white/5 group hover:border-primary/30 transition-all"
+                style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.6})` }}
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-black tracking-widest text-primary uppercase">{inv.name}</span>
                   <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
@@ -172,9 +181,10 @@ const ResilienceDashboard: React.FC = () => {
                   key={idx} 
                   className={`relative overflow-hidden p-6 rounded-[2rem] border transition-all hover:scale-[1.02] ${
                     res.status === 'OK' 
-                    ? 'bg-black/30 border-white/5 hover:border-primary/20' 
+                    ? 'border-white/5 hover:border-primary/20' 
                     : 'bg-error/10 border-error/20 hover:border-error/40 shadow-[0_0_30px_rgba(255,68,68,0.1)]'
                   }`}
+                  style={res.status === 'OK' ? { backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.6})` } : {}}
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div>

@@ -2,7 +2,7 @@ import json
 import os
 import time
 import random
-from typing import Dict
+from config import load_config
 
 class EmotionManager:
     def __init__(self):
@@ -71,9 +71,10 @@ class EmotionManager:
             return
 
         # 3. EMOTIONAL ENGINE: Decay Logic (Based on dt from last_update)
-        active["warmth"] -= 0.001 * (dt / 60)
-        active["echo"] -= 0.002 * (dt / 60)
-        active["arousal"] += active["echo"] * 0.0005 * (dt / 60)
+        cfg = load_config()
+        active["warmth"] -= cfg.warmth_decay_rate * (dt / 60)
+        active["echo"] -= cfg.echo_decay_rate * (dt / 60)
+        active["arousal"] += active["echo"] * cfg.arousal_decay_rate * (dt / 60)
 
         # Auto stabilize Arousal
         if active["arousal"] > 80:

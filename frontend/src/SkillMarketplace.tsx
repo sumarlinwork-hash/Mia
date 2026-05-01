@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Zap, Plus, Book, Music, MessageCircle, CheckCircle, Star, Sparkles, X, ChevronRight } from 'lucide-react';
+import { useConfig } from './hooks/useConfig';
 import AppWizard from './components/SkillWizard';
 import AppExecutor from './components/SkillExecutor';
 import SetupFlow from './components/SetupFlow';
@@ -24,6 +25,7 @@ export interface AppManifest {
 }
 
 const SkillMarketplace: React.FC = () => {
+  const { config } = useConfig();
   const [apps, setApps] = useState<App[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
@@ -183,7 +185,8 @@ const SkillMarketplace: React.FC = () => {
             placeholder={labels.SEARCH_PLACEHOLDER}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="bg-black/40 border border-white/10 rounded-2xl pl-12 pr-6 py-3 text-white outline-none focus:border-primary w-full md:w-80 transition-all backdrop-blur-3xl"
+            className="border border-white/10 rounded-2xl pl-12 pr-6 py-3 text-white outline-none focus:border-primary w-full md:w-80 transition-all backdrop-blur-3xl"
+            style={{ backgroundColor: `rgba(0, 0, 0, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
           />
         </div>
       </header>
@@ -248,8 +251,9 @@ const SkillMarketplace: React.FC = () => {
             className={`flex items-center gap-2 px-6 py-3 rounded-xl border transition-all whitespace-nowrap ${
               selectedCategory === cat.name 
               ? 'bg-primary/20 border-primary text-primary' 
-              : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white'
+              : 'border-white/10 text-white/60 hover:bg-white/10 hover:text-white'
             }`}
+            style={selectedCategory !== cat.name ? { backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` } : {}}
           >
             <cat.icon size={16} />
             <span className="font-bold text-xs uppercase tracking-wider">{cat.name}</span>
@@ -283,7 +287,8 @@ const SkillMarketplace: React.FC = () => {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: i * 0.05 }}
-              className="p-6 rounded-[2.5rem] bg-black/40 backdrop-blur-3xl border border-white/10 hover:border-primary/40 transition-all group relative overflow-hidden"
+              className="p-6 rounded-[2.5rem] backdrop-blur-3xl border border-white/10 hover:border-primary/40 transition-all group relative overflow-hidden"
+              style={{ backgroundColor: `rgba(0, 0, 0, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
             >
               <div className="absolute top-0 right-0 p-4">
                 <Star className="text-white/10 group-hover:text-yellow-400 transition-colors" size={20} />

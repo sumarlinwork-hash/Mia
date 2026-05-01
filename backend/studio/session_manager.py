@@ -24,13 +24,13 @@ class StudioSessionManager:
         from .project_service import studio_project_service
         from .lock_service import studio_lock_service
         
-        # STEP 3.2: Distributed Lock Acquisition (Distributed SSOT)
-        if not studio_lock_service.acquire_project_lock(project_id):
+        session_id = f"sess_{uuid.uuid4().hex[:12]}"
+
+        # STEP 3.2: Distributed Lease Acquisition
+        if not studio_lock_service.acquire_project_lock(project_id, session_id):
              raise Exception(f"Project {project_id} is currently locked by another instance.")
              
         studio_project_service.verify_project(project_id)
-        
-        session_id = f"sess_{uuid.uuid4().hex[:12]}"
         self.sessions[session_id] = StudioSession(session_id, project_id)
         return session_id
 

@@ -1,50 +1,90 @@
-import os
 import time
 import threading
-import uuid
-from typing import Optional
+from typing import Dict, Any, Optional
 
 class StudioLockService:
-    """STEP 3.2: Distributed Lock Manager (DLM).
-    Handles lock per project_id with timeout + deadlock recovery.
+    """STEP 3.2: Lease-Based Distributed Lock Manager (DLM).
+    A lock is a time-bound lease with ownership and heartbeat renewal.
     """
-    def __init__(self, lock_dir: str = "backend/studio/locks"):
-        self.lock_dir = os.path.abspath(lock_dir)
-        os.makedirs(self.lock_dir, exist_ok=True)
-        self._local_locks: dict[str, threading.Lock] = {}
-        self._global_lock = threading.Lock()
+    def __init__(self, ttl: int = 30):
+        self.locks: Dict[str, Dict[str, Any]] = {}
+        self.ttl = ttl
+        self._lock = threading.Lock()
+        self._start_reaper()
 
-    def acquire_project_lock(self, project_id: str, timeout: float = 10.0) -> bool:
-        """Acquires a cross-process file lock (simulating DLM)."""
-        lock_path = os.path.join(self.lock_dir, f"{project_id}.lock")
-        start_time = time.time()
-        
-        while time.time() - start_time < timeout:
-            try:
-                # O_CREAT | O_EXCL is atomic on most filesystems
-                fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                # Write owner info for deadlock debugging
-                os.write(fd, f"PID:{os.getpid()}|TIME:{time.time()}".encode())
-                os.close(fd)
+    def acquire_project_lock(self, project_id: str, session_id: str) -> bool:
+        """Acquires a lease lock for a project."""
+        with self._lock:
+            now = time.time()
+            lock = self.locks.get(project_id)
+
+            # CASE 1: No lock exists
+            if not lock:
+                self.locks[project_id] = self._create_lock(project_id, session_id)
                 return True
-            except FileExistsError:
-                # [3.2] Deadlock Recovery Policy: If lock is too old (> 30s), force break it
-                try:
-                    if os.path.exists(lock_path):
-                        mtime = os.path.getmtime(lock_path)
-                        if time.time() - mtime > 30.0:
-                            print(f"[DLM] Deadlock recovery: breaking stale lock for {project_id}")
-                            os.remove(lock_path)
-                except: pass
-                time.sleep(0.1)
-        return False
 
-    def release_project_lock(self, project_id: str):
-        lock_path = os.path.join(self.lock_dir, f"{project_id}.lock")
-        try:
-            if os.path.exists(lock_path):
-                os.remove(lock_path)
-        except Exception as e:
-            print(f"[DLM Error] Failed to release lock: {e}")
+            # CASE 2: Lock expired -> auto-reclaim allowed
+            if now > lock["expires_at"]:
+                print(f"[DLM] Reclaiming expired lock for {project_id}")
+                self.locks[project_id] = self._create_lock(project_id, session_id)
+                return True
+
+            # CASE 3: Same owner -> renew lease
+            if lock["owner_id"] == session_id:
+                lock["expires_at"] = now + self.ttl
+                lock["last_heartbeat"] = now
+                return True
+
+            # CASE 4: Active lock owned by someone else
+            return False
+
+    def heartbeat(self, project_id: str, session_id: str) -> bool:
+        """Extends the lease if the requester is the owner."""
+        with self._lock:
+            now = time.time()
+            lock = self.locks.get(project_id)
+
+            if not lock or lock["owner_id"] != session_id:
+                return False
+
+            if now > lock["expires_at"]:
+                return False
+
+            lock["expires_at"] = now + self.ttl
+            lock["last_heartbeat"] = now
+            return True
+
+    def release_project_lock(self, project_id: str, session_id: str):
+        """Releases the lock if owned by the session."""
+        with self._lock:
+            lock = self.locks.get(project_id)
+            if lock and lock["owner_id"] == session_id:
+                del self.locks[project_id]
+                return True
+            return False
+
+    def _create_lock(self, project_id: str, session_id: str) -> Dict[str, Any]:
+        now = time.time()
+        return {
+            "resource_id": project_id,
+            "owner_id": session_id,
+            "issued_at": now,
+            "expires_at": now + self.ttl,
+            "last_heartbeat": now
+        }
+
+    def _start_reaper(self):
+        """Background thread to clean up dead locks."""
+        def reaper_loop():
+            while True:
+                time.sleep(10)
+                with self._lock:
+                    now = time.time()
+                    to_delete = [rid for rid, l in self.locks.items() if now > l["expires_at"]]
+                    for rid in to_delete:
+                        print(f"[DLM] Reaper: Removing stale lock for {rid}")
+                        del self.locks[rid]
+        
+        threading.Thread(target=reaper_loop, daemon=True).start()
 
 studio_lock_service = StudioLockService()

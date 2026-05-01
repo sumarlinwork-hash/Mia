@@ -12,22 +12,29 @@ class HistoryManager:
         self.init_db()
 
     def get_connection(self):
-        return sqlite3.connect(DB_PATH)
+        # Patch C: SQLITE WAJIB NON-BLOCKING MODE
+        conn = sqlite3.connect(DB_PATH, timeout=1, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        return conn
 
     def init_db(self):
-        with self.get_connection() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    metadata TEXT,
-                    is_pinned INTEGER DEFAULT 0,
-                    is_liked INTEGER DEFAULT 0
-                )
-            """)
-            conn.commit()
+        try:
+            with self.get_connection() as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        metadata TEXT,
+                        is_pinned INTEGER DEFAULT 0,
+                        is_liked INTEGER DEFAULT 0
+                    )
+                """)
+                conn.commit()
+        except Exception as e:
+            print(f"[HistoryManager] Init Failed (Skipped): {e}")
 
     def add_message(self, role, content, metadata=None):
         with self.get_connection() as conn:

@@ -23,6 +23,8 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     let isMounted = true;
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
     
     const load = async () => {
       await fetchConfig();
@@ -32,12 +34,46 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       load();
     }
     
+    // Global Real-time Sync
+    const connectWS = () => {
+      if (!isMounted) return;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.host}/ws/heartbeat`;
+      
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'config_update') {
+            console.log("[Global Config] Update received, refreshing...");
+            fetchConfig();
+            // Dispatch for other non-context listeners (like App.tsx background)
+            window.dispatchEvent(new Event('configUpdated'));
+          }
+        } catch { /* ignore */ }
+      };
+
+      ws.onclose = () => {
+        if (isMounted) {
+          reconnectTimeout = setTimeout(connectWS, 5000);
+        }
+      };
+    };
+
+    connectWS();
+    
     // Listen for manual updates from Settings
     const handleUpdate = () => fetchConfig();
     window.addEventListener('configUpdated', handleUpdate);
+
     return () => {
       isMounted = false;
       window.removeEventListener('configUpdated', handleUpdate);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      ws?.close();
     };
   }, [fetchConfig]);
 

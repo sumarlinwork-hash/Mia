@@ -7,13 +7,13 @@ SOUL_PATH = os.path.join(IAM_MIA_DIR, "SOUL.md")
 
 class PersonalityManager:
     def __init__(self):
-        # Default Baseline (Neutral-Warm)
-        self.default_p = [0.5, 0.8, 0.7, 0.6, 0.4, 0.8]
+        # Default Baseline (Warmth, Arousal, Echo) - Synchronized with SSOT v5
+        self.default_p = [0.7, 0.5, 0.4]
 
     def parse_soul(self) -> list[float]:
         """
         Parses SOUL.md to derive the personality baseline vector P.
-        Fulfills Addendum v4 Section 2.A.
+        Fulfills mia_sexy_emotion.md Section 4 (Active Dimensions).
         """
         if not os.path.exists(SOUL_PATH):
             return self.default_p
@@ -22,33 +22,30 @@ class PersonalityManager:
             with open(SOUL_PATH, "r", encoding="utf-8") as f:
                 content = f.read().lower()
 
-            # Initialize with default
+            # Initialize with default [warmth, arousal, echo]
             p = list(self.default_p)
 
-            # Keyword Analysis (Addendum v4 Section 2.A)
-            # [arousal, warmth, happiness, reassurance, dominance, respect]
+            # Keyword Analysis (Synchronized with new Dimension logic)
             
-            # Genit/Nakal keywords
-            if any(k in content for k in ["genit", "nakal", "flirty", "tease"]):
-                p[0] += 0.2  # +Arousal
-                p[2] += 0.1  # +Happiness
-                p[4] += 0.1  # +Dominance (assertiveness in teasing)
+            # 1. Genit/Nakal/Sexy keywords
+            if any(k in content for k in ["genit", "nakal", "flirty", "tease", "sexy"]):
+                p[1] += 0.2  # +Arousal
+                p[2] += 0.2  # +Echo (More responsive/attention)
 
-            # Dewasa/Bijak keywords
-            if any(k in content for k in ["dewasa", "bijak", "mature", "wise"]):
-                p[3] += 0.2  # +Reassurance
-                p[5] += 0.2  # +Respect
-                p[0] -= 0.1  # -Arousal (calmer)
+            # 2. Dewasa/Bijak/Sanguin keywords
+            if any(k in content for k in ["dewasa", "bijak", "mature", "wise", "sanguin"]):
+                p[0] += 0.2  # +Warmth
+                p[1] -= 0.1  # -Arousal (More stable)
 
-            # Penurut keywords
-            if any(k in content for k in ["penurut", "obedient", "submissive"]):
-                p[4] -= 0.3  # -Dominance
-                p[5] += 0.1  # +Respect
+            # 3. Penurut/Setia keywords
+            if any(k in content for k in ["penurut", "obedient", "setia", "loyal"]):
+                p[0] += 0.1  # +Warmth
+                p[2] += 0.2  # +Echo (High devotion)
 
-            # Ceria/Happy keywords
-            if any(k in content for k in ["ceria", "happy", "bubbly"]):
-                p[2] += 0.2  # +Happiness
-                p[0] += 0.1  # +Arousal
+            # 4. Ceria/Happy/Cheerful keywords
+            if any(k in content for k in ["ceria", "happy", "bubbly", "ceria"]):
+                p[0] += 0.1  # +Warmth
+                p[1] += 0.1  # +Arousal
 
             # Clamp results
             return [max(0.0, min(1.0, v)) for v in p]
@@ -61,7 +58,7 @@ class PersonalityManager:
         p = self.parse_soul()
         return {
             "p_vector": p,
-            "labels": ["arousal", "warmth", "happiness", "reassurance", "dominance", "respect"],
+            "labels": ["warmth", "arousal", "echo"],
             "status": "synchronized" if os.path.exists(SOUL_PATH) else "default"
         }
 
