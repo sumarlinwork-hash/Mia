@@ -15,6 +15,7 @@ import { ImpactModal } from './ImpactModal';
 import { StudioTopbar } from './StudioTopbar';
 import { StudioSidebar } from './StudioSidebar';
 import { StudioBottomBar } from './StudioBottomBar';
+import { ResilienceMonitor } from './ResilienceMonitor';
 import clsx from 'clsx';
 
 export const StudioPage: React.FC = () => {
@@ -44,6 +45,7 @@ export const StudioPage: React.FC = () => {
   
   const execution = useExecution();
   const stream = useStudioStream();
+  const resilienceStream = useStudioStream();
 
   // Patch FE-1 & FE-3: WS Lifecycle Binding
   useEffect(() => {
@@ -174,6 +176,12 @@ export const StudioPage: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    // Connect to system resilience feed on mount
+    resilienceStream.connect("system_resilience");
+    return () => resilienceStream.disconnect();
+  }, [resilienceStream]);
+
   const handleRun = async () => {
     if (execution.state === 'RUNNING' || execution.state === 'STARTING') return;
     
@@ -188,6 +196,10 @@ export const StudioPage: React.FC = () => {
     const entryFile = fileStore.files[entryPath];
     await execution.runCode(sessionId, entryFile?.content || "");
   };
+
+  // Extract SHAD-CSA Data from resilience stream
+  const lastShadEvent = [...resilienceStream.graphEvents].reverse().find(e => e.type === 'SHAD_CSA_TELEMETRY');
+  const shadData = lastShadEvent?.payload as Record<string, unknown>;
 
   const activeFile = tabs.activeTab ? fileStore.files[tabs.activeTab] : null;
 
@@ -290,6 +302,15 @@ export const StudioPage: React.FC = () => {
               <div className="flex-1 bg-[#0a0a0a]/50 rounded-lg border border-white/5 overflow-hidden">
                 <GraphViewer events={stream.graphEvents} />
               </div>
+
+              {/* Resilience Monitor Section */}
+              <ResilienceMonitor 
+                health={shadData?.snapshot?.health_score ?? 1.0}
+                mode={shadData?.snapshot?.mode ?? 'NORMAL'}
+                nodes={shadData?.nodes ?? []}
+                suggestions={shadData?.suggestions ?? []}
+                projectId={fileStore.currentProjectId ?? "default"}
+              />
                
                {/* Hardened Project Metadata Card */}
                <div className="p-4 bg-blue-500/[0.03] border border-blue-500/10 rounded-lg backdrop-blur-sm">

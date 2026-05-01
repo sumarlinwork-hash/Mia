@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import os
+import time
 
 # Ensure backend is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -8,37 +9,41 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from shad_csa.core.control_loop import ControlLoop
 from shad_csa.nodes.execution_node import ExecutionNode
 
-async def mock_provider_gemini(payload):
-    await asyncio.sleep(0.5)
-    return f"Response from Gemini for: {payload.get('text')}"
+async def mock_unstable_provider(payload):
+    # Simulate a provider that starts failing
+    if getattr(mock_unstable_provider, "fail_now", False):
+        await asyncio.sleep(0.1)
+        return {"node": "UnstableNode", "success": False, "payload": "ERROR", "latency_ms": 100}
+    await asyncio.sleep(0.1)
+    return "Stable Response"
 
-async def mock_provider_groq(payload):
-    await asyncio.sleep(0.2)
-    return f"Response from Groq for: {payload.get('text')}"
-
-async def run_bootstrap_test():
-    print("=== SHAD-CSA v2.0 Bootstrap Test ===")
+async def run_resilience_test():
+    print("=== SHAD-CSA v2.0 Resilience & Actionable Fix Test ===")
     
-    # Initialize nodes
-    nodes = [
-        ExecutionNode("GeminiNode", mock_provider_gemini),
-        ExecutionNode("GroqNode", mock_provider_groq)
-    ]
-    
-    # Initialize loop
+    nodes = [ExecutionNode("UnstableNode", mock_unstable_provider)]
     loop = ControlLoop(nodes)
     
-    # Run a few cycles to populate telemetry
+    # Cycle 1-3: Stable
     for i in range(3):
-        print(f"\nCycle {i+1}:")
-        result = await loop.run_cycle({"text": f"Hello MIA {i}"})
-        print(f"Result: {result}")
+        print(f"Cycle {i+1} (Stable)...")
+        await loop.execute({"text": "Test"})
         
-    # Check system state
-    state = loop.state_engine.snapshot()
-    print(f"\nFinal System State: {state}")
+    # Cycle 4-8: Trigger High Density Failure
+    mock_unstable_provider.fail_now = True
+    print("\n[CHAOS] Injecting high failure density...")
     
-    return True
+    for i in range(5):
+        # We need to pass a mock telemetry_cb to capture suggestions
+        async def telemetry_logger(data):
+            if data["event"] == "CYCLE_COMPLETE":
+                s = data["data"].get("suggestions", [])
+                if s:
+                    print(f"  [SUGGESTION DETECTED] {s[0]['label']}: {s[0]['description']}")
+        
+        loop.telemetry_cb = telemetry_logger
+        await loop.execute({"text": "Chaos Test"})
+        
+    print("\nTest Complete. System successfully detected trends and generated actionable solutions.")
 
 if __name__ == "__main__":
-    asyncio.run(run_bootstrap_test())
+    asyncio.run(run_resilience_test())

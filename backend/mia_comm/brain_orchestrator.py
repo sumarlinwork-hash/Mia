@@ -13,6 +13,14 @@ import re
 import random
 import json
 from typing import Dict, List, Any, Optional, Callable
+# SHAD-CSA v2.0 Imports
+from shad_csa.core.control_loop import ControlLoop
+from shad_csa.nodes.execution_node import ExecutionNode
+from shad_csa.economy.economic_control import EconomicControlField
+from shad_csa.runtime.lifecycle_manager import NodeLifecycleManager
+from shad_csa.runtime.resilience_interpreter import ResilienceInterpreter
+from mia_comm.runtime.renderer import emotion_renderer
+from studio.graph_stream import studio_graph_streamer
 
 class BrainOrchestrator:
     def __init__(self):
@@ -21,6 +29,44 @@ class BrainOrchestrator:
         self.compiler = GraphCompiler(tool_registry=agent_tools.get_tool_names())
         self.active_graphs: Dict[str, ExecutionGraph] = {}
         self.graph_timestamps: Dict[str, float] = {}
+        self._init_shad_csa()
+
+    def _init_shad_csa(self):
+        """
+        Initializes SHAD-CSA v2.0 (EBARF Edition) for production.
+        """
+        config = load_config()
+        
+        # 1. EBARF Components
+        self.ecf = EconomicControlField(compute_budget=5000, node_budget=20, chaos_budget=0)
+        self.interpreter = ResilienceInterpreter()
+        
+        nodes = []
+        for name, p in config.providers.items():
+            if p.is_active:
+                def make_provider_fn(provider_config):
+                    async def provider_fn(payload):
+                        return await self._call_api(
+                            provider_config, 
+                            payload["system_prompt"], 
+                            payload["context"], 
+                            payload["user_message"], 
+                            payload["images"]
+                        )
+                    return provider_fn
+                
+                nodes.append(ExecutionNode(name, make_provider_fn(p)))
+        
+        # 2. Lifecycle Manager
+        self.lifecycle = NodeLifecycleManager(self.ecf, None) # Placeholder provider_fn, logic handled by loop
+        self.lifecycle.active_nodes = nodes
+        
+        # 3. Final Wiring
+        self.control_loop = ControlLoop(
+            nodes, 
+            ecf=self.ecf, 
+            interpreter=self.interpreter
+        )
 
     def _cleanup_old_graphs(self):
         """
@@ -206,12 +252,40 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 emotion_chunk = emotion_manager.get_emotion_prompt_chunk(is_pro=is_pro)
                 behavior_instr = emotion_manager.get_behavior_instruction(is_pro=is_pro)
                 
+                
+                
                 full_system_prompt = f"{system_prompt}\n\nCurrent Emotional State: {emotion_chunk}\nInstructions: {behavior_instr}"
                 
-                response = await self._call_api(p, full_system_prompt, current_context, clean_prompt, current_images)
-                # Track cost (Estimated 1k tokens per call for now)
-                cost_manager.track_call(name, 1000)
+                # SHAD-CSA v2.0: Distributed Control Execution
+                await emit("THINKING", "MIA is processing via SHAD-CSA v2.0...")
                 
+                # Bind telemetry to the main emitter for visual analytics
+                async def shad_telemetry_bridge(data):
+                    await emit("SHAD_CSA", data)
+                    # P4-X: Also broadcast to System Stream for Studio visibility
+                    config = load_config()
+                    project_id = config.active_project_id or "default_project"
+                    studio_graph_streamer.push_event(
+                        execution_id="system_resilience", 
+                        event_type="SHAD_CSA_TELEMETRY", 
+                        payload=data,
+                        project_id=project_id
+                    )
+                
+                self.control_loop.telemetry_cb = shad_telemetry_bridge
+                
+                response = await self.control_loop.execute({
+                    "system_prompt": full_system_prompt,
+                    "context": current_context,
+                    "user_message": clean_prompt,
+                    "images": current_images
+                })
+                
+                # Fallback to legacy if SHAD-CSA returns system error (Bootstrap protection)
+                if response == "MIA_SYSTEM_ERROR::TOTAL_EXECUTION_FAILURE":
+                    await emit("FALLBACK", "SHAD-CSA total failure. Using emergency legacy fallback...")
+                    response = await self._call_api(p, full_system_prompt, current_context, clean_prompt, current_images)
+
                 final_response = response
                 
                 # Step 8: Parse and Execute Graph Workflow (DAG-native)
@@ -243,9 +317,29 @@ If you use a tool, I will execute it and provide the result in the next turn.
             latency = int((time.time() - start_time) * 1000)
             await self._update_metrics(name, True, latency)
             
-            # Step 9: Realism Layer
+            # Step 9: Emotion Rendering (Isolated Layer B/C)
             await emit("DONE", "Response generated.")
-            return await self._apply_realism(final_response, config)
+            
+            # Fetch current mood state
+            mood = "Neutral"
+            try:
+                mood_state = emotion_manager.get_state()
+                # Determine dominant mood for rendering
+                if mood_state.get("warmth", 50) > 70: mood = "Affectionate"
+                elif mood_state.get("arousal", 50) > 70: mood = "Intense"
+                elif mood_state.get("warmth", 50) < 30: mood = "Soft"
+            except:
+                pass
+
+            # Render Final Output (Safe Post-Process)
+            render_result = emotion_renderer.render(final_response, "SUCCESS", mood)
+            
+            # Apply visual latency hint if provided
+            if isinstance(render_result, dict):
+                await asyncio.sleep(render_result.get("latency_hint", 0.1))
+                return render_result["text"]
+            
+            return render_result
         except Exception as e:
             await self._update_metrics(name, False, 0)
             raw_error = str(e)
@@ -577,44 +671,6 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 except Exception as native_err:
                     raise Exception(f"HF Chat API & Native API both failed. Last: {str(native_err)}")
             raise e
-
-    async def _apply_realism(self, response: str, config) -> str:
-        """Inject human friction: micro-delays, typos, and repetition checks."""
-        import random
-        import asyncio
-        
-        # 1. Micro-delay (80-250ms)
-        await asyncio.sleep(random.uniform(0.08, 0.25))
-        
-        # 2. Imperfect Response (Typo Chance)
-        if random.random() < getattr(config, 'imperfect_response_chance', 0.05):
-            words = response.split()
-            if len(words) > 8:
-                idx = random.randint(2, len(words) - 1)
-                word = list(words[idx])
-                if len(word) > 4:
-                    p = random.randint(0, len(word) - 2)
-                    word[p], word[p+1] = word[p+1], word[p]
-                    words[idx] = "".join(word)
-                    response = " ".join(words)
-                    # GF Acknowledgment
-                    acks = [
-                        "\n\n*Aduh, maaf ya ada typo sedikit...*",
-                        "\n\n*Ups, jariku terpeleset pas ngetik tadi, hehe.*",
-                        "\n\n*Maaf sayang, aku terlalu semangat sampai salah ketik.*"
-                    ]
-                    response += random.choice(acks)
-        
-        # 3. Repetition Check
-        for old_resp in self.response_history:
-            if response[:50] == old_resp[:50]:
-                response = "Sekali lagi, " + response[0].lower() + response[1:]
-                
-        self.response_history.append(response)
-        if len(self.response_history) > 3:
-            self.response_history.pop(0)
-            
-        return response
 
     async def _update_metrics(self, name: str, success: bool, latency: int):
         """Update provider health metrics with circuit breaker logic."""

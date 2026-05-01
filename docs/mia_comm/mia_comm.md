@@ -9,6 +9,19 @@ SCOPE: BrainOrchestrator + Execution + Healing + Observability + Consensus
 SECTION 0 — SYSTEM DEFINITION (LOCKED)
 ============================================================
 
+## 🏛️ SHAD-CSA MASTER ROADMAP (Phases 1-6)
+
+| Fase | Nama | Fokus Utama | Status |
+| :--- | :--- | :--- | :--- |
+| **Phase 1** | **Foundations** | Definisi 5 Kelas Node & Kontrak Eksekusi Statis. | [x] DONE |
+| **Phase 2** | **Modulation** | Implementasi Sigmoid Field Router & Quorum Manager. | [x] DONE |
+| **Phase 3** | **Healing** | Integrasi Predictive Healer & Event Store. | [x] DONE |
+| **Phase 4** | **Integration** | Wiring 8-Step Control Loop (No Silent Failure). | [x] DONE |
+| **Phase 5** | **Continuity** | Implementasi CAPSE Engine (Realitas Entropi Permanen). | [x] DONE |
+| **Phase 6** | **Economy** | EBARF (Ekonomi Bounded) & Replikasi Node Otonom. | [x] DONE |
+
+---
+
 SYSTEM NAME:
 SHAD-CSA (Self-Healing Autonomous Distributed Control System Architecture)
 
@@ -299,3 +312,134 @@ F. CONTROL LOOP
 ============================================================
 END OF SPECIFICATION (LOCKED)
 ============================================================
+
+# 🏛️ SHAD-CSA System Blueprint (v2.0)
+**Chaos-Stable Distributed Control Field (CSDCF) Architecture**
+
+Blueprint ini telah diperbarui dengan **Control Loop Integration Map**, peta jalan teknis untuk menyambungkan seluruh komponen SHAD-CSA v2.0 menjadi sistem kontrol yang berjalan.
+
+---
+
+## 1. Prinsip Integrasi (Execution Order)
+
+Loop kontrol berfungsi sebagai **Central Event Bus**. Seluruh modul harus terhubung ke bus ini dan mengikuti urutan eksekusi yang tidak boleh diubah (*Hard Rule*):
+
+1.  - [x] **SENSE:** `state.snapshot()` (Observasi kondisi sistem)
+2.  - [x] **MODULATE:** `field_router.compute()` (Injeksi sinyal kontrol Sigmoid)
+3.  - [x] **SCALE:** `quorum.select()` (Penentuan jumlah node partisipan)
+4.  - [x] **EXECUTE:** `broadcast()` (Panggilan paralel dengan batasan timeout)
+5.  - [x] **RESOLVE:** `consensus.resolve()` (Pemilihan output paling stabil)
+6.  - [x] **TRACK:** `health.update()` (Pembaruan telemetri - Side effect)
+7.  - [x] **HEAL:** `healer.evaluate()` (Analisis tren & pemulihan asinkron)
+8.  - [x] **COMMIT:** `store.commit()` (Pencatatan kebenaran tunggal ke Event Store)
+
+---
+
+## 2. Spesifikasi Modul Aktivasi (Fase 2)
+
+### 2.1 Field Router (The Brain Modulator)
+Bertugas mengubah `health_score` menjadi kebijakan operasional menggunakan fungsi Sigmoid.
+- **Output:** `retry_count`, `timeout_ms`, `load_factor`, `parallel_mode`.
+
+### 2.2 Quorum Manager (Backpressure Control)
+Mengatur jumlah node aktif berdasarkan `load_factor` untuk mencegah *cascading failure* saat beban tinggi.
+- **Logic:** `active_nodes = total_nodes * (1 - load)`.
+
+### 2.3 Predictive Healer (Async Immune System)
+Hook asinkron yang memantau tren kegagalan di `EventStore`.
+- **Constraint:** Tidak boleh menghambat loop utama; tidak boleh memanggil node eksekusi secara langsung.
+
+---
+
+## 3. Python Skeleton (v2.0 Integration Wiring)
+
+### 3.1 Control Loop Integration
+```python
+class ControlLoop:
+    async def execute(self, request):
+        # 1. Sense & Modulate
+        snapshot = self.state.snapshot()
+        policy = self.field_router.compute(snapshot["health"])
+        
+        # 2. Scale Quorum
+        active_nodes = self.quorum.select(self.nodes, policy["load"])
+        
+        # 3. Execution Broadcast (Isolated & Bounded)
+        results = await self._broadcast(active_nodes, request, policy)
+        
+        # 4. Resolve Consensus
+        response = ConsensusEngine.resolve(results)
+        
+        # 5. Non-blocking Side Effects (Health & Healing)
+        self.health_engine.update(self.store, results)
+        asyncio.create_task(self.predictive_healer.evaluate(self.store))
+        
+        # 6. Commit Truth
+        self.store.commit(request, response, snapshot, policy)
+        
+        return response
+```
+
+### 3.2 Field Router Logic
+```python
+class FieldRouter:
+    def compute(self, health):
+        intensity = sigmoid(health)
+        return {
+            "load": intensity,
+            "timeout_ms": 5000 + (1 - intensity) * 10000,
+            "parallel": intensity > 0.4
+        }
+```
+
+---
+
+## 4. Jaminan Integrasi (Integration Guarantees)
+✔ **Loop Authority:** Tidak ada modul yang boleh melewati jalur kontrol utama.
+✔ **Guaranteed Timeout:** Semua eksekusi node wajib memiliki batasan waktu.
+✔ **Stateless Memory:** State direkonstruksi dari Event Store di setiap siklus.
+✔ **Predictive Resilience:** Pemulihan dimulai sebelum anomali mencapai level kritis.
+
+---
+**STATUS:** INTEGRATION MAP LOCKED  
+**NEXT STEP:** PHASE 6 - EBARF & CAPSE Integration (COMPLETE)
+
+---
+
+# 🏛️ SHAD-CSA Phase 6 — EBARF & CAPSE Specification
+**Economically Bounded Autonomous Resilience Field (EBARF)**
+
+## 1. Lapisan Realitas Permanen (CAPSE Engine)
+Berbeda dengan pengujian tradisional, SHAD-CSA v2.0 beroperasi di dalam **CAPSE (Continuous Adversarial Production Simulation Engine)**. Entropi tidak disimulasikan sebagai tes sekali jalan, melainkan disuntikkan secara permanen ke dalam sistem.
+
+*   - [x] **Entropy Field:** Injeksi non-deterministik dari Latency Drift, Node Corruption, dan Network Partition.
+*   - [x] **No-Reset Reality:** Sistem tidak pernah di-reset; ia harus bertahan hidup dan berevolusi di bawah tekanan terus-menerus.
+
+## 2. Kontrol Ekonomi (Economic Control Field - ECF)
+EBARF memperkenalkan konsep kelangkaan sumber daya. Setiap tindakan dalam loop kontrol memiliki biaya.
+
+*   - [x] **Compute Budget:** Membatasi jumlah eksekusi per jam untuk mencegah *infinite loops*.
+*   - [x] **Node Budget:** Membatasi jumlah kelahiran node baru untuk mencegah *node explosion*.
+*   - [x] **Partial Refund:** Pensiun node yang tidak efisien memberikan pengembalian anggaran 50%.
+
+## 3. Evolusi & Silsilah Node (Node Lineage)
+Identitas node kini bersifat permanen dan memiliki riwayat silsilah (*Lineage*).
+*   - [x] **NodeFactory:** Melahirkan node baru dengan identitas unik saat kuorum berada di bawah ambang batas (N < 3).
+*   - [x] **Trust History:** Melacak evolusi perilaku node dari generasi ke generasi untuk mendeteksi korupsi sistemik.
+
+## 4. Resilience Interpreter (Signal → Policy)
+Menerjemahkan sinyal entropi dari CAPSE menjadi kebijakan operasional secara real-time:
+*   - [x] **CONSERVATIVE MODE (High Entropy):** Memperpanjang timeout, mengurangi spawn rate, memperketat quorum.
+*   - [x] **EXPANSIVE MODE (Low Entropy):** Mempercepat eksekusi, meningkatkan pengambilan sampel bayangan (*shadow sampling*).
+
+## 5. Jaminan Validasi (Test Harness Invariants)
+Sistem dianggap valid jika memenuhi kriteria audit berikut:
+*   - [x] **No Node Explosion:** Pertumbuhan node dibatasi maksimal 20 node.
+*   - [x] **Economic Stability:** Anggaran komputasi tidak boleh negatif.
+*   - [x] **No Healing Oscillation:** Mekanisme pemulihan tidak boleh menyebabkan osilasi status node (*flapping*).
+*   - [x] **Silent Failure Drift Detection:** Deteksi otomatis terhadap divergensi hasil tanpa adanya log kesalahan eksplisit.
+
+---
+**STATUS FINAL:** SHAD-CSA v2.0 - EBARF ACTIVATED  
+**CLASSIFICATION:** Economically Bounded Self-Evolving Distributed Control Organism  
+**DATE:** 2026-05-01

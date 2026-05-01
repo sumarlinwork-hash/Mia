@@ -499,7 +499,8 @@ END MASTER PLAN
   * [ ] Affectionate (1s)
   * [ ] Intense (1.5s)
   * [ ] Soft (2s)   
-* [ ] Tidak terasa “lag”, tapi terasa “nuance”
+* [x] Tidak terasa “lag”, tapi terasa “nuance”
+* [x] **EBARF Sync:** Latensi dikendalikan oleh `FieldRouter` untuk menjamin konsistensi mood di bawah tekanan jaringan.
 
 ---
 
@@ -577,3 +578,98 @@ Selama itu dijaga, semua tweak teknis aman.
 
 Kalau kamu mau next step:
 👉 saya bisa bantu **review hasil coding nyata (bukan pseudo)** sebelum kamu deploy.
+---
+
+# 🏛️ SHAD-CSA v2.0 — FINAL ARCHITECTURE PATCH
+
+## Emotional Field Sync (SAFE LAYERED IMPLEMENTATION)
+
+TYPE: IMPLEMENTATION-READY CONTRACT SPEC (NO AMBIGUITY)
+SCOPE: Core Isolation + Emotion Overlay Separation + Runtime Safety
+
+---
+
+## 0. PRINCIPLE REDEFINITION
+
+SYSTEM RULE:
+*   **SHAD-CSA CORE** = STRICTLY DETERMINISTIC CONTROL SYSTEM
+*   **EMOTION SYSTEM** = PURE POST-PROCESS RENDER LAYER
+*   **NO CROSS-DEPENDENCY** BETWEEN CONTROL LOGIC AND EMOTION LOGIC
+
+---
+
+## 1. ARCHITECTURE LAYERS (FINAL)
+
+### LAYER A — SHAD-CSA CORE ENGINE (IMMUTABLE)
+**LOCATION:** `/backend/shad_csa/core/`
+
+**RESPONSIBILITIES:**
+*   ControlLoop execution
+*   ExecutionNode orchestration
+*   Consensus resolution
+*   Circuit breaker logic
+*   Healing system
+
+**RULES:**
+*   **NO** emotion dependency
+*   **NO** randomness injection
+*   **NO** UX modulation logic
+*   **ALL** outputs must be deterministic or fallback-safe
+
+---
+
+### LAYER B — EMOTION FIELD ENGINE (ISOLATED)
+**LOCATION:** `/backend/mia_comm/emotion/`
+
+**RESPONSIBILITIES:**
+*   mood state handling
+*   latency modulation (UI-only)
+*   tone transformation
+*   stylistic variation
+
+**RULES:**
+*   **MUST NOT** modify core decision logic
+*   **MUST NOT** affect ControlLoop timing
+*   **ONLY** operates on final output string
+
+---
+
+### LAYER C — RENDERER (BINDING LAYER)
+**LOCATION:** `/backend/mia_comm/runtime/renderer.py`
+
+**RESPONSIBILITIES:**
+*   merge core output + emotion overlay
+*   apply latency simulation (UI only)
+*   ensure safe fallback rendering
+
+---
+
+## 2. MODIFIED COMPONENT BEHAVIOR
+
+### 2.1 FieldRouter (CORE SAFE MODE)
+**FILE:** `backend/shad_csa/core/field_router.py`
+**RULE CHANGE:** REMOVE emotional latency injection from core routing. REPLACE with metadata tagging only.
+
+### 2.2 BrainOrchestrator (CLEAN SEPARATION)
+**FILE:** `backend/mia_comm/brain_orchestrator.py`
+**RULE CHANGE:** 
+1. Step 1: Execute core only. 
+2. Step 2: Pass result to emotion layer.
+
+### 2.3 Fallback System (STRICT MODE)
+**RULE:** Fallback **MUST** ignore emotion system entirely. No stylistic rendering, no latency simulation.
+
+---
+
+## 3. SAFETY GUARANTEES
+✔ Core system unaffected by emotional state
+✔ Emotion layer cannot break execution path
+✔ Failure fallback always deterministic
+✔ CAPSE tests remain valid and reproducible
+✔ No hidden state propagation across layers
+
+---
+
+**STATUS:** ARCHITECTURE PATCH LOCKED  
+**CLASSIFICATION:** Deterministic Core with Isolated Emotional Rendering  
+**DATE:** 2026-05-01

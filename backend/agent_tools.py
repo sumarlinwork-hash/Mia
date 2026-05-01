@@ -40,8 +40,19 @@ class AgentTools:
         return f"Pressed: {key}"
 
     def run_command(self, command: str):
-        """Runs a system command asynchronously."""
+        """Runs a system command asynchronously with safety filters."""
         import subprocess
+        
+        # Security: Blacklist of destructive commands
+        blacklist = [
+            "rm -rf", "del /s", "format ", "mkfs", "dd if=", 
+            "> /dev/", ":(){ :|:& };:", "shutdown", "reboot"
+        ]
+        
+        for forbidden in blacklist:
+            if forbidden in command.lower():
+                return f"Security Alert: Command '{command}' is blocked due to safety policies."
+
         try:
             # Use Popen to avoid blocking the backend
             subprocess.Popen(command, shell=True)

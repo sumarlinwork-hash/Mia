@@ -59,3 +59,35 @@ backend/studio/test_*.py
 backend/backend/studio/locks/
 backend/backend/studio/logs/
 backend/backend/studio/history/
+
+# SHAD-CSA v2.0 Runtime Isolation
+backend/temp_screens/
+backend/shad_csa/runtime/__pycache__/
+backend/shad_csa/runtime/*.log
+backend/shad_csa/runtime/results/
+
+# General Temporary & Backup Files
+*.tmp
+*.bak
+*.swp
+*~
+*.old
+*.pyc
+
+# OS & IDE Noise
+.vscode/
+.idea/
+.DS_Store
+desktop.ini
+thumbs.db
+ehthumbs.db
+Icon?
+
+# Python Build & Distribution
+build/
+dist/
+node_modules/
+.venv/
+*.egg-info/
+.installed.cfg
+*.egg
