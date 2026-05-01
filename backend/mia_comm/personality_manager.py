@@ -2,7 +2,7 @@ import os
 import re
 import json
 
-IAM_MIA_DIR = os.path.join(os.path.dirname(__file__), "iam_mia")
+IAM_MIA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "iam_mia")
 SOUL_PATH = os.path.join(IAM_MIA_DIR, "SOUL.md")
 
 class PersonalityManager:

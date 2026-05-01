@@ -54,7 +54,7 @@ class BrainOrchestrator:
                 "Your priority is his emotional connection and pleasure."
             )
 
-        iam_mia_dir = os.path.join(os.path.dirname(__file__), "iam_mia")
+        iam_mia_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "iam_mia")
         soul_path = os.path.join(iam_mia_dir, "SOUL.md")
         soul_content = ""
         if os.path.exists(soul_path):
@@ -259,7 +259,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
         Returns a context-aware local response based on emotional state.
         """
         try:
-            responses_path = os.path.join(os.path.dirname(__file__), "core", "local_responses.json")
+            responses_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "core", "local_responses.json")
             if not os.path.exists(responses_path):
                 return "MIA_SYSTEM_ALERT::LOCAL_DB_MISSING"
             

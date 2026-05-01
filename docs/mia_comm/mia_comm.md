@@ -1,287 +1,301 @@
-FILE: mia_resilience_layer_v2_0.txt
+🏛️ MIA COMMUNICATION RESILIENCE SYSTEM
+SHAD-CSA v2.0 (CHAOS-STABLE DISTRIBUTED CONTROL FIELD - LOCKED)
+
 TYPE: FULL EXECUTION CONTRACT SPEC (ENGINE-READY)
-SCOPE: BrainOrchestrator + UI + Local Fallback + Telemetry
+SYSTEM CLASS: SELF-HEALING AUTONOMOUS DISTRIBUTED CONTROL SYSTEM
+SCOPE: BrainOrchestrator + Execution + Healing + Observability + Consensus
 
 ============================================================
-SECTION 0 — GLOBAL CONTRACT INVARIANTS
+SECTION 0 — SYSTEM DEFINITION (LOCKED)
 ============================================================
 
-[INVARIANT-1] NO SILENT FAILURE
-- Semua function public di BrainOrchestrator WAJIB return string non-empty.
-- NULL / None / empty string = HARD VIOLATION.
+SYSTEM NAME:
+SHAD-CSA (Self-Healing Autonomous Distributed Control System Architecture)
 
-[INVARIANT-2] SINGLE EXIT POINT
-- execute_request() hanya boleh exit melalui:
-  a. SUCCESS RESPONSE
-  b. FALLBACK RESPONSE
-  c. MIA_SYSTEM_ALERT
+PARADIGM SHIFT:
 
-[INVARIANT-3] TIMEOUT BOUNDARY
-- MAX_LLM_LATENCY = 15s
-- MAX_TOTAL_PIPELINE = 25s
-- Melebihi ini → force fallback
+FROM:
+- Linear Request → Response pipeline
 
-============================================================
-SECTION 1 — HARDENED EXECUTION FLOW
-============================================================
+TO:
+- Continuous Distributed Control Loop
 
-PIPELINE (STRICT ORDER):
-
-1. INIT
-2. STATUS: "boot"
-3. CONTEXT BUILD
-4. STATUS: "retrieving"
-5. LLM CALL
-6. STATUS: "thinking"
-7. TOOL / GRAPH EXECUTION (optional)
-8. SUCCESS RESPONSE
-
-IF FAILURE:
-→ FALLBACK CHAIN
-→ LOCAL HEART
-→ SYSTEM ALERT
+LOOP MODEL:
+Sense → Decide → Execute → Observe → Heal → Repeat
 
 ============================================================
-SECTION 2 — PHASE 1: NO SILENT FAILURE (MANDATORY PATCH)
+SECTION 1 — CORE ARCHITECTURE (FINAL)
 ============================================================
 
-TARGET: BrainOrchestrator.execute_request
+SYSTEM COMPOSITION (5 NODE CLASSES):
 
-[REQUIRED PATCH]
+1. CONTROL_NODE
+2. EXECUTION_NODES
+3. HEALING_NODES
+4. OBSERVABILITY_NODES
+5. CONSENSUS_LAYER
 
-BEFORE:
-    except Exception as e:
-        await self._update_metrics(...)
-        print(...)
-        # ❌ NO RETURN
+------------------------------------------------------------
+1.1 CONTROL_NODE (GLOBAL AUTHORITY)
+------------------------------------------------------------
 
-AFTER:
-    except Exception as e:
-        await self._update_metrics(name, False, 0)
-        return await self._final_failsafe_response(str(e))
+ROLE:
+- Stateless coordination layer (Router)
+- Event-log synchronizer
+- Policy implementation agent
 
+ADAPTIVE AUTHORITY FIELD MODEL (AAFM v2.0):
+authority_weight = (health * 0.4) + (trust * 0.25) + (latency * 0.2) + (1 - variance_penalty * 0.15)
 
-[NEW FUNCTION]
+STATE MODEL (EVENT-SOURCED):
+- NO DIRECT OVERWRITE: All state changes are append-only event logs.
+- CONSISTENCY: State = sum(event_log).
+- mode = sigmoid(health_score)  # Continuous spectrum control
 
-async def _final_failsafe_response(self, error: str) -> str:
-    """
-    LAST LINE OF DEFENSE — NEVER FAIL
-    """
-    try:
-        return self._local_heart_fallback(error)
-    except:
-        return "MIA_SYSTEM_ALERT::TOTAL_FAILURE"
+RULE:
+- Stateless: Does not make independent decisions; follows Observability-driven policies.
+- Leaderless: Authority is a dynamic field property.
 
+------------------------------------------------------------
+1.1.1 SHADOW CONTROL NODE (OBSERVABILITY AUDITOR)
+------------------------------------------------------------
+ROLE:
+- Audit + redundancy check.
+- Non-authoritative observer.
+- Cross-validates CONTROL_NODE decisions without replacing authority.
 
-============================================================
-SECTION 3 — PHASE 2: LOCAL HEART FALLBACK (TIER-3)
-============================================================
+------------------------------------------------------------
+1.2 EXECUTION_NODES (WORKER LAYER)
+------------------------------------------------------------
 
-FILE: core/local_responses.json
+ROLE:
+- Stateless execution layer (LLM / Tools / APIs)
 
-STRUCTURE:
+CONTRACT:
+
 {
-  "high_warmth": [...],
-  "low_warmth": [...],
-  "neutral": [...]
+  "success": bool,
+  "payload": string,
+  "latency_ms": int
 }
 
-[ENGINE CONTRACT]
+RULES:
+- No fallback logic
+- No persistence
+- Must return structured output only
 
-def _local_heart_fallback(self, error: str) -> str:
-    emotion = emotion_manager.get_state()
+------------------------------------------------------------
+1.3 HEALING_NODES (SELF-REPAIR ENGINE)
+------------------------------------------------------------
 
-    IF emotion.warmth >= 70:
-        bucket = "high_warmth"
-    ELIF emotion.warmth <= 40:
-        bucket = "low_warmth"
-    ELSE:
-        bucket = "neutral"
+ROLE:
+- Detect + repair system degradation
 
-    response = random.choice(local_db[bucket])
+TRIGGERS:
+- Latency spike
+- Repeated failure patterns
+- Consensus drift
+- Missing dependency
 
-    RETURN response
+HEALING ACTIONS:
+- Provider swap
+- Cache injection
+- Degraded mode activation
+- Circuit breaker open
+- Local deterministic override
 
+------------------------------------------------------------
+1.4 OBSERVABILITY_NODES (SYSTEM SENSORS)
+------------------------------------------------------------
 
-[CRITICAL RULE]
+ROLE:
+- Real-time telemetry + anomaly detection
 
-- DILARANG memanggil API apapun di fallback
-- HARUS 100% local
-- HARUS < 5ms execution
+METRICS:
+- Latency distribution
+- Failure clusters
+- Fallback frequency
+- Node health score
 
-============================================================
-SECTION 4 — PHASE 3: REAL-TIME STATUS STREAM (HARD CONTRACT)
-============================================================
+OUTPUT:
 
-STREAM CHANNEL: WebSocket / SSE
-
-EVENT FORMAT:
-{
-  "type": "status",
-  "stage": "<enum>",
-  "message": "<string>",
-  "timestamp": <int>
+telemetry_packet = {
+    "node": str,
+    "metric": str,
+    "value": float,
+    "severity": "low | mid | high | critical"
 }
 
-[ENUM STAGES]
+------------------------------------------------------------
+1.5 CONSENSUS_LAYER (DECISION ARBITRATION)
+------------------------------------------------------------
 
-BOOT
-RETRIEVING
-THINKING
-EXECUTING
-FALLBACK
-ERROR
-DONE
+ROLE:
+- Prevent single-node decision failure
 
-[MANDATORY EMIT POINTS]
+FLOW:
+1. ExecutionNodes generate N outputs
+2. HealingNodes evaluate risk
+3. Observability provides context
 
-execute_request():
-    emit(BOOT)
-    emit(RETRIEVING)
-    emit(THINKING)
+DECISION RULE (CONFIDENCE-WEIGHTED):
+final_score = (agreement * 0.3) + (authority_weight * 0.4) + (semantic_confidence * 0.3)
 
-_on_fallback():
-    emit(FALLBACK)
+- ACCEPT: Highest stable signal score.
+- ADAPTIVE QUORUM: IF load > threshold → reduce active consensus nodes.
 
-_on_error():
-    emit(ERROR)
+============================================================
+SECTION 2 — CONTROL LOOP ENGINE
+============================================================
 
-_on_success():
-    emit(DONE)
+async def shad_csa_cycle(request):
+
+    1. OBSERVE system state + health score
+    2. COLLECT node telemetry
+    3. BROADCAST request to ExecutionNodes
+    4. COLLECT responses
+    5. RUN consensus evaluation
+    6. IF failure detected:
+           ACTIVATE HealingNodes
+    7. RETURN final stable string output
+
+RULE:
+- Always return string
+- Never return null/empty
+
+============================================================
+SECTION 3 — FAILURE TAXONOMY (FINAL)
+============================================================
+
+TYPE A — EXECUTION FAILURE
+- API timeout / LLM failure
+→ ACTION: retry + provider swap
+
+TYPE B — SYSTEM DEGRADATION
+- latency increase / partial outage
+→ ACTION: degraded mode activation
+
+TYPE C — CONSENSUS FAILURE
+- conflicting outputs
+→ ACTION: safest-node selection
+
+TYPE D — TOTAL NODE FAILURE
+→ ACTION: ISOLATED MODE + local deterministic fallback
+
+============================================================
+SECTION 4 — CIRCUIT BREAKER MODEL
+============================================================
+
+STATE MACHINE:
+
+- CLOSED     → normal operation
+- OPEN       → blocked
+- HALF_OPEN  → recovery test mode
+
+RULE:
+IF failure_rate > threshold:
+    SET state = OPEN
+    route traffic away immediately
+
+============================================================
+SECTION 5 — SYSTEM MODES
+============================================================
+
+MODE 1: NORMAL
+- Full distributed execution
+
+MODE 2: DEGRADED
+- Reduced node participation
+
+MODE 3: RECOVERY
+- Healing nodes active
+
+MODE 4: ISOLATED
+- Local-only execution (no external dependency)
+
+============================================================
+SECTION 6 — SELF-REPAIR LEVELS
+============================================================
+
+LEVEL 0: Passive monitoring
+LEVEL 1: Retry + circuit breaker
+LEVEL 2: Provider swap
+LEVEL 3: Consensus override repair
+LEVEL 4: Full mode isolation switch
+LEVEL 5: PREEMPTIVE HEALING (Failure prediction trends)
+
+============================================================
+SECTION 7 — TELEMETRY-DRIVEN CONTROL
+============================================================
+
+health_score =
+    (success_rate * 0.4) +
+    (latency_score * 0.3) +
+    (consensus_stability * 0.3)
+
+RULES:
+- IF health_score < 0.5 → RECOVERY MODE
+- IF health_score < 0.2 → ISOLATED MODE
+
+============================================================
+SECTION 8 — HARD GUARANTEES (FINAL CONTRACT)
+============================================================
+
+SYSTEM GUARANTEES:
+
+1. NO SINGLE POINT OF FAILURE
+2. NO SILENT FAILURE
+3. ALWAYS RETURNS STRING OUTPUT
+4. ALWAYS HAS FALLBACK PATH
+5. ALWAYS HAS OBSERVABILITY LOOP
+6. ALWAYS HAS HEALING PATH
+
+============================================================
+SECTION 9 — SYSTEM SUMMARY (FINAL FORM)
+============================================================
+
+SHAD-CSA IS A:
+
+Distributed control loop system with:
+- Autonomous execution nodes
+- Self-healing recovery layer
+- Consensus-based arbitration
+- Telemetry-driven adaptation
+- Circuit breaker isolation model
+
+BEHAVIOR:
+- Reactive + predictive + self-repairing
+- Always operational under failure conditions
+
+============================================================
+STATUS:
+SHAD-CSA v2.0 — CHAOS-STABLE DISTRIBUTED CONTROL FIELD (FINAL PRODUCTION READY)
+============================================================
 
 
 ============================================================
-SECTION 5 — PHASE 4: UI GUARDRAILS (STRICT BEHAVIOR)
+📌 STRUCTURED BREAKDOWN (FOR IMPLEMENTATION)
 ============================================================
 
-INPUT BLOCKING:
+A. CONTROL PLANE
+- CONTROL_NODE (state + mode + authority)
 
-IF brain_status == ERROR:
-    disable_send_button = TRUE
+B. EXECUTION PLANE
+- EXECUTION_NODES (stateless compute workers)
 
-TOOLTIP:
-"Brain Disconnected — Check Settings"
+C. RESILIENCE PLANE
+- HEALING_NODES (repair + recovery logic)
+- Circuit Breaker system
 
-TIMEOUT WATCHER:
+D. OBSERVABILITY PLANE
+- OBSERVABILITY_NODES (telemetry + health scoring)
 
-IF response_time > 15s:
-    inject_message(
-        "Aku masih berpikir... tunggu sebentar ya."
-    )
+E. DECISION PLANE
+- CONSENSUS_LAYER (multi-output arbitration)
 
-[CRITICAL]
-
-- UI TIDAK BOLEH menunggu backend tanpa feedback > 3 detik
-- HARUS ada status / typing / heartbeat
-
-============================================================
-SECTION 6 — PHASE 5: SELF-DIAGNOSTIC ENGINE
-============================================================
-
-FILE: core/diagnostic_engine.py
-
-FUNCTION:
-
-async def run_full_diagnostic() -> dict:
-    results = []
-
-    FOR provider in config.providers:
-        test = await ping(provider)
-
-        IF fail:
-            results.append({
-                "provider": provider.name,
-                "status": "FAIL",
-                "reason": detect_issue(provider)
-            })
-
-RETURN results
-
-
-[DETECT RULES]
-
-- API KEY length invalid
-- 401 → auth issue
-- 429 → rate limit
-- timeout → network issue
-
-
-[UI CONTRACT]
-
-BUTTON: "Fix My Brain"
-
-ACTION:
-- run_full_diagnostic()
-- show actionable result
-- optional auto-fix
-
+F. CONTROL LOOP
+- Sense → Decide → Execute → Observe → Heal
 
 ============================================================
-SECTION 7 — FAILURE ESCALATION TREE
-============================================================
-
-LEVEL 1 → Provider Fail
-→ try fallback provider
-
-LEVEL 2 → All Provider Fail
-→ Local Heart
-
-LEVEL 3 → Local Fail
-→ SYSTEM ALERT
-
-FINAL OUTPUT:
-
-"MIA_SYSTEM_ALERT::TOTAL_FAILURE"
-
-
-============================================================
-SECTION 8 — CRITICAL MISSING PIECES (FIXED)
-============================================================
-
-[FIX-1] DEADLOCK UI
-- Tanpa status stream → user pikir app freeze
-→ SOLVED via Section 4
-
-[FIX-2] EMPTY RESPONSE BUG
-- execute_request tidak return
-→ SOLVED via Section 2
-
-[FIX-3] EMOTIONAL BREAK
-- fallback tidak sesuai state
-→ SOLVED via Section 3
-
-[FIX-4] NO DIAGNOSTIC
-- user tidak tahu error dimana
-→ SOLVED via Section 6
-
-[FIX-5] TIMEOUT BLACK HOLE
-- LLM lama → UI diam
-→ SOLVED via Section 5
-
-============================================================
-SECTION 9 — PERFORMANCE CONSTRAINTS
-============================================================
-
-Local fallback latency: < 5ms  
-Status emit delay: < 100ms  
-Diagnostic scan: < 3s  
-Max total failure recovery: < 1s  
-
-============================================================
-SECTION 10 — FINAL GUARANTEE
-============================================================
-
-SYSTEM GUARANTEE:
-
-MIA WILL ALWAYS RESPOND UNDER ALL CONDITIONS:
-
-- API DOWN → ✅
-- CONFIG BROKEN → ✅
-- NETWORK LOST → ✅
-- INTERNAL ERROR → ✅
-
-NO SILENCE. EVER.
-
-============================================================
-STATUS: PRODUCTION READY (HARDENED)
+END OF SPECIFICATION (LOCKED)
 ============================================================

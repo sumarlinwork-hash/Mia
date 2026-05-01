@@ -5,7 +5,7 @@ from typing import List, Callable, Dict, Optional, Any
 from core.local_runtime import local_event_bus
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from memory_orchestrator import memory_orchestrator
+from mia_comm.memory_orchestrator import memory_orchestrator
 
 IAM_MIA_DIR = os.path.join(os.path.dirname(__file__), "iam_mia")
 MEMORY_LOG_DIR = os.path.join(IAM_MIA_DIR, "memory")
@@ -172,7 +172,7 @@ class CroneDaemon:
         Returns a bullet-point list of facts to be stored in MEMORY.md.
         """
         try:
-            from brain_orchestrator import brain_orchestrator
+            from mia_comm.brain_orchestrator import brain_orchestrator
             
             extraction_prompt = (
                 f"Analisis log percakapan berikut antara User dan MIA dari tanggal {source_file}.\n"
@@ -218,7 +218,7 @@ class CroneDaemon:
         if idle_minutes < 5 and self._websocket_ref:
             print(f"[CRONE] 👁️ Starting Proactive Screen Analysis (Idle: {int(idle_minutes)}m)")
             try:
-                from brain_orchestrator import brain_orchestrator
+                from mia_comm.brain_orchestrator import brain_orchestrator
                 from agent_tools import agent_tools
                 import base64
                 

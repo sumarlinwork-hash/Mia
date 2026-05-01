@@ -2,7 +2,6 @@ import React from 'react';
 import { 
   GitBranch, 
   AlertCircle, 
-  CheckCircle2, 
   Terminal, 
   Zap,
   Globe,

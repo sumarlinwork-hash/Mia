@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Play, Square, Save, Shield } from 'lucide-react';
+import { Play, Square, Save } from 'lucide-react';
 import { useExecution } from '../hooks/useExecution';
 import { useStudioStream } from '../hooks/useStudioStream';
 import { useProject } from '../hooks/useProject';

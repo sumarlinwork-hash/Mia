@@ -3,7 +3,6 @@ import {
   Shield, 
   Search, 
   Activity, 
-  Wifi, 
   Bell, 
   ChevronDown,
   Cpu

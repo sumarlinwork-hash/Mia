@@ -9,7 +9,7 @@ import httpx
 # Use google-genai or standard requests for embedding. We use standard requests to keep it simple and dependency-light.
 # External Embedding API is strictly enforced. No local models.
 
-IAM_MIA_DIR = os.path.join(os.path.dirname(__file__), "iam_mia")
+IAM_MIA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "iam_mia")
 CHROMA_DB_DIR = os.path.join(IAM_MIA_DIR, "chroma_db")
 
 class MemoryOrchestrator:

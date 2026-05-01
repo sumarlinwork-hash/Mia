@@ -15,11 +15,11 @@ from pydantic import BaseModel
 import uvicorn
 from config import load_config, save_config, MIAConfig, ProviderConfig
 from crone_daemon import crone_daemon
-from memory_orchestrator import memory_orchestrator
-from history_manager import history_manager
-from brain_orchestrator import brain_orchestrator
-from tts_service import tts_service
-from stt_service import stt_service
+from mia_comm.memory_orchestrator import memory_orchestrator
+from mia_comm.history_manager import history_manager
+from mia_comm.brain_orchestrator import brain_orchestrator
+from mia_comm.tts_service import tts_service
+from mia_comm.stt_service import stt_service
 from skill_manager import skill_manager
 from core.local_runtime import local_event_bus
 from discovery.services import AppBuilderService

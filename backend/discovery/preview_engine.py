@@ -144,7 +144,7 @@ class PreviewEngine:
 
         try:
             # Import inside method to avoid circular imports if any
-            from brain_orchestrator import brain_orchestrator
+            from mia_comm.brain_orchestrator import brain_orchestrator
             import re
 
             # Short, constrained prompt for preview purposes

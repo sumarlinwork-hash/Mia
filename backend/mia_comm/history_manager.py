@@ -3,7 +3,7 @@ import os
 import json
 from datetime import datetime
 
-HISTORY_DIR = os.path.join(os.path.dirname(__file__), "history")
+HISTORY_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "history")
 DB_PATH = os.path.join(HISTORY_DIR, "chat_history.db")
 
 class HistoryManager:
