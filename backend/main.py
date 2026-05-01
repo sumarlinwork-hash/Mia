@@ -9,6 +9,7 @@ import time
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from typing import Dict, Optional, Any
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
@@ -24,6 +25,11 @@ from core.local_runtime import local_event_bus
 from discovery.services import AppBuilderService
 from discovery.preview_engine import preview_engine
 from core.mode_hub import mode_hub, MIAMode
+from studio import (
+    StudioSessionManager, StudioExecutionService, StudioFileService, 
+    StudioVersionService, StudioProjectService, studio_graph_streamer, 
+    studio_version_service, studio_project_service
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,6 +50,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="MIA Backend API", lifespan=lifespan)
 intimacy_mode = False  # Global state for Intimacy Mode
 app_builder = AppBuilderService()
+
+# Initialize Studio Services (Phase 1)
+studio_file_service = StudioFileService(os.path.abspath(os.getcwd()))
+studio_execution_service = StudioExecutionService()
+studio_session_manager = StudioSessionManager(studio_execution_service, studio_file_service)
 
 # Setup CORS for React Frontend
 app.add_middleware(
@@ -127,9 +138,221 @@ async def websocket_graph_stream(websocket: WebSocket, graph_id: str):
         print(f"[WS Error] {e}")
         await websocket.close()
 
+@app.websocket("/ws/studio/graph/{execution_id}")
+async def websocket_studio_graph_stream(websocket: WebSocket, execution_id: str, session_id: str = Query(...)):
+    """
+    Patch G5, G6: Studio-specific hardened graph stream.
+    """
+    # Patch G6: Strict Session Validation
+    try:
+        # Check if execution belongs to session and is running
+        entry = studio_execution_service.registry.get(execution_id)
+        if not entry:
+            await websocket.close(code=4004, reason="Execution not found")
+            return
+        
+        if entry.owner_session_id != session_id:
+            await websocket.close(code=4003, reason="Unauthorized session")
+            return
+            
+        if entry.status.value != "running":
+            # If it's already done, we might still want to stream what's in the queue?
+            # Patch G6 says: execution.status == RUNNING
+            await websocket.close(code=4000, reason="Execution not running")
+            return
+
+        await websocket.accept()
+        print(f"[WS] Studio client connected to graph: {execution_id}")
+        
+        async for update in studio_graph_streamer.subscribe(execution_id):
+            await websocket.send_json(update)
+            
+    except WebSocketDisconnect:
+        print(f"[WS] Studio client disconnected from graph: {execution_id}")
+    except Exception as e:
+        print(f"[WS Error Studio] {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
+
 @app.post("/api/skills/save")
 async def save_skill(req: SkillSaveRequest):
     return skill_manager.save_skill(req.name, req.code)
+
+# --- MIA ARCHITECT STUDIO API (Phase 4 Hardening) ---
+
+class StudioHandshakeRequest(BaseModel):
+    project_id: str
+
+class StudioFileRequest(BaseModel):
+    project_id: str
+    session_id: str
+    path: str
+    content: Optional[str] = None
+    expected_hash: Optional[str] = None
+    expected_snapshot_id: Optional[str] = None
+
+class StudioRollbackRequest(BaseModel):
+    project_id: str
+    session_id: str
+    snapshot_id: str
+
+class StudioRenameRequest(BaseModel):
+    project_id: str
+    session_id: str
+    old_path: str
+    new_path: str
+    confirmed: bool = False
+    check_only: bool = False
+
+class StudioDeleteRequest(BaseModel):
+    project_id: str
+    session_id: str
+    path: str
+    confirmed: bool = False
+    check_only: bool = False
+
+@app.post("/api/studio/auth/handshake")
+async def studio_handshake(req: StudioHandshakeRequest):
+    """P4-X1: Server-Issued Session Handshake."""
+    try:
+        session_id = studio_session_manager.init_session(req.project_id)
+        return {"status": "success", "session_id": session_id}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/studio/file/read")
+async def studio_read_file(project_id: str, path: str, session_id: str):
+    """P4-A & P4-X1: Isolated read with Identity Verification."""
+    try:
+        studio_session_manager.verify_identity(project_id, session_id)
+        content = studio_file_service.read_proxy(project_id, path, session_id)
+        
+        # Conflict Guard Baseline
+        from backend.studio.version_service import studio_version_service
+        abs_path = os.path.join(studio_file_service.draft_dir, project_id, path)
+        f_hash = studio_version_service._calculate_hash(abs_path)
+        snap_id = studio_version_service.current_snapshot_id.get(project_id)
+        
+        return {"status": "success", "content": content, "hash": f_hash, "snapshot_id": snap_id}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/studio/file/write")
+async def studio_write_file(req: StudioFileRequest):
+    """P4-A & P4-X1: Isolated write with Identity Verification."""
+    try:
+        studio_session_manager.verify_identity(req.project_id, req.session_id)
+        studio_file_service.write_proxy(
+            req.project_id, 
+            req.path, 
+            req.content or "", 
+            req.session_id, 
+            req.expected_hash, 
+            req.expected_snapshot_id
+        )
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/studio/file/list")
+async def studio_list_files(project_id: str, session_id: str, rel_path: str = ""):
+    """P4-A & P4-X1: Isolated list with Identity Verification."""
+    try:
+        studio_session_manager.verify_identity(project_id, session_id)
+        files = studio_file_service.list_files(project_id, rel_path)
+        return {"status": "success", "files": files}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/studio/file/rename")
+async def studio_rename_file(req: StudioRenameRequest):
+    try:
+        studio_session_manager.verify_identity(req.project_id, req.session_id)
+        if req.check_only:
+            from studio.dependency_service import studio_dependency_service
+            impact = studio_dependency_service.analyze_impact(req.old_path)
+            return {"status": "success", "impact": impact}
+            
+        studio_file_service.rename_file_proxy(req.project_id, req.old_path, req.new_path, req.session_id, req.confirmed)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/studio/file/delete")
+async def studio_delete_file(req: StudioDeleteRequest):
+    try:
+        studio_session_manager.verify_identity(req.project_id, req.session_id)
+        if req.check_only:
+            from studio.dependency_service import studio_dependency_service
+            impact = studio_dependency_service.analyze_impact(req.path)
+            return {"status": "success", "impact": impact}
+            
+        studio_file_service.delete_file_proxy(req.project_id, req.path, req.session_id, req.confirmed)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/studio/execution/run")
+async def studio_run_code(req: StudioFileRequest):
+    try:
+        execution_id = studio_session_manager.run_studio_code(req.project_id, req.session_id, req.content or "")
+        return {"status": "success", "execution_id": execution_id}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/studio/execution/stop")
+async def studio_stop_code(req: StudioFileRequest):
+    try:
+        # Note: req.path is used as execution_id here
+        studio_session_manager.stop_studio_code(req.session_id, req.path)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/studio/versions/list")
+async def studio_list_snapshots(project_id: str, session_id: str):
+    try:
+        studio_session_manager.verify_identity(project_id, session_id)
+        from backend.studio.version_service import studio_version_service
+        snapshots = studio_version_service.list_snapshots(project_id)
+        return {"status": "success", "snapshots": [s.model_dump() for s in snapshots]}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/studio/versions/rollback")
+async def studio_rollback_snapshot(req: StudioRollbackRequest):
+    try:
+        studio_session_manager.verify_identity(req.project_id, req.session_id)
+        studio_version_service.rollback(req.project_id, req.snapshot_id)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/studio/project/metadata")
+async def studio_get_metadata(project_id: str, session_id: str):
+    try:
+        studio_session_manager.verify_identity(project_id, session_id)
+        meta = studio_project_service.get_project_metadata(project_id)
+        return {"status": "success", "metadata": meta.model_dump()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.websocket("/ws/studio/events/{project_id}")
+async def studio_events_ws(websocket: WebSocket, project_id: str, session_id: str = Query(...)):
+    """P3-K & P4: Project-wide System Events with Identity Verification."""
+    try:
+        studio_session_manager.verify_identity(project_id, session_id)
+        await websocket.accept()
+        queue = studio_graph_streamer.get_system_queue(project_id)
+        while True:
+            event = await queue.get()
+            await websocket.send_json(event)
+    except WebSocketDisconnect: pass
+    except Exception as e:
+        try: await websocket.close()
+        except: pass
 
 @app.post("/api/skills/test/{skill_id}")
 async def test_skill(skill_id: str, args: dict = {}):

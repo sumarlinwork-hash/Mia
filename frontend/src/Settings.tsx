@@ -1,21 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
   ArrowLeft, Save, Plus, Trash2, Pencil, Zap, 
-  CheckCircle2, XCircle, Info, RefreshCcw, Star, AlertCircle, Activity
+  CheckCircle2, XCircle, Info, RefreshCcw, Star
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import ThemeTab from './components/settings/ThemeTab';
 import { useConfig } from './hooks/useConfig';
 
 import type { MIAConfig, ProviderConfig } from './types/config';
 import type { App as Skill } from './utils/viewModel';
+import ResilienceDashboard from './ResilienceDashboard';
 
-interface DiagnosticResult {
-  provider: string;
-  status: 'OK' | 'FAIL';
-  reason: string;
-  action: string;
-}
 
 const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Anthropic API", "Groq", "DeepSeek", "Mistral"];
 const PURPOSES = ["Text & Logic (LLM)", "Vision / Multimodal", "Coding Specialist", "Audio / Speech", "Search / RAG"];
@@ -49,7 +44,16 @@ export default function Settings() {
   const { config, loading, updateConfig: setGlobalConfig, refreshConfig } = useConfig();
   const [originalConfig, setOriginalConfig] = useState<MIAConfig | null>(null);
   const [view, setView] = useState<'list' | 'add' | 'edit'>('list');
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('intelligence');
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab && ['intelligence', 'appearance', 'personality', 'skills', 'resilience'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [location]);
   const [isSaving, setIsSaving] = useState(false);
   const [editName, setEditName] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -73,8 +77,6 @@ export default function Settings() {
     health_ok: 0,
     health_fail: 0
   });
-  const [diagnosticResults, setDiagnosticResults] = useState<DiagnosticResult[]>([]);
-  const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -125,21 +127,6 @@ export default function Settings() {
     return () => { isMounted = false; };
   }, [config, originalConfig]);
 
-  const runDiagnostic = async () => {
-    setIsDiagnosing(true);
-    try {
-      const res = await fetch('/api/diagnostic');
-      const data = await res.json();
-      if (data.status === 'success') {
-        setDiagnosticResults(data.results);
-        addToast("Sistem Diagnostik Selesai.", "success");
-      }
-    } catch {
-      addToast("Gagal menjalankan diagnostik.", "error");
-    } finally {
-      setIsDiagnosing(false);
-    }
-  };
 
   const updateConfigLocal = async (newConf: MIAConfig) => {
     setGlobalConfig(newConf);
@@ -324,13 +311,13 @@ export default function Settings() {
         </header>
 
         <div className="flex gap-8 mb-8 border-b border-white/10">
-          {['intelligence', 'appearance', 'themes', 'personality', 'skills'].map(tab => (
+          {['intelligence', 'appearance', 'personality', 'skills', 'resilience'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`pb-4 px-2 text-sm font-bold uppercase tracking-widest transition-all ${activeTab === tab ? 'text-primary border-b-2 border-primary' : 'text-white/40 hover:text-white'}`}
             >
-              {tab === 'skills' ? 'Manage Abilities' : tab}
+              {tab === 'skills' ? 'Manage Abilities' : tab === 'resilience' ? 'Resilience Audit' : tab}
             </button>
           ))}
         </div>
@@ -369,48 +356,6 @@ export default function Settings() {
                 </div>
              </div>
 
-             {/* DIAGNOSTIC ENGINE (Phase 5) */}
-             <div className="mb-10 p-8 rounded-[32px] bg-red-500/5 border border-red-500/10 backdrop-blur-3xl">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-2xl bg-red-500/20 text-red-500"><AlertCircle size={24}/></div>
-                    <div>
-                      <h2 className="text-xl font-bold text-white">Diagnostic & Repair Center</h2>
-                      <p className="text-sm text-white/40">Jika MIA tidak menjawab, jalankan diagnostik untuk menemukan masalahnya.</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={runDiagnostic}
-                    disabled={isDiagnosing}
-                    className="px-8 py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {isDiagnosing ? <RefreshCcw className="animate-spin" /> : <Activity size={20} />} 
-                    Fix My Brain
-                  </button>
-                </div>
-
-                {diagnosticResults.length > 0 && (
-                  <div className="mt-8 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                    {diagnosticResults.map((res, idx) => (
-                      <div key={idx} className={`p-5 rounded-2xl border ${res.status === 'OK' ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/10 border-red-500/30'} flex flex-col md:flex-row md:items-center justify-between gap-4`}>
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${res.status === 'OK' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-                            {res.status === 'OK' ? <CheckCircle2 size={18}/> : <XCircle size={18}/>}
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-white/60 uppercase tracking-widest">{res.provider}</div>
-                            <div className={`text-sm font-bold ${res.status === 'OK' ? 'text-green-400' : 'text-red-400'}`}>{res.reason}</div>
-                          </div>
-                        </div>
-                        <div className="flex flex-col md:items-end">
-                           <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest mb-1">Recommended Action</div>
-                           <div className="text-xs text-white/80">{res.action}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-             </div>
 
             {view === 'list' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -697,7 +642,7 @@ export default function Settings() {
               <div>
                 <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Background Type</label>
                 <div className="flex gap-4">
-                  {['video', 'image', 'color'].map(type => (
+                  {['video', 'image', 'color', 'themes'].map(type => (
                     <button 
                       key={type}
                       onClick={() => {
@@ -705,7 +650,7 @@ export default function Settings() {
                         if (type === 'color' && newUrl.startsWith('/')) {
                           newUrl = '#0a0a0a';
                         }
-                        updateConfigLocal({ ...config, appearance: { ...config.appearance, background_type: type as 'video' | 'image' | 'color', background_url: newUrl } });
+                        updateConfigLocal({ ...config, appearance: { ...config.appearance, background_type: type as 'video' | 'image' | 'color' | 'themes', background_url: newUrl } });
                       }}
                       className={`px-6 py-2 rounded-xl font-bold transition-all ${config.appearance.background_type === type ? 'bg-primary text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
                     >
@@ -715,7 +660,11 @@ export default function Settings() {
                 </div>
               </div>
 
-              {config.appearance.background_type !== 'color' ? (
+              {config.appearance.background_type === 'themes' ? (
+                <div className="mt-4">
+                   <ThemeTab config={config} updateConfigLocal={updateConfigLocal} />
+                </div>
+              ) : config.appearance.background_type !== 'color' ? (
                 <div>
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
                     Background URL / Local Path
@@ -775,11 +724,6 @@ export default function Settings() {
           </div>
         )}
         
-        {/* Themes Settings Tab */}
-        {activeTab === 'themes' && (
-          <ThemeTab config={config} updateConfigLocal={updateConfigLocal} />
-        )}
-
         {activeTab === 'personality' && (
           <div className="max-w-3xl bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300">
             <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
@@ -954,6 +898,10 @@ export default function Settings() {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'resilience' && (
+          <ResilienceDashboard />
         )}
 
       </div>

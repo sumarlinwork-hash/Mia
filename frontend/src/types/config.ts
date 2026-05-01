@@ -1,6 +1,6 @@
 export interface AppearanceConfig {
   background_url: string;
-  background_type: 'video' | 'image' | 'color';
+  background_type: 'video' | 'image' | 'color' | 'themes';
   ui_opacity: number;
   bubble_color_mia: string;
   bubble_color_user: string;
@@ -36,4 +36,5 @@ export interface MIAConfig {
   care_pulse_enabled: boolean;
   resonant_skin_enabled: boolean;
   bio_sync_enabled: boolean;
+  os_mode: string;
 }

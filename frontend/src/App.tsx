@@ -8,7 +8,8 @@ import IamMia from './IamMia';
 import Crone from './Crone';
 import EmotionDashboard from './EmotionDashboard';
 import SkillMarketplace from './SkillMarketplace';
-import ResilienceDashboard from './ResilienceDashboard';
+import { StudioPage } from './mia_studio/components/StudioPage';
+import { FileStoreProvider } from './mia_studio/context/FileStoreContext';
 import ZenModeOverlay from './components/ZenModeOverlay';
 import ResonantOrchestrator from './components/ResonantOrchestrator';
 
@@ -91,7 +92,11 @@ function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/emotion" element={<EmotionDashboard />} />
               <Route path="/skills" element={<SkillMarketplace />} />
-              <Route path="/resilience" element={<ResilienceDashboard />} />
+              <Route path="/studio" element={
+                <FileStoreProvider>
+                  <StudioPage />
+                </FileStoreProvider>
+              } />
             </Routes>
           </main>
 

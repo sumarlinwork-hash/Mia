@@ -783,7 +783,7 @@ export default function Home() {
                 {brainStatus !== "Connected" ? "BRAIN DISCONNECTED" : `${statusStage}: ${statusMessage}`}
               </span>
               {brainStatus !== "Connected" && (
-                <Link to="/resilience" className="text-[10px] font-black bg-red-500 text-black px-2 py-0.5 rounded animate-pulse hover:bg-white transition-colors">
+                <Link to="/settings?tab=resilience" className="text-[10px] font-black bg-red-500 text-black px-2 py-0.5 rounded animate-pulse hover:bg-white transition-colors">
                   FIX MY BRAIN
                 </Link>
               )}

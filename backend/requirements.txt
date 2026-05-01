@@ -13,3 +13,4 @@ edge-tts
 openai
 elevenlabs
 requests
+psutil

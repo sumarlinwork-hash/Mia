@@ -34,6 +34,7 @@ thumbs.db
 # MIA Private Memories (Jangan unggah privasi Bos ke publik)
 backend/iam_mia/*.md
 backend/iam_mia/*.json
+backend/iam_mia/memory/
 backend/history.db
 frontend/public/assets/chatbg/*
 !frontend/public/assets/chatbg/.gitkeep
@@ -44,3 +45,12 @@ scratch/
 DxDiag.txt
 kemampuan.txt
 promptCheck.txt
+
+# MIA Studio Isolation (Phase 4 - Do not leak project drafts or snapshots)
+backend/studio/drafts/
+backend/studio/versions/
+backend/studio/journal/
+backend/studio/trash/
+backend/studio/logs/
+backend/studio/projects_registry.json
+backend/studio/test_*.py
