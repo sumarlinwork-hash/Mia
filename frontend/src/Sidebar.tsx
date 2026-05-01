@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Settings2, Brain, Activity, ChevronLeft, ChevronRight, Heart, Zap, Shield, Flower, Flower2, Flower2Icon, LucideFlower2 } from 'lucide-react';
+import { Home, Settings2, Brain, Activity, ChevronLeft, ChevronRight, Heart, Zap, Shield, Flower } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
 
 interface SidebarProps {

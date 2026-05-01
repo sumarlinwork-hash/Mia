@@ -40,12 +40,7 @@ function App() {
 
   const bgUrl = config?.appearance?.background_url || '';
   
-  // Adaptive UI: Determine brightness overlay based on time of day
-  const hour = new Date().getHours();
-  let timeTint = "bg-black/20"; // Afternoon default
-  if (hour >= 18 || hour < 5) timeTint = "bg-black/60"; // Night
-  else if (hour >= 5 && hour < 10) timeTint = "bg-black/30"; // Morning
-  else if (hour >= 10 && hour < 15) timeTint = "bg-black/10"; // Noon
+
 
   return (
     <ThemeProvider>
