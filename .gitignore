@@ -52,5 +52,10 @@ backend/studio/versions/
 backend/studio/journal/
 backend/studio/trash/
 backend/studio/logs/
+backend/studio/locks/
+backend/studio/history/
 backend/studio/projects_registry.json
 backend/studio/test_*.py
+backend/backend/studio/locks/
+backend/backend/studio/logs/
+backend/backend/studio/history/
