@@ -13,9 +13,15 @@ interface DiagnosticResult {
   action?: string;
 }
 
+interface SystemInvariant {
+  name: string;
+  status: string;
+  desc: string;
+}
+
 const ResilienceDashboard: React.FC = () => {
   const [results, setResults] = useState<DiagnosticResult[]>([]);
-  const [invariants, setInvariants] = useState<any[]>([]);
+  const [invariants, setInvariants] = useState<SystemInvariant[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [systemHealth, setSystemHealth] = useState<number>(100);
@@ -39,7 +45,7 @@ const ResilienceDashboard: React.FC = () => {
         const baseScore = total > 0 ? ((total - failed) / total) * 100 : 100;
         
         // Invariants penalty if any are INACTIVE
-        const inactiveInvariants = invariantResults.filter((i: any) => i.status !== 'ACTIVE').length;
+        const inactiveInvariants = invariantResults.filter((i: SystemInvariant) => i.status !== 'ACTIVE').length;
         const finalScore = Math.max(0, Math.round(baseScore - (inactiveInvariants * 10)));
         
         setSystemHealth(finalScore);
