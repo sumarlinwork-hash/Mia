@@ -402,7 +402,7 @@ export default function Home() {
       window.removeEventListener('keydown', handleGlobalShortcuts);
       clearInterval(intimacyInterval);
     };
-  }, [playSFX, stopAudio]);
+  }, [playSFX, stopAudio, toggleIntimacy]);
 
   // Phase 4: Timeout Watcher (Strict Behavior)
   useEffect(() => {
