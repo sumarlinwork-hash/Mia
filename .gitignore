@@ -92,3 +92,5 @@ node_modules/
 *.egg-info/
 .installed.cfg
 *.egg
+
+backend/history/chat_history.db

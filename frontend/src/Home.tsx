@@ -338,6 +338,8 @@ export default function Home() {
 
         if (data.type === "message" || data.type === "system") {
           setIsThinking(false); 
+          setStatusStage("DONE");
+          setStatusMessage("");
           playSFX('receive');
           
           const isError = data.content.startsWith("[SYSTEM ERROR]");

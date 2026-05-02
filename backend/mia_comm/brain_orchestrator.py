@@ -382,7 +382,22 @@ If you use a tool, I will execute it and provide the result in the next turn.
             else:
                 bucket = "neutral"
                 
-            return random.choice(local_db[bucket])
+            error_lower = str(error).lower()
+            error_key = "general_error"
+            
+            if "401" in error_lower or "unauthorized" in error_lower or "key" in error_lower:
+                error_key = "api_401"
+            elif "429" in error_lower or "rate" in error_lower or "quota" in error_lower:
+                error_key = "api_429"
+            elif "timeout" in error_lower or "time out" in error_lower:
+                error_key = "timeout"
+            elif "disconnect" in error_lower or "connection" in error_lower or "network" in error_lower or "socket" in error_lower:
+                error_key = "ws_disconnected"
+            elif "brain" in error_lower or "llm" in error_lower or "model" in error_lower:
+                error_key = "brain_disconnected"
+                
+            bucket_data = local_db.get(bucket, {})
+            return bucket_data.get(error_key, bucket_data.get("general_error", "MIA_SYSTEM_ALERT::TOTAL_FAILURE"))
         except Exception as inner_err:
             print(f"[Critical Fail] Local Heartbeat failed: {inner_err}")
             return "MIA_SYSTEM_ALERT::TOTAL_FAILURE"
