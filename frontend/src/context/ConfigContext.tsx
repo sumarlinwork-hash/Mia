@@ -40,7 +40,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
 
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/heartbeat`;
+      const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/api/chat/heartbeat`;
       
       ws = new WebSocket(wsUrl);
 

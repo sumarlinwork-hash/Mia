@@ -1,104 +1,38 @@
-# 🏛️ MIA-AS — FINAL SYSTEM VERIFICATION REPORT (ULTIMATE EDITION)
-
-Version: 3.0 (EBARF-CAPSE Hardened)
-Scope: Full System Integrity, Advanced Resilience & Emotional Isolation
-Status: PRODUCTION-GRADE VERIFIED (LOCKED)
-Timestamp: 2026-05-01 15:40:00
+# 🏛️ MIA-AS PROVIDER INTELLIGENCE VERIFICATION (FACT CHECK)
 
 ============================================================
-SECTION 1 — CORE INTEGRITY (REGRESSION & QUALITY)
+SECTION 1 — TEST EXECUTION FACTS
 ============================================================
 
-Pemeriksaan menyeluruh terhadap seluruh codebase (Backend & Frontend).
-
-| TEST ID      | CATEGORY          | DESCRIPTION                     | RESULT |
-|--------------|-------------------|---------------------------------|--------|
-| REG-INT-01   | Backend Syntax    | Compile-all audit (No Typos)    | PASS   |
-| REG-INT-02   | Frontend Types    | TSC Type-Check (Strict Mode)    | PASS   |
-| REG-INT-03   | Bundling          | Vite Production Build Simulation| PASS   |
-| REG-INT-04   | Linting           | ESLint Static Quality Check     | PASS   |
-| REG-INT-05   | Environment       | .env Configuration Sync         | PASS   |
-
-**VERDICT: 100% ERROR-FREE (Clean System State)**
+| DATA POINT                | ACTUAL VALUE |
+|---------------------------|--------------|
+| Provider Tested           | HuggingFace2 |
+| Toast Message (UI)        | HuggingFace2 gagal: HTTP 404: <!DOCTYPE html>... |
+| HTTP Status Code          | 404 (Not Found) |
+| Request Path (Chat API)   | /v1/chat/completions |
+| Request Path (Native)     | /models/Qwen/Qwen2.5-1.5B-Instruct |
 
 ============================================================
-SECTION 2 — ADVANCED LOAD & STRESS (NUCLEAR TEST)
+SECTION 2 — PROVIDER CONFIG COMPARISON
 ============================================================
 
-Beban ekstrem pada infrastruktur SHAD-CSA v2.0 (ControlLoop).
+Data dari `config.json` untuk audit endpoint compatibility:
 
-*   **Concurrency:** 100 Concurrent Requests (Simultaneous Blast).
-*   **Success Rate:** 100.0% (Zero Crashes / Zero Data Leak).
-*   **Throughput:** 177.68 requests/second.
-*   **Avg Latency:** 0.0056s per internal request.
-*   **Economic Integrity:** ECF Budget tracking verified (9900/10000).
-
-**VERDICT: STRESS-RESISTANT (Military Grade Throughput)**
-
-============================================================
-SECTION 3 — CAPSE ADVERSARIAL REALITY (PHASE 6)
-============================================================
-
-Validasi ketahanan terhadap kegagalan terdistribusi dan korupsi data.
-
-*   **Marathon Cycles:** 1,000 Continuous Cycles.
-*   **Entropy Mode:** Permanent Stochastic Reality (Adversarial).
-*   **Invariant Violations:** 0 (No Node Explosion, No Drift).
-*   **Recovery Rate:** Instant (< 1.2s) under 40% node corruption.
-*   **Self-Healing:** Proactive (PredictiveHealer) & Reactive (Quorum Shift).
-
-**VERDICT: APOCALYPSE SURVIVOR (Autonomous Resilience)**
+| FIELD        | HuggingFace2 (FAIL)                   | HuggingFace5 (NOT TESTED)            |
+|--------------|---------------------------------------|--------------------------------------|
+| Model ID     | Qwen/Qwen2.5-1.5B-Instruct            |            |
+| Base URL     | https://api-inference.huggingface.co/v1 | https://api-inference.huggingface.co/v1 |
+| Protocol     | OpenAI Compatible                     | OpenAI Compatible                    |
+| Latency      | 9999                                  | 0                                    |
+| Health FAIL  | 7                                     | 0                                    |
 
 ============================================================
-SECTION 4 — SECURITY & DATA PROTECTION
+SECTION 3 — ENGINEERING VERDICT
 ============================================================
 
-Audit keamanan terhadap pola eksekusi dan perlindungan sistem.
+1. **Backend Connectivity:** TERVERIFIKASI (Google Ping OK, Terminal Log menunjukkan request terkirim).
+2. **Observability:** TERVERIFIKASI (Refresh config jalan, angka Fail bertambah di layar).
+3. **Penyebab Gagal:** Endpoint HuggingFace (baik Chat maupun Native) mengembalikan 404 HTML. Ini mensinyalir bahwa model-model tersebut tidak tersedia di jalur *Serverless Inference* publik standar HF.
 
-*   **Shell Safety:** `run_command` hardened with **Strict Blacklist**.
-*   **Dangerous Sink Audit:** `eval()`, `os.system()` patterns eliminated/isolated.
-*   **Architecture Isolation:** Strict 3-Layer separation (Core, Emotion, Renderer).
-*   **Fallback Integrity:** Failures trigger deterministic non-emotional responses.
-
-**VERDICT: HARDENED (No Critical Vulnerabilities Found)**
-
-============================================================
-SECTION 5 — UX & USABILITY (ZERO-EFFORT ENTRY)
-============================================================
-
-Analisis kenyamanan dan alur interaksi pengguna akhir.
-
-*   **Initial Load:** < 1.0s (Auto-config & Identity loading).
-*   **Adaptive UI:** Auto-tinting (Morning/Noon/Night) comfort sync.
-*   **Emotional Realism:** Post-process human friction (Typos/Delays) verified.
-*   **Navigational Fluidity:** 1000ms Premium transitions (Ease-in-out).
-
-**VERDICT: USER-CENTRIC (Premium UX Experience)**
-
-============================================================
-SECTION 6 — FINAL ARCHITECTURE RATINGS
-============================================================
-
-| METRIC                      | SCORE (1-10) | NOTES                         |
-|-----------------------------|--------------|-------------------------------|
-| **Stability**               | 10/10        | 100% Success in Stress Test   |
-| **Resilience**              | 9.8/10       | High-speed adversarial recovery|
-| **Security**                | 9.5/10       | Strict command blacklisting   |
-| **Usability**               | 9.7/10       | Zero-effort automation flow   |
-| **Integrity**               | 10/10        | Deterministic Event Ordering  |
-
-**FINAL CLASSIFICATION:**
-**MIA ARCHITECT STUDIO: Economically Bounded Self-Evolving Distributed Organism**
-
-============================================================
-ENGINEERING CONCLUSION:
-Sistem telah divalidasi sebagai **PRODUCTION READY (S+)**. 
-Arsitektur SHAD-CSA v2.0 telah mencapai puncak evolusinya—menggabungkan kekuatan deterministik militer dengan kelembutan emosional yang terisolasi. Seluruh jalur data, dari Home Chat hingga Studio Dashboard, telah terkunci dalam status **VALIDATED**.
-
-DATE: 2026-05-01
-SIGNATURE: Antigravity (AI Auditor)
-============================================================
-FINAL COMPLETION TIMESTAMP: 2026-05-01 15:41:00 (WIB)
-STATUS: ARCHITECTURE LOCKED & VERIFIED
-============================================================
-EOF
+---
+STATUS: AUDITING ENDPOINT COMPATIBILITY

@@ -9,6 +9,7 @@ from core.graph_engine import GraphExecutor, ExecutionGraph, NodeStatus, Executi
 from core.graph_compiler import GraphCompiler
 from core.emotion_manager import emotion_manager
 from core.cost_manager import cost_manager
+from core.provider_resolver import provider_resolver
 import re
 import random
 import json
@@ -29,15 +30,21 @@ class BrainOrchestrator:
         self.compiler = GraphCompiler(tool_registry=agent_tools.get_tool_names())
         self.active_graphs: Dict[str, ExecutionGraph] = {}
         self.graph_timestamps: Dict[str, float] = {}
-        self._init_shad_csa()
+        # Brain starts with a refresh to be ready
+        self._refresh_brain_nodes()
 
-    def _init_shad_csa(self):
+    def _refresh_brain_nodes(self):
         """
-        Initializes SHAD-CSA v2.0 (EBARF Edition) for production.
+        Dynamically synchronizes MIA's brain nodes with the current config.json.
+        This ensures that GUI updates are reflected instantly in chat.
         """
         config = load_config()
         
-        # 1. EBARF Components
+        # 1. EBARF Components (Economy & Resilience)
+        from shad_csa.economy.economic_control import EconomicControlField
+        from shad_csa.runtime.resilience_interpreter import ResilienceInterpreter
+        from shad_csa.core.control_loop import ControlLoop
+
         self.ecf = EconomicControlField(compute_budget=5000, node_budget=20, chaos_budget=0)
         self.interpreter = ResilienceInterpreter()
         
@@ -58,10 +65,10 @@ class BrainOrchestrator:
                 nodes.append(ExecutionNode(name, make_provider_fn(p)))
         
         # 2. Lifecycle Manager
-        self.lifecycle = NodeLifecycleManager(self.ecf, None) # Placeholder provider_fn, logic handled by loop
+        self.lifecycle = NodeLifecycleManager(self.ecf, None)
         self.lifecycle.active_nodes = nodes
         
-        # 3. Final Wiring
+        # 3. Dynamic Control Loop Re-binding
         self.control_loop = ControlLoop(
             nodes, 
             ecf=self.ecf, 
@@ -265,13 +272,12 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 async def shad_telemetry_bridge(data):
                     await emit("SHAD_CSA", data)
                     # P4-X: Also broadcast to System Stream for Studio visibility
+                    # P4-X: Also broadcast to System Stream for Studio visibility
                     config = load_config()
-                    project_id = config.active_project_id or "default_project"
                     studio_graph_streamer.push_event(
                         execution_id="system_resilience", 
                         event_type="SHAD_CSA_TELEMETRY", 
-                        payload=data,
-                        project_id=project_id
+                        payload=data
                     )
                 
                 self.control_loop.telemetry_cb = shad_telemetry_bridge
@@ -534,16 +540,21 @@ If you use a tool, I will execute it and provide the result in the next turn.
         Smart Protocol Dispatcher with Retry Logic.
         Supports: Gemini API, Groq, OpenAI, DeepSeek, OpenAI-compatible.
         """
-        protocol = p.protocol.lower()
-        full_user_content = f"{context}\n\nUser: {user_message}" if context.strip() else user_message
+        # --- GRAND RESOLVER STEP ---
+        # Resolve the TRUE endpoint and protocol before any API call
+        resolved = provider_resolver.resolve(p.display_name, p.model_id, p.base_url)
+        target_url = resolved["url"]
+        protocol = resolved["protocol"]
         
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
-                if "gemini" in protocol:
-                    return await self._call_gemini(p, system_prompt, full_user_content, images)
+                if protocol == "gemini":
+                    return await self._call_gemini(p, target_url, system_prompt, user_message, images)
+                elif protocol == "hf_native":
+                    return await self._call_huggingface_native(p, target_url, system_prompt, user_message)
                 else:
-                    return await self._call_openai_compatible(p, system_prompt, full_user_content, images)
+                    return await self._call_openai_compatible(p, target_url, system_prompt, user_message, images)
             except Exception as e:
                 # Retry on rate limits or transient errors
                 if "429" in str(e) or "503" in str(e) or "500" in str(e):
@@ -554,16 +565,14 @@ If you use a tool, I will execute it and provide the result in the next turn.
                         continue
                 raise e
 
-    async def _call_gemini(self, p: ProviderConfig, system_prompt: str, user_message: str, images: list) -> str:
+    async def _call_gemini(self, p: ProviderConfig, resolved_url: str, system_prompt: str, user_message: str, images: list) -> str:
         """
-        Google Gemini Native REST API.
-        Uses: generativelanguage.googleapis.com (NOT OpenAI-compatible format)
+        Google Gemini Native REST API (Resolved).
         """
-        model = p.model_id or "gemini-1.5-flash"
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models"
-            f"/{model}:generateContent?key={p.api_key}"
-        )
+        final_url = resolved_url
+        if "key=" not in resolved_url:
+            sep = "&" if "?" in resolved_url else "?"
+            final_url = f"{resolved_url}{sep}key={p.api_key}"
 
         user_parts = [{"text": user_message}]
         for img in images:
@@ -596,7 +605,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
         }
 
         resp = await self.client.post(
-            url, json=payload,
+            final_url, json=payload,
             headers={"Content-Type": "application/json"},
             timeout=10.0 # Strict production timeout
         )
@@ -604,33 +613,43 @@ If you use a tool, I will execute it and provide the result in the next turn.
         data = resp.json()
         return data["candidates"][0]["content"]["parts"][0]["text"]
 
-    async def _call_openai_compatible(self, p: ProviderConfig, system_prompt: str, user_message: str, images: list) -> str:
+    async def _call_huggingface_native(self, p: ProviderConfig, resolved_url: str, system_prompt: str, user_message: str) -> str:
         """
-        OpenAI-Compatible API (Groq, DeepSeek, OpenAI, custom base_url).
+        HuggingFace Hub Native Inference API (Resolved).
         """
-        protocol = p.protocol.lower()
+        url = resolved_url
+        headers = {"Content-Type": "application/json"}
+        if p.api_key:
+            headers["Authorization"] = f"Bearer {p.api_key}"
 
+        # Native HF expects a single 'inputs' field
+        payload = {
+            "inputs": f"{system_prompt}\n\nUser: {user_message}\n\nAssistant:",
+            "parameters": {
+                "max_new_tokens": 250,
+                "return_full_text": False
+            }
+        }
+
+        resp = await self.client.post(url, json=payload, headers=headers, timeout=15.0)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # HF returns a list: [{"generated_text": "..."}]
+        if isinstance(data, list) and len(data) > 0:
+            return data[0].get("generated_text", "").strip()
+        return str(data)
+
+    async def _call_openai_compatible(self, p: ProviderConfig, resolved_url: str, system_prompt: str, user_message: str, images: list) -> str:
+        """
+        OpenAI-Compatible API (Resolved).
+        """
+        url = resolved_url
+        
         headers = {
             "Authorization": f"Bearer {p.api_key}",
             "Content-Type": "application/json"
         }
-
-        if protocol == "groq":
-            url = "https://api.groq.com/openai/v1/chat/completions"
-        elif protocol == "deepseek":
-            url = "https://api.deepseek.com/chat/completions"
-        elif "huggingface" in p.base_url.lower():
-            # HuggingFace Native Inference API support
-            url = f"https://api-inference.huggingface.co/models/{p.model_id}"
-            # For native HF API, payload structure is different (not chat/completions)
-            # But many HF models now support the /v1/chat/completions endpoint
-            # Let's try the /v1/chat/completions first, but if it's base_url, 
-            # we allow the user to specify it.
-            url = f"{p.base_url.rstrip('/')}/chat/completions"
-        elif p.base_url:
-            url = f"{p.base_url.rstrip('/')}/chat/completions"
-        else:
-            url = "https://api.openai.com/v1/chat/completions"
 
         user_content = user_message
         if images:

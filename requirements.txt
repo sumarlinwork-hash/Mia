@@ -13,6 +13,7 @@ pyaudio==0.2.14
 
 # Senses - Mulut (Local TTS CPU)
 edge-tts==6.1.9
+piper-tts==1.2.0
 
 # Senses - Mata & Tangan (Vision & Automation)
 pyautogui==0.9.54

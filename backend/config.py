@@ -84,20 +84,21 @@ class MIAConfig(BaseModel):
     
     providers: Dict[str, ProviderConfig] = {}
     appearance: AppearanceConfig = AppearanceConfig()
+    test_timeout: int = 30
 
 def get_default_config() -> MIAConfig:
     default_providers = {
         "Gemini": ProviderConfig(
             is_active=True, is_default=True, display_name="Gemini Flash", 
-            model_id="gemini-1.5-flash", protocol="Gemini API", purpose="LLM & Logic", cost_label="FREE"
+            model_id="gemini-1.5-flash", protocol="Gemini API", purpose="Inti Logika & Pikiran", cost_label="Gratis berlimit"
         ),
         "Groq": ProviderConfig(
             is_active=True, display_name="Groq Llama 3", 
-            model_id="llama3-8b-8192", protocol="Groq", purpose="Fast Logic", cost_label="FREE"
+            model_id="llama3-8b-8192", protocol="Groq", purpose="Inti Logika & Pikiran", cost_label="Gratis berlimit"
         ),
         "OpenAI": ProviderConfig(
             is_active=False, display_name="GPT-4o", 
-            model_id="gpt-4o", protocol="OpenAI Compatible", purpose="Complex Tasks", cost_label="PAID"
+            model_id="gpt-4o", protocol="OpenAI Compatible", purpose="Inti Logika & Pikiran", cost_label="Berbayar"
         )
     }
     return MIAConfig(providers=default_providers)

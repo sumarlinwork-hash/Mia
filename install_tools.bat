@@ -74,7 +74,7 @@ if exist ".venv\Scripts\activate.bat" (
     
     set "SKIP_PIP=0"
     if exist ".venv\.last_install" (
-        powershell -Command "$req = Get-Item 'requirements.txt'; $last = Get-Item '.venv\.last_install'; if ($req.LastWriteTime -le $last.LastWriteTime) { exit 0 } else { exit 1 }" >nul 2>&1
+        powershell -Command "$req = Get-Item 'requirements.txt'; $last = Get-Item '.venv\.last_install'; if ^($req.LastWriteTime -le $last.LastWriteTime^) { exit 0 } else { exit 1 }" >nul 2>&1
         if !errorlevel! == 0 set "SKIP_PIP=1"
     )
 
@@ -106,7 +106,7 @@ if exist "frontend\package.json" (
     
     set "SKIP_NPM=0"
     if exist "node_modules\.last_install" (
-        powershell -Command "$pkg = Get-Item 'package.json'; $last = Get-Item 'node_modules\.last_install'; if ($pkg.LastWriteTime -le $last.LastWriteTime) { exit 0 } else { exit 1 }" >nul 2>&1
+        powershell -Command "$pkg = Get-Item 'package.json'; $last = Get-Item 'node_modules\.last_install'; if ^($pkg.LastWriteTime -le $last.LastWriteTime^) { exit 0 } else { exit 1 }" >nul 2>&1
         if !errorlevel! == 0 set "SKIP_NPM=1"
     )
 

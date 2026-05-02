@@ -37,4 +37,5 @@ export interface MIAConfig {
   resonant_skin_enabled: boolean;
   bio_sync_enabled: boolean;
   os_mode: string;
+  test_timeout: number;
 }

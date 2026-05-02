@@ -4,7 +4,7 @@ import {
   Image as ImageIcon, FileText, MonitorUp, Volume2, VolumeX, 
   Search, Code, Zap, Database, CheckSquare, Sparkles, XCircle,
   ThumbsUp, ThumbsDown, Pin, Pencil, Trash2, Download, PlayCircle,
-  Copy, Check, AlertCircle, Info as InfoIcon, Heart
+  Copy, Check, AlertCircle, Info as InfoIcon, Heart, Droplets
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -140,13 +140,25 @@ export default function Home() {
     setIsSpeaking(false);
   }, []);
 
+  const resumeAudioContext = useCallback(async () => {
+    if (!audioContext.current) {
+      const AudioContextClass = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      audioContext.current = new AudioContextClass();
+      analyser.current = audioContext.current.createAnalyser();
+      analyser.current.fftSize = 256;
+    }
+    if (audioContext.current.state === 'suspended') {
+      await audioContext.current.resume();
+    }
+  }, []);
+
   const playAudio = useCallback((src: string) => {
     if (isSpeaking) { audioQueue.current.push(src); return; }
     const audio = new Audio(src);
-    audio.crossOrigin = "anonymous";
     currentAudio.current = audio;
     if (!audioContext.current) {
-      audioContext.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const AudioContextClass = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      audioContext.current = new AudioContextClass();
       analyser.current = audioContext.current.createAnalyser();
       analyser.current.fftSize = 256;
     }
@@ -189,6 +201,9 @@ export default function Home() {
     const trimmedInput = input.trim();
     if (!trimmedInput || !ws.current) return;
 
+    // Prime the audio context on user gesture
+    resumeAudioContext();
+
     if (trimmedInput === '/clear') {
        fetch('/api/chat/history', { method: 'DELETE' }); 
        setMessages([]); setInput("");
@@ -228,10 +243,13 @@ export default function Home() {
     setShowCommands(false); 
     setShowMentions(false); 
     setShowAttachMenu(false);
-  }, [input, addToast, playSFX]);
+  }, [input, addToast, playSFX, resumeAudioContext]);
 
   const toggleIntimacy = useCallback(async () => {
     try {
+      // Prime audio on interaction
+      resumeAudioContext();
+      
       const target = !intimacyActive;
       const res = await fetch(`/api/intimacy/toggle?active=${target}`, { method: 'POST' });
       const data = await res.json();
@@ -239,7 +257,7 @@ export default function Home() {
       addToast(data.intimacy_active ? "Fase Keintiman Diaktifkan... Aku milikmu sepenuhnya 💖" : "Kembali ke Mode Kerja... Aku siap melayanimu, Bos 💼", data.intimacy_active ? "success" : "info");
       setShowPalette(false);
     } catch { addToast("Failed to toggle intimacy mode", "error"); }
-  }, [intimacyActive, addToast]);
+  }, [intimacyActive, addToast, resumeAudioContext]);
 
   // --- 6. PLAIN VALUES ---
   const paletteMenuItems = [
@@ -283,7 +301,8 @@ export default function Home() {
       if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
 
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/heartbeat`;
+      // Rule: WebSocket MUST point to Backend (Port 8000)
+      const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/api/chat/heartbeat`;
       
       console.log(`[WS] Connecting to ${wsUrl}...`);
       const socket = new WebSocket(wsUrl);
@@ -338,6 +357,11 @@ export default function Home() {
           if (data.audio && !isTTSMutedRef.current && role === "MIA") {
             playAudioRef.current?.(data.audio);
           }
+        } else if (data.type === "audio_chunk") {
+          // Rule 3: Smart Queue for Pacing
+          if (data.audio && !isTTSMutedRef.current) {
+            playAudioRef.current?.(data.audio);
+          }
         } else if (data.type === "status") {
           if (data.stage) {
             setStatusStage(data.stage);
@@ -362,7 +386,7 @@ export default function Home() {
     connectWS();
 
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setShowPalette(prev => !prev); playSFX('pop'); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); toggleIntimacy(); }
       if (e.key === 'Escape') setShowPalette(false);
     };
     window.addEventListener('keydown', handleGlobalShortcuts);
@@ -374,10 +398,11 @@ export default function Home() {
         ws.current.onclose = null;
         ws.current.close();
       }
+      stopAudio(); // Rule 1: Stop on page change
       window.removeEventListener('keydown', handleGlobalShortcuts);
       clearInterval(intimacyInterval);
     };
-  }, [playSFX]);
+  }, [playSFX, stopAudio]);
 
   // Phase 4: Timeout Watcher (Strict Behavior)
   useEffect(() => {
@@ -431,7 +456,10 @@ export default function Home() {
     const val = e.target.value;
     setInput(val);
 
-    if (val.trim() && isSpeaking) stopAudio();
+    // Rule 1: Auto-stop on typing
+    if (val.trim() !== "" && isSpeaking) {
+      stopAudio();
+    }
 
     // PERFORMANCE: Only process command/mention logic if strictly necessary
     const cursor = e.target.selectionStart || 0;
@@ -517,6 +545,9 @@ export default function Home() {
       setIsRecording(false);
       return;
     }
+
+    // Prime audio context on mic click
+    resumeAudioContext();
 
     // Stop MIA from speaking if user wants to record
     if (isSpeaking) {
@@ -726,6 +757,13 @@ export default function Home() {
             </button>
             <button onClick={() => setIsTTSMuted(!isTTSMuted)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
               {isTTSMuted ? <VolumeX size={20} className="text-white/40" /> : <Volume2 size={20} className="text-primary" />}
+            </button>
+            <button 
+              onClick={toggleIntimacy} 
+              className={`p-2 hover:bg-white/10 rounded-full transition-all duration-500 ${intimacyActive ? 'text-pink-500 animate-pulse shadow-[0_0_15px_rgba(255,100,150,0.4)]' : 'text-white/40 hover:text-pink-400'}`}
+              title="Intimacy Mode (Soulmate Phase)"
+            >
+              <Droplets size={20} className={intimacyActive ? "fill-pink-500" : ""} />
             </button>
             <Link to="/settings" className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-primary">
               <Settings2 size={20} />

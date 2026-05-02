@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+// MIA Architect Studio - Intelligence Core Logic
 import { 
   ArrowLeft, Save, Plus, Trash2, Pencil, Zap, 
   CheckCircle2, XCircle, Info, RefreshCcw, Star
@@ -12,26 +13,32 @@ import type { App as Skill } from './utils/viewModel';
 import ResilienceDashboard from './ResilienceDashboard';
 
 
-const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Anthropic API", "Groq", "DeepSeek", "Mistral"];
-const PURPOSES = ["Text & Logic (LLM)", "Vision / Multimodal", "Coding Specialist", "Audio / Speech", "Search / RAG"];
-const COSTS = ["GRATIS (Tanpa Cost / Rate Limit Tinggi)", "PAID (Pay-per-token)", "PREMIUM (Enterprise / Private)"];
+const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Groq"];
+const PURPOSES = ["Inti Logika & Pikiran", "Persepsi Visual & Imajinasi", "Kreativitas & Kreasi Media", "Analisis Data & Pengetahuan"];
+const COSTS = ["Gratis berlimit", "Berbayar", "Lokal"];
 
 const PRESETS: Record<string, Partial<ProviderConfig>> = {
-  "OpenAI": { model_id: "gpt-4o", protocol: "OpenAI Compatible", base_url: "https://api.openai.com/v1", cost_label: COSTS[1] },
-  "Google Gemini": { model_id: "gemini-2.0-flash", protocol: "Gemini API", base_url: "", cost_label: COSTS[0] },
-  "Anthropic": { model_id: "claude-3-5-sonnet-20240620", protocol: "OpenAI Compatible", base_url: "https://api.anthropic.com/v1", cost_label: COSTS[1] },
-  "Groq": { model_id: "llama-3.1-8b-instant", protocol: "Groq", base_url: "https://api.groq.com/openai/v1", cost_label: COSTS[0] },
-  "DeepSeek": { model_id: "deepseek-chat", protocol: "DeepSeek", base_url: "https://api.deepseek.com", cost_label: COSTS[1] },
-  "Mistral": { model_id: "mistral-large-latest", protocol: "OpenAI Compatible", base_url: "https://api.mistral.ai/v1", cost_label: COSTS[1] },
-  "Perplexity": { model_id: "llama-3-sonar-large-32k-online", protocol: "OpenAI Compatible", base_url: "https://api.perplexity.ai", cost_label: COSTS[1] },
-  "Together AI": { model_id: "meta-llama/Llama-3-70b-chat-hf", protocol: "OpenAI Compatible", base_url: "https://api.together.xyz/v1", cost_label: COSTS[1] },
-  "OpenRouter": { model_id: "openrouter/auto", protocol: "OpenAI Compatible", base_url: "https://openrouter.ai/api/v1", cost_label: COSTS[1] },
-  "HuggingFace": { model_id: "meta-llama/Meta-Llama-3-8B-Instruct", protocol: "OpenAI Compatible", base_url: "https://api-inference.huggingface.co/v1", cost_label: COSTS[0] },
-  "Cohere": { model_id: "command-r-plus", protocol: "OpenAI Compatible", base_url: "https://api.cohere.ai/v1", cost_label: COSTS[1] },
-  "Fireworks AI": { model_id: "accounts/fireworks/models/llama-v3-70b-instruct", protocol: "OpenAI Compatible", base_url: "https://api.fireworks.ai/inference/v1", cost_label: COSTS[1] },
-  "xAI (Grok)": { model_id: "grok-1", protocol: "OpenAI Compatible", base_url: "https://api.x.ai/v1", cost_label: COSTS[1] },
-  "Ollama (Local)": { model_id: "llama3", protocol: "OpenAI Compatible", base_url: "http://localhost:11434/v1", cost_label: COSTS[0] },
-  "Custom Provider": { model_id: "", protocol: "OpenAI Compatible", base_url: "", cost_label: COSTS[0] },
+  "OpenAI": { model_id: "gpt-4o", protocol: "OpenAI Compatible", base_url: "https://api.openai.com/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "Google Gemini": { model_id: "gemini-2.0-flash", protocol: "Gemini API", base_url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent", cost_label: COSTS[0], purpose: PURPOSES[0] },
+  "Anthropic": { model_id: "claude-3-5-sonnet-20240620", protocol: "OpenAI Compatible", base_url: "https://api.anthropic.com/v1/messages", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "Groq": { model_id: "llama-3.3-70b-versatile", protocol: "Groq", base_url: "https://api.groq.com/openai/v1/chat/completions", cost_label: COSTS[0], purpose: PURPOSES[0] },
+  "DeepSeek": { model_id: "deepseek-chat", protocol: "OpenAI Compatible", base_url: "https://api.deepseek.com/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "Mistral": { model_id: "mistral-large-latest", protocol: "OpenAI Compatible", base_url: "https://api.mistral.ai/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "Perplexity": { model_id: "llama-3.1-sonar-large-128k-online", protocol: "OpenAI Compatible", base_url: "https://api.perplexity.ai/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[3] },
+  "Together AI": { model_id: "meta-llama/Llama-3-70b-chat-hf", protocol: "OpenAI Compatible", base_url: "https://api.together.xyz/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "OpenRouter": { model_id: "openrouter/auto", protocol: "OpenAI Compatible", base_url: "https://openrouter.ai/api/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "HuggingFace": { model_id: "google/gemma-3-1b-it:fastest", protocol: "OpenAI Compatible", base_url: "https://router.huggingface.co/v1/chat/completions", cost_label: COSTS[0], purpose: PURPOSES[0] },
+  "Cohere": { model_id: "command-r-plus", protocol: "OpenAI Compatible", base_url: "https://api.cohere.ai/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "Fireworks AI": { model_id: "accounts/fireworks/models/llama-v3-70b-instruct", protocol: "OpenAI Compatible", base_url: "https://api.fireworks.ai/inference/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "xAI (Grok)": { model_id: "grok-1", protocol: "OpenAI Compatible", base_url: "https://api.x.ai/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "Ollama (Local)": { model_id: "llama3", protocol: "OpenAI Compatible", base_url: "http://localhost:11434/v1/chat/completions", cost_label: COSTS[2], purpose: PURPOSES[0] },
+  "Alibaba (Qwen)": { model_id: "qwen-max", protocol: "OpenAI Compatible", base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "SiliconFlow": { model_id: "deepseek-ai/DeepSeek-V3", protocol: "OpenAI Compatible", base_url: "https://api.siliconflow.cn/v1/chat/completions", cost_label: COSTS[0], purpose: PURPOSES[0] },
+  "SeaLLMs (Sea AI)": { model_id: "SeaLLMs/SeaLLMs-v3-1.5B-Chat", protocol: "OpenAI Compatible", base_url: "https://api.siliconflow.cn/v1/chat/completions", cost_label: COSTS[0], purpose: PURPOSES[0] },
+  "ByteDance / TikTok": { model_id: "seed-2.0-pro", protocol: "OpenAI Compatible", base_url: "https://api.openrouter.ai/api/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "Xiaomi (MiLM)": { model_id: "milm-v2-12b", protocol: "OpenAI Compatible", base_url: "https://api.siliconflow.cn/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "Moonshot AI (Kimi)": { model_id: "moonshot-v1-8k", protocol: "OpenAI Compatible", base_url: "https://api.moonshot.cn/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "Custom Provider": { model_id: "", protocol: "OpenAI Compatible", base_url: "", cost_label: COSTS[0], purpose: PURPOSES[0] },
 };
 
 interface Toast {
@@ -60,6 +67,8 @@ export default function Settings() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
   const [skillCode, setSkillCode] = useState("");
+  const [testCountdown, setTestCountdown] = useState<number>(0);
+  const [activeTest, setActiveTest] = useState<string | null>(null);
 
   
   // Form State
@@ -177,6 +186,7 @@ export default function Settings() {
       health_fail: updatedConfig.providers[newProvider.display_name]?.health_fail || 0
     };
     await handleSave(updatedConfig);
+    await refreshConfig();
     setView('list');
     setEditName(null);
     setNewProvider({
@@ -204,14 +214,39 @@ export default function Settings() {
 
   const testProvider = async (name: string) => {
     if (!config) return;
-    const updatedProviders = { ...config.providers };
-    updatedProviders[name].latency = -1; // Loading state
-    setGlobalConfig({ ...config, providers: updatedProviders });
-    
-    const res = await fetch(`/api/providers/test/${encodeURIComponent(name)}`, { method: 'POST' });
-    const data = await res.json();
-    if (data.status === 'success') {
-      refreshConfig();
+    // Start Countdown
+    const timeout = config.test_timeout || 30;
+    setActiveTest(name);
+    setTestCountdown(timeout);
+    const timer = setInterval(() => {
+      setTestCountdown(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    try {
+      const res = await fetch(`/api/providers/test/${encodeURIComponent(name)}`, { method: 'POST' });
+      const data = await res.json();
+      
+      if (data.status === 'success') {
+        addToast(`${name} terhubung: ${data.latency}ms`, 'success');
+      } else {
+        // Tampilkan pesan error asli dari backend agar diagnosa akurat
+        addToast(`${name} gagal: ${data.message || 'Error tidak dikenal'}`, 'error');
+        
+        // Update latensi lokal agar UI tetap responsif menunjukkan kegagalan (9999)
+        const failProviders = { ...config.providers };
+        failProviders[name].latency = 9999;
+        setGlobalConfig({ ...config, providers: failProviders });
+      }
+    } catch (err) {
+      const error = err as Error;
+      console.error(error);
+      addToast(`Masalah Jaringan: ${error.message}`, 'error');
+    } finally {
+      // UNIVERSAL REFRESH: Apapun yang terjadi, tarik data terbaru dari disk sebelum reset state
+      await refreshConfig();
+      clearInterval(timer);
+      setActiveTest(null);
+      setTestCountdown(0);
     }
   };
 
@@ -383,7 +418,7 @@ export default function Settings() {
                   <div className="mb-6">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-xl font-bold text-white">{name}</h3>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 uppercase tracking-tighter">FREE</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 uppercase tracking-tighter">{p.cost_label}</span>
                       {p.is_default && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary text-black uppercase tracking-tighter">DEFAULT</span>}
                     </div>
                     <p className="text-xs text-white/40 font-mono">Model: {p.model_id}</p>
@@ -410,10 +445,13 @@ export default function Settings() {
                     <div className="flex items-center gap-3">
                       <button 
                         onClick={() => testProvider(name)}
-                        disabled={p.latency === -1}
+                        disabled={activeTest === name}
                         className="flex items-center gap-2 px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-[11px] font-bold text-white transition-all disabled:opacity-50"
                       >
-                        <RefreshCcw size={12} className={p.latency === -1 ? "animate-spin" : ""} /> {p.latency === -1 ? 'Testing...' : 'Test'}
+                        <RefreshCcw size={12} className={activeTest === name ? "animate-spin" : ""} /> 
+                        {activeTest === name 
+                          ? `Testing (${testCountdown}s)...` 
+                          : 'Test'}
                       </button>
 
                       <div 
@@ -487,6 +525,7 @@ export default function Settings() {
                       onChange={e => setNewProvider({...newProvider, display_name: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                       placeholder="MIA Main Brain"
+                      autoComplete="off"
                     />
                   </div>
                   <div className="relative">
@@ -499,6 +538,7 @@ export default function Settings() {
                       onChange={e => setNewProvider({...newProvider, model_id: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                       placeholder="gpt-4o"
+                      autoComplete="off"
                     />
                   </div>
                 </div>
@@ -514,19 +554,21 @@ export default function Settings() {
                       onChange={e => setNewProvider({...newProvider, api_key: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                       placeholder="sk-proj-..."
+                      autoComplete="off"
                     />
                   </div>
                   <div>
                     <label className="flex items-center gap-2 text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
-                      End Point <span title="Kosongkan jika menggunakan endpoint default (hanya untuk Custom/On-Premise)" className="cursor-help"><Info size={12} /></span>
+                      Target URL (Full Path) <span title="Masukkan alamat lengkap API termasuk /chat/completions" className="cursor-help"><Info size={12} /></span>
                     </label>
                     <input 
                       id="provider-endpoint"
                       name="provider-endpoint"
                       type="text" value={newProvider.base_url} 
+                      placeholder="Auto-Resolve based on model (recommended)"
                       onChange={e => setNewProvider({...newProvider, base_url: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                      placeholder="https://..."
+                      autoComplete="off"
                     />
                   </div>
                 </div>
@@ -554,14 +596,23 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <button 
-                  onClick={handleAddOrEditProvider}
-                  disabled={isSaving}
-                  className="mt-4 w-full py-4 bg-primary text-black rounded-2xl font-bold text-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
-                >
-                  {isSaving ? <RefreshCcw className="animate-spin" /> : <Save size={20} />} 
-                  {view === 'edit' ? 'Simpan Perubahan' : 'Simpan & Aktifkan'}
-                </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                  <button 
+                    onClick={() => setView('list')}
+                    className="py-4 bg-white/5 border border-white/10 text-white/60 rounded-2xl font-bold text-lg hover:bg-white/10 transition-all active:scale-95"
+                  >
+                    Batal
+                  </button>
+
+                  <button 
+                    onClick={handleAddOrEditProvider}
+                    disabled={isSaving}
+                    className="py-4 bg-primary text-black rounded-2xl font-bold text-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
+                  >
+                    {isSaving ? <RefreshCcw className="animate-spin" /> : <Save size={20} />} 
+                    Simpan & Aktifkan
+                  </button>
+                </div>
 
               </div>
             </div>
@@ -798,8 +849,8 @@ export default function Settings() {
               <div className="pt-8 mt-8 border-t border-white/5">
                 <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-6">Voice & Speech Engine</h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                  {['edge-tts', 'elevenlabs', 'openai'].map(engine => (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                  {['edge-tts', 'piper', 'elevenlabs', 'openai'].map(engine => (
                     <button
                       key={engine}
                       onClick={() => updateConfigLocal({ ...config, tts_engine: engine })}
@@ -811,7 +862,7 @@ export default function Settings() {
                     >
                       <div className="font-bold capitalize">{engine.replace('-', ' ')}</div>
                       <div className="text-[10px] opacity-60">
-                        {engine === 'edge-tts' ? 'Gratis & Stabil (Default)' : engine === 'elevenlabs' ? 'Cloning Ultra-Realistis' : 'Premium & Natural'}
+                        {engine === 'edge-tts' ? 'Gratis & Online' : engine === 'piper' ? '100% Lokal & Cepat' : engine === 'elevenlabs' ? 'Cloning Ultra-Real' : 'Premium & Natural'}
                       </div>
                     </button>
                   ))}

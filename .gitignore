@@ -35,6 +35,7 @@ thumbs.db
 backend/iam_mia/*.md
 backend/iam_mia/*.json
 backend/iam_mia/memory/
+backend/data/voice_archive/
 backend/history.db
 frontend/public/assets/chatbg/*
 !frontend/public/assets/chatbg/.gitkeep

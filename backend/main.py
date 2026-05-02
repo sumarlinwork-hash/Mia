@@ -19,6 +19,8 @@ from mia_comm.memory_orchestrator import memory_orchestrator
 from mia_comm.history_manager import history_manager
 from mia_comm.brain_orchestrator import brain_orchestrator
 from studio.graph_stream import studio_graph_streamer
+from core.routing_service import routing_service
+from core.provider_resolver import provider_resolver
 from core.emotion_manager import emotion_manager
 
 # P4-X: Initialize System Resilience Feed for Studio
@@ -603,35 +605,116 @@ async def test_provider(name: str):
     config = load_config()
     if name not in config.providers:
         return {"status": "error", "message": "Provider not found"}
-    
+
     p = config.providers[name]
+
     import time
     import httpx
-    
-    start = time.time()
-    try:
-        # Real Health Check: Send a minimal model list or version request
-        test_url = p.base_url.rstrip('/') + "/models" if "openai" in p.protocol.lower() else p.base_url
-        if not test_url: 
-             # Fallback for Gemini/Groq where we might just check DNS/Reachability
-             test_url = "https://google.com" if "gemini" in p.protocol.lower() else "https://api.groq.com"
 
-        async with httpx.AsyncClient() as client:
-            # We don't necessarily need valid keys for a simple reachability test, 
-            # but a 401/403 is better than a timeout (means provider is ALIVE)
-            resp = await client.get(test_url, timeout=5.0)
+    start = time.time()
+
+    # Identitas Penyamaran Browser
+    BROWSER_HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=float(config.test_timeout),
+            headers=BROWSER_HEADERS
+        ) as client:
+            # Connectivity diagnostic
+            try:
+                await client.get("https://www.google.com", timeout=2.0)
+            except:
+                pass
+
+            target_url = p.base_url.strip()
+            model_id = p.model_id
+            api_key = p.api_key
+            purpose = p.purpose
+
+            # --- GRAND RESOLVER STEP ---
+            # MIA now resolves the TRUE endpoint and protocol in the background
+            resolved = provider_resolver.resolve(name, model_id, target_url)
+            final_url = resolved["url"]
+            protocol = resolved["protocol"]
             
-        latency = int((time.time() - start) * 1000)
-        p.latency = latency
-        p.health_ok += 1
-        save_config(config)
-        return {"status": "success", "latency": latency}
+            print(f"[Test] Smart-Routing to: {final_url} (Protocol: {protocol})")
+
+            is_chat_based = purpose in [
+                "Inti Logika & Pikiran",
+                "Persepsi Visual & Imajinasi",
+                "Analisis Data & Pengetahuan",
+            ]
+
+            if is_chat_based:
+                if protocol == "gemini":
+                    # Jalur Smart Gemini (Auto-inject API Key to URL)
+                    if "key=" not in final_url:
+                        sep = "&" if "?" in final_url else "?"
+                        final_url = f"{final_url}{sep}key={api_key}"
+                    
+                    resp = await client.post(final_url, json={"contents": [{"parts": [{"text": "ping"}]}]})
+                    resp.raise_for_status()
+                elif protocol == "hf_native":
+                    # Jalur Smart HuggingFace Hub (Native Payload)
+                    headers = {"Content-Type": "application/json"}
+                    if api_key:
+                        headers["Authorization"] = f"Bearer {api_key}"
+                    
+                    resp = await client.post(
+                        final_url,
+                        headers=headers,
+                        json={"inputs": "ping"}
+                    )
+                    resp.raise_for_status()
+                else:
+                    # Jalur Smart OpenAI (HuggingFace Router, Groq, DeepSeek, dll)
+                    headers = {"Content-Type": "application/json"}
+                    if api_key:
+                        headers["Authorization"] = f"Bearer {api_key}"
+
+                    resp = await client.post(
+                        final_url,
+                        headers=headers,
+                        json={
+                            "model": model_id,
+                            "messages": [{"role": "user", "content": "ping"}],
+                            "max_tokens": 5
+                        },
+                    )
+                    resp.raise_for_status()
+            else:
+                # Non-chat based (TTS/STT)
+                resp = await client.get(target_url)
+                resp.raise_for_status()
+
+            latency = int((time.time() - start) * 1000)
+            p.latency = latency
+            p.health_ok += 1
+            save_config(config)
+
+            return {"status": "success", "latency": latency}
+
     except Exception as e:
-        print(f"Health check failed for {name}: {e}")
+        print(f"Smart Handshake failed for {name}: {e}")
         p.health_fail += 1
         p.latency = 9999
         save_config(config)
         return {"status": "error", "message": str(e)}
+
+    except Exception as e:
+        print(f"Full Handshake failed for {name}: {e}")
+
+        p.health_fail += 1
+        p.latency = 9999
+        save_config(config)
+
+        return {
+            "status": "error",
+            "message": str(e),
+        }
 
 
 # --- APPEARANCE ENDPOINTS ---(For Settings GUI) ---
@@ -653,6 +736,7 @@ class TestConnectionRequest(BaseModel):
     base_url: str
     protocol: str = "openai"
     model_id: str = ""
+    purpose: str = "Inti Logika & Pikiran"
 
 @app.post("/api/test-connection")
 async def test_connection(req: TestConnectionRequest):
@@ -665,26 +749,33 @@ async def test_connection(req: TestConnectionRequest):
         return {"status": "error", "message": "API Key tidak boleh kosong."}
 
     protocol = req.protocol.lower()
+    purpose = req.purpose
     start = time.time()
+    config = load_config()
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            if "gemini" in protocol:
-                # Gemini: List models to verify key
-                url = f"https://generativelanguage.googleapis.com/v1beta/models?key={req.api_key}"
-                resp = await client.get(url)
-            elif protocol == "groq":
-                url = "https://api.groq.com/openai/v1/models"
-                resp = await client.get(url, headers={"Authorization": f"Bearer {req.api_key}"})
-            elif protocol == "deepseek":
-                url = "https://api.deepseek.com/chat/completions"
-                payload = {"model": req.model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}
-                resp = await client.post(url, headers={"Authorization": f"Bearer {req.api_key}"}, json=payload)
+        async with httpx.AsyncClient(timeout=float(config.test_timeout)) as client:
+            is_chat_based = purpose in ["Inti Logika & Pikiran", "Persepsi Visual & Imajinasi", "Analisis Data & Pengetahuan"]
+            
+            if is_chat_based:
+                if "gemini" in protocol:
+                    # Gemini: Real handshake via generateContent
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{req.model_id}:generateContent?key={req.api_key}"
+                    payload = {"contents": [{"parts": [{"text": "ping"}]}]}
+                    resp = await client.post(url, json=payload)
+                elif protocol == "groq":
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                    payload = {"model": req.model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}
+                    resp = await client.post(url, headers={"Authorization": f"Bearer {req.api_key}"}, json=payload)
+                else:
+                    # OpenAI-compatible / HuggingFace / DeepSeek
+                    base = req.base_url.rstrip('/') if req.base_url else "https://api.openai.com/v1"
+                    url = f"{base}/chat/completions"
+                    payload = {"model": req.model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}
+                    resp = await client.post(url, headers={"Authorization": f"Bearer {req.api_key}"}, json=payload)
             else:
-                # OpenAI-compatible / HuggingFace OpenAI API
-                base = req.base_url.rstrip('/') if req.base_url else "https://api.openai.com/v1"
-                url = f"{base}/chat/completions"
-                payload = {"model": req.model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}
-                resp = await client.post(url, headers={"Authorization": f"Bearer {req.api_key}"}, json=payload)
+                # Specialized: Simple Ping
+                url = req.base_url or "https://google.com"
+                resp = await client.get(url)
 
             latency = int((time.time() - start) * 1000)
 
@@ -922,13 +1013,14 @@ async def save_memory_file(req: MemorySaveRequest):
 
 # --- WEBSOCKET ENDPOINT (For Home Hub / Heartbeat) ---
 
-@app.websocket("/ws/heartbeat")
+@app.websocket("/api/chat/heartbeat")
 async def websocket_heartbeat(websocket: WebSocket):
     """
     Real-time bidirectional communication.
     React sends messages/audio here, Python sends responses/status.
     """
     await websocket.accept()
+    print("[WS] MIA Heartbeat Connected - Pipeline Open")
     config = load_config()
     crone_daemon.register_websocket(websocket)
     
@@ -1013,22 +1105,49 @@ async def websocket_heartbeat(websocket: WebSocket):
                         current_state = emotion_manager.get_state()
                         is_intimate_audio = intimacy_mode or current_state["mood"] in ["Intense", "Affectionate", "Glow"]
                         
-                        # TTS with failsafe
-                        try:
-                            audio_base64 = await asyncio.wait_for(
-                                tts_service.generate_speech_base64(response_text, is_intimate=is_intimate_audio),
-                                timeout=5.0
-                            )
-                        except:
-                            audio_base64 = None
-
+                        # 1. Send Text immediately (Rule 2: Pacing Start)
                         await websocket.send_json({
                             "type": "message", 
                             "content": response_text,
                             "id": mia_msg_id,
-                            "audio": audio_base64
+                            "audio": None # No audio yet
                         })
-                        await websocket.send_json({"type": "status", "content": "Idle"})
+
+                        # 2. Slice and stream audio (Rule 2: Pacing)
+                        import re
+                        # Split by sentence markers but keep the marker
+                        slices = re.split(r'([.!?]+(?:\s+|$))', response_text)
+                        # Recombine markers with sentences
+                        sentences = []
+                        current = ""
+                        for s in slices:
+                            current += s
+                            # Only slice if we have punctuation AND current length is decent (> 300)
+                            # OR if current length is getting too long (> 500)
+                            if (re.search(r'[.!?]+(?:\s+|$)', s) and len(current) > 300) or len(current) > 500:
+                                if current.strip():
+                                    sentences.append(current.strip())
+                                current = ""
+                        if current.strip():
+                            sentences.append(current.strip())
+
+                        for idx, sentence in enumerate(sentences):
+                            try:
+                                # Quick TTS for chunk
+                                chunk_b64 = await asyncio.wait_for(
+                                    tts_service.generate_speech_base64(sentence, is_intimate=is_intimate_audio),
+                                    timeout=5.0
+                                )
+                                if chunk_b64:
+                                    await websocket.send_json({
+                                        "type": "audio_chunk",
+                                        "audio": chunk_b64,
+                                        "is_last": idx == len(sentences) - 1
+                                    })
+                            except Exception as ce:
+                                print(f"[TTS Pacing] Failed chunk {idx}: {ce}")
+
+                        await websocket.send_json({"type": "status", "content": "Idle", "stage": "DONE"})
                 
                 except Exception as inner_error:
                     print(f"[WebSocket Error] Internal Crash: {inner_error}")

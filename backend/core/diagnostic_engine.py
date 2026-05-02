@@ -52,6 +52,8 @@ async def run_full_diagnostic() -> list:
                 diagnostic["status"] = "FAIL"
                 diagnostic["reason"] = f"Error jaringan: {str(e)}"
                 diagnostic["action"] = "Pastikan firewall tidak memblokir koneksi."
+            
+            results.append(diagnostic)
 
     # SHAD-CSA v2.0 Invariants Check
     invariants = [
