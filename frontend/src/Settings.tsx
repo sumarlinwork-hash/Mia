@@ -377,7 +377,7 @@ export default function Settings() {
     } catch { addToast("Gagal menyimpan skill", "error"); }
   };
 
-  if (loading || !config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse">Loading System Config...</div>;
+  if (loading || !config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse">Memuat Jiwa MIA...</div>;
 
   return (
     <div className="min-h-screen w-full p-4 sm:p-8 overflow-y-auto custom-scrollbar">

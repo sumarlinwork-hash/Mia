@@ -116,8 +116,8 @@ class TTSService:
         temp_wav = os.path.join(tempfile.gettempdir(), f"mia_piper_{uuid.uuid4().hex}.wav")
         
         # Piper CLI command
-        # Speed 1.3 to sound younger and energetic
-        speed = "1.3" if not is_intimate else "1.1"
+        # Speed 1.0 for natural, deeper tone; 0.95 for slower intimate delivery
+        speed = "1.0" if not is_intimate else "0.95"
         
         # Note: Search for piper.exe in project root's .venv
         venv_path = os.path.join(project_root, ".venv", "Scripts", "piper.exe")
@@ -137,24 +137,7 @@ class TTSService:
         if process.returncode != 0:
             raise Exception(f"Piper execution failed: {stderr}")
 
-        # Post-Processing: Increase Pitch by 100% using FFmpeg
-        # Formula: Increase sampling rate (asetrate) + Fix tempo (atempo)
-        pitched_wav = os.path.join(tempfile.gettempdir(), f"mia_pitched_{uuid.uuid4().hex}.wav")
-        # 22050 * 2 = 44100 (Double pitch)
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-i", temp_wav,
-            "-af", "asetrate=44100,atempo=0.5,atempo=1.0", 
-            pitched_wav
-        ]
-        
-        try:
-            subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
-            if os.path.exists(pitched_wav):
-                # Replace original with pitched version
-                os.remove(temp_wav)
-                temp_wav = pitched_wav
-        except Exception as fe:
-            print(f"[TTS] FFmpeg Pitch Shift failed (using original): {fe}")
+        # Note: FFmpeg pitch-shift block removed — Piper now outputs natural pitch
             
         return self._file_to_base64(temp_wav)
 
