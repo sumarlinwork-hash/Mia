@@ -26,7 +26,10 @@ async def run_full_diagnostic() -> list:
                 diagnostic["action"] = "Periksa kembali API Key Anda dari dashboard provider."
             
             # Rule 2: Reachability Test
-            test_url = "https://generativelanguage.googleapis.com" if "gemini" in p.protocol.lower() else (p.base_url or "https://api.openai.com")
+            from core.provider_resolver import provider_resolver
+            resolved = provider_resolver.resolve(name, p.model_id, p.base_url, p.api_key)
+            test_url = resolved["url"]
+            
             try:
                 start = time.time()
                 resp = await client.get(test_url)

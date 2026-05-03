@@ -10,6 +10,7 @@ from mia_comm.memory_orchestrator import memory_orchestrator
 IAM_MIA_DIR = os.path.join(os.path.dirname(__file__), "iam_mia")
 MEMORY_LOG_DIR = os.path.join(IAM_MIA_DIR, "memory")
 MEMORY_FILE = os.path.join(IAM_MIA_DIR, "MEMORY.md")
+INTIMACY_FILE = os.path.join(IAM_MIA_DIR, "INTIMACY.md")
 
 class CroneDaemon:
     def __init__(self):
@@ -114,86 +115,80 @@ class CroneDaemon:
 
         self.start()
 
-    def _setup_memory_worker(self):
-        # Patch B — BACKGROUND MEMORY WORKER (ANTI-HANG)
-        from queue import Queue
-        import threading
-        self.memory_queue = Queue(maxsize=1000)
-        
-        def memory_worker():
-            while True:
-                task = self.memory_queue.get()
-                try:
-                    # Patch D — FILE WRITE ANTI-LOCK (MEMORY.md)
-                    role, content = task
-                    date_str = datetime.now().strftime("%Y-%m-%d")
-                    log_file = os.path.join(MEMORY_LOG_DIR, f"{date_str}.md")
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    log_entry = f"[{timestamp}] {role}: {content}\n"
-                    
-                    with open(log_file, "a", encoding="utf-8", buffering=1) as f:
-                        f.write(log_entry)
-                except Exception:
-                    pass
-                finally:
-                    self.memory_queue.task_done()
-
-        threading.Thread(target=memory_worker, daemon=True, name="MemoryWorker").start()
-
-    async def log_episodic_memory(self, role: str, content: str):
-        """Called by main.py to log daily conversations. Non-blocking via Patch B."""
-        if not hasattr(self, "memory_queue"):
-            self._setup_memory_worker()
-            
-        try:
-            self.memory_queue.put_nowait((role, content))
-        except:
-            pass # Fail-soft: IGNORE if queue is full
-
     async def run_meta_rag_pruning(self):
         """
         Advanced Meta-RAG Algorithm:
-        1. Read today's episodic log
+        1. Read the synchronized chat_log.md
         2. Call LLM to extract persistent facts about the user
         3. Append extracted facts to MEMORY.md (Tier 1)
         4. Embed the full log into ChromaDB (Tier 3 vector DB)
-        5. Archive the processed log file
+        (Maintains the file without archiving/renaming, adhering to SSOT)
         """
         print("[CRONE] Starting Meta-RAG Pruning Sequence...")
         
-        for filename in os.listdir(MEMORY_LOG_DIR):
-            if filename.endswith(".md") and not filename.endswith("_archived.md"):
-                filepath = os.path.join(MEMORY_LOG_DIR, filename)
-                with open(filepath, "r", encoding="utf-8") as f:
-                    content = f.read().strip()
+        filepath = os.path.join(MEMORY_LOG_DIR, "chat_log.md")
+        if not os.path.exists(filepath):
+            print("[CRONE] No chat_log.md found. Skipping pruning.")
+            return
+
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        
+        if not content:
+            print("[CRONE] chat_log.md is empty. Skipping pruning.")
+            return
+
+        # Step 1: Embed full log into ChromaDB (Tier 3 Semantic Memory)
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        
+        # DETECT INTENTION: Is this log mostly intimate?
+        is_intimate_log = self._is_intimate_content(content)
+        
+        await memory_orchestrator.add_memory(
+            text=f"Conversation log from {date_str}:\n{content}",
+            metadata={"source": "chat_log", "date": date_str},
+            is_intimate=is_intimate_log
+        )
+        print(f"[CRONE] ✅ Embedded chat_log.md into {'Intimate' if is_intimate_log else 'General'} Vector DB.")
+
+        # Step 2: Real LLM Fact Extraction
+        extracted_facts = await self._extract_facts_with_llm(content, "chat_log.md")
+        
+        if extracted_facts:
+            # VALIDATION: Reject LLM refusal messages (Safety Blocks)
+            if self._is_rejection_response(extracted_facts):
+                print(f"[CRONE] ⚠️ LLM Rejection detected for chat_log.md. Skipping fact extraction.")
+            else:
+                # Step 3: Append extracted facts to appropriate file (Tier 1 Isolation)
+                os.makedirs(IAM_MIA_DIR, exist_ok=True)
+                target_file = INTIMACY_FILE if is_intimate_log else MEMORY_FILE
                 
-                if not content:
-                    continue
+                with open(target_file, "a", encoding="utf-8") as mf:
+                    mf.write(f"\n\n## Extracted Facts [{date_str}]\n{extracted_facts}")
+                print(f"[CRONE] ✅ Facts from chat_log.md saved to {os.path.basename(target_file)}.")
 
-                # Step 1: Embed full log into ChromaDB (Tier 3 Semantic Memory)
-                await memory_orchestrator.add_memory(
-                    text=f"Conversation log from {filename}:\n{content}",
-                    metadata={"source": "daily_log", "date": filename.replace(".md", "")}
-                )
-                print(f"[CRONE] ✅ Embedded {filename} into Vector DB.")
+        print("[CRONE] Meta-RAG Pruning complete. (chat_log.md remains intact)")
 
-                # Step 2: Real LLM Fact Extraction
-                extracted_facts = await self._extract_facts_with_llm(content, filename)
-                
-                if extracted_facts:
-                    # Step 3: Append extracted facts to MEMORY.md
-                    os.makedirs(IAM_MIA_DIR, exist_ok=True)
-                    date_label = filename.replace(".md", "")
-                    with open(MEMORY_FILE, "a", encoding="utf-8") as mf:
-                        mf.write(f"\n\n## Extracted Facts [{date_label}]\n{extracted_facts}")
-                    print(f"[CRONE] ✅ Facts from {filename} saved to MEMORY.md.")
+    def _is_rejection_response(self, text: str) -> bool:
+        """Cegah teks penolakan LLM masuk ke memori jangka panjang."""
+        rejection_patterns = [
+            "maaf", "sorry", "cannot help", "tidak bisa membantu",
+            "I'm unable", "can't assist", "dilarang", "forbidden",
+            "tidak dapat", "unable to", "against policy", "policy violation"
+        ]
+        text_lower = text.lower()
+        return any(pattern in text_lower for pattern in rejection_patterns)
 
-                # Step 4: Archive the processed log
-                archived_path = filepath.replace(".md", "_archived.md")
-                os.rename(filepath, archived_path)
-                print(f"[CRONE] ✅ Archived {filename}.")
-
-        print("[CRONE] Meta-RAG Pruning complete.")
+    def _is_intimate_content(self, text: str) -> bool:
+        """Detect if the content contains intimacy markers to route to correct namespace."""
+        intimacy_markers = [
+            "*ah*", "*mmh*", "sayang", "honey", "love you", "cinta", 
+            "kiss", "hug", "intim", "seksual", "xxx", "🔞"
+        ]
+        text_lower = text.lower()
+        # Heuristic: If more than 2 markers found, consider it intimate
+        matches = sum(1 for marker in intimacy_markers if marker in text_lower)
+        return matches >= 2
 
     async def _extract_facts_with_llm(self, log_content: str, source_file: str) -> str:
         """

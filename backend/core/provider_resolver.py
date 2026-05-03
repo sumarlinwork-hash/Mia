@@ -1,6 +1,7 @@
 import httpx
 import json
 import asyncio
+import re
 from typing import Dict, Any, Optional
 
 class ProviderResolver:
@@ -10,67 +11,69 @@ class ProviderResolver:
     """
     
     @staticmethod
-    def resolve(p_name: str, model_id: str, base_url: str) -> Dict[str, Any]:
+    def resolve(p_name: str, model_id: str, base_url: str, api_key: str = "") -> Dict[str, Any]:
         """
-        Determines the final Target URL and Protocol based on Model ID and Provider.
+        Determines the final Target URL and Protocol.
+        MIA SMART ASSEMBLY: Automatically replaces {model_id} in the URL template.
         """
-        url = base_url.strip() if base_url else ""
-        protocol = "openai" # Default
-        
-        # 1. SMART HUGGINGFACE LOGIC
-        if "huggingface" in p_name.lower() or "huggingface" in url.lower():
-            # Check if it's a niche model (contains '/') or specifically hub URL
-            # Note: We exclude some known popular models that might have '/' but are on router
-            is_niche = "/" in model_id and not any(m in model_id.lower() for m in ["llama", "gemma", "qwen"])
-            
-            if "api-inference.huggingface.co" in url or is_niche:
-                # Target: Native Hub (Universal)
-                protocol = "hf_native"
-                # If it's a niche model but the URL is still Router, we FORCE switch to Hub
-                if not url or "router.huggingface.co" in url:
-                    url = f"https://api-inference.huggingface.co/models/{model_id}"
-            else:
-                # Target: Router (Fast OpenAI compatible)
-                protocol = "openai"
-                if not url:
-                    url = "https://router.huggingface.co/v1/chat/completions"
+        # CLEANING: Remove accidental prefixes from API Key (Common User Error)
+        prefixes_to_clean = ["GEMINI_API_KEY=", "OPENAI_API_KEY=", "GROQ_API_KEY=", "ANTHROPIC_API_KEY="]
+        for pref in prefixes_to_clean:
+            if api_key.startswith(pref):
+                api_key = api_key.replace(pref, "").strip()
+                print(f"[Resolver] Cleaned API Key for {p_name} (Removed prefix)")
 
-        # 2. SMART GEMINI LOGIC
-        elif "google" in p_name.lower() or "gemini" in model_id.lower() or "googleapis.com" in url:
+        raw_url = base_url.strip() if base_url else ""
+        model_id = model_id.strip()
+        protocol = "openai" # Default
+
+        # 1. SMART ASSEMBLY (Placeholder Replacement)
+        url = raw_url.replace("{model_id}", model_id) if raw_url else ""
+
+        # 2. RECONCILIATION (Enforce model_id on standard URLs even if placeholder was missing)
+        # This ensures that changing the 'Model ID' field in the UI actually changes the target model
+        if url:
+            # Google Gemini Pattern: .../models/MODEL_NAME:...
+            if "generativelanguage.googleapis.com" in url:
+                # Enforce v1beta to support system_instruction (avoids 400 errors)
+                url = url.replace("/v1/", "/v1beta/")
+                url = re.sub(r"/models/[^/:]+", f"/models/{model_id}", url)
+                protocol = "gemini"
+            
+            # HF Native Hub Pattern: .../models/MODEL_NAME (Supports owner/model_name)
+            elif "api-inference.huggingface.co" in url:
+                url = re.sub(r"/models/.*", f"/models/{model_id}", url)
+                protocol = "hf_native"
+
+        # 3. PROTOCOL DETECTION & DEFAULTS
+        # Gemini Protocol
+        if "gemini" in model_id.lower() or "googleapis.com" in url or "Gemini" in p_name:
             protocol = "gemini"
             if not url:
-                # Default to stable Pro if not specified
-                m = model_id or "gemini-1.5-pro"
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
-
-        # 3. GROQ LOGIC
-        elif "groq" in p_name.lower() or "groq" in url:
-            protocol = "openai"
-            if not url:
-                url = "https://api.groq.com/openai/v1/chat/completions"
-
-        # 4. DEEPSEEK LOGIC
-        elif "deepseek" in p_name.lower():
-            protocol = "openai"
-            if not url:
-                url = "https://api.deepseek.com/chat/completions"
-
-        # 5. ANTHROPIC LOGIC
-        elif "anthropic" in p_name.lower() or "claude" in model_id.lower():
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id or 'gemini-2.0-flash'}:generateContent"
+        
+        # Anthropic Protocol
+        elif "claude" in model_id.lower() or "anthropic.com" in url:
             protocol = "anthropic"
             if not url:
                 url = "https://api.anthropic.com/v1/messages"
 
-        # 6. DEFAULT FALLBACK
-        else:
-            protocol = "openai"
+        # Groq Protocol
+        elif "groq" in p_name.lower() or "groq.com" in url:
+            protocol = "openai" # Groq uses OpenAI protocol
             if not url:
-                url = "https://api.openai.com/v1/chat/completions"
+                url = "https://api.groq.com/openai/v1/chat/completions"
 
+        # 4. GLOBAL FALLBACK
+        if not url:
+            url = "https://api.openai.com/v1/chat/completions"
+
+        print(f"[Resolver] Smart-Assembly: {p_name} -> {url} ({protocol})")
         return {
             "url": url,
             "protocol": protocol,
-            "model_id": model_id
+            "model_id": model_id,
+            "api_key": api_key
         }
 
     @staticmethod

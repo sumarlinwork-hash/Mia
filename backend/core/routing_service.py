@@ -32,8 +32,11 @@ class RoutingService:
                 cost_val = val
                 break
         
-        # 4. Purpose Match
-        purpose_match = 1.0 if target_purpose.lower() in p.purpose.lower() else 0.5
+        # 4. Purpose Match (Contract 6.2: Intimacy Hard-Priority)
+        if target_purpose.lower() == "intimacy":
+            purpose_match = 10.0 if "intimacy" in p.purpose.lower() else 0.1
+        else:
+            purpose_match = 1.0 if target_purpose.lower() in p.purpose.lower() else 0.5
 
         # Weighted Sum
         score = (
@@ -57,12 +60,27 @@ class RoutingService:
         """
         Selects the best provider based on scoring, skipping excluded and circuit-broken ones.
         """
+        from core.stats_manager import stats_manager
         config = load_config()
         now = time.time()
         exclude_list = exclude or []
         
+        # Merge static config with volatile stats
+        merged_providers = {}
+        for name, p in config.providers.items():
+            # Create a deep copy to avoid modifying the original config object
+            p_copy = p.model_copy() if hasattr(p, 'model_copy') else p.copy()
+            stats = stats_manager.get_stats(name)
+            p_copy.latency = stats["latency"]
+            p_copy.health_ok = stats["health_ok"]
+            p_copy.health_fail = stats["health_fail"]
+            p_copy.failure_count = stats["failure_count"]
+            p_copy.last_failure_time = stats["last_failure_time"]
+            p_copy.circuit_breaker_until = stats["circuit_breaker_until"]
+            merged_providers[name] = p_copy
+
         # 1. Get all active providers not in the exclusion list
-        all_active = {name: p for name, p in config.providers.items() 
+        all_active = {name: p for name, p in merged_providers.items() 
                       if p.is_active and name not in exclude_list}
         
         if not all_active:

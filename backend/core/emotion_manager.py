@@ -176,6 +176,11 @@ class EmotionManager:
         if is_pro:
             return f"Status: Optimal | Focus: Productivity | Tone: Professional. (Mood: {active['mood']})"
         
-        return f"Warmth: {active['warmth']}% | Arousal: {active['arousal']}% | Connection: {active['echo']}% | Mood: {active['mood']}"
+    def intimacy_gate(self) -> bool:
+        active = self.state["active"]
+        return active["arousal"] >= 75 and active["warmth"] >= 45
+
+    def soft_deflect_response(self) -> str:
+        return "Mmm... rasanya aku masih ingin menikmati momen kebersamaan kita ini pelan-pelan, Bos..."
 
 emotion_manager = EmotionManager()

@@ -5,6 +5,9 @@ from datetime import datetime
 
 HISTORY_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "history")
 DB_PATH = os.path.join(HISTORY_DIR, "chat_history.db")
+IAM_MIA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "iam_mia")
+MEMORY_LOG_DIR = os.path.join(IAM_MIA_DIR, "memory")
+CHAT_LOG_FILE = os.path.join(MEMORY_LOG_DIR, "chat_log.md")
 
 class HistoryManager:
     def __init__(self):
@@ -36,6 +39,31 @@ class HistoryManager:
         except Exception as e:
             print(f"[HistoryManager] Init Failed (Skipped): {e}")
 
+    def _sync_to_markdown(self):
+        """
+        SINGLE SOURCE OF TRUTH: Merubah isi chat_log.md 100% sama dengan database SQLite.
+        Called automatically on every CRUD operation.
+        """
+        os.makedirs(MEMORY_LOG_DIR, exist_ok=True)
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM messages ORDER BY timestamp ASC LIMIT 10000")
+                rows = cursor.fetchall()
+
+            content = ""
+            for row in rows:
+                timestamp = row["timestamp"]
+                role = row["role"]
+                msg = row["content"]
+                content += f"[{timestamp}] {role}: {msg}\n"
+
+            with open(CHAT_LOG_FILE, "w", encoding="utf-8") as f:
+                f.write(content)
+        except Exception as e:
+            print(f"[HistoryManager] Sync to Markdown Failed: {e}")
+
     def add_message(self, role, content, metadata=None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -44,6 +72,7 @@ class HistoryManager:
                 (role, content, json.dumps(metadata) if metadata else None)
             )
             conn.commit()
+            self._sync_to_markdown()
             return cursor.lastrowid
 
     def get_history(self, limit=50):
@@ -57,11 +86,13 @@ class HistoryManager:
         with self.get_connection() as conn:
             conn.execute("UPDATE messages SET content = ? WHERE id = ?", (new_content, message_id))
             conn.commit()
+        self._sync_to_markdown()
 
     def delete_message(self, message_id):
         with self.get_connection() as conn:
             conn.execute("DELETE FROM messages WHERE id = ?", (message_id,))
             conn.commit()
+        self._sync_to_markdown()
 
     def set_pinned(self, message_id, pinned=True):
         with self.get_connection() as conn:
@@ -78,5 +109,6 @@ class HistoryManager:
         with self.get_connection() as conn:
             conn.execute("DELETE FROM messages")
             conn.commit()
+        self._sync_to_markdown()
 
 history_manager = HistoryManager()

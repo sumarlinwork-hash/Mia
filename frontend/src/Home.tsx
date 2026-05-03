@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Mic, Send, Activity, Settings2, Eye, Brain, Paperclip, 
-  Image as ImageIcon, FileText, MonitorUp, Volume2, VolumeX, 
+import {
+  Mic, Send, Activity, Settings2, Eye, Brain, Paperclip,
+  Image as ImageIcon, FileText, MonitorUp, Volume2, VolumeX,
   Search, Code, Zap, Database, CheckSquare, Sparkles, XCircle,
   ThumbsUp, ThumbsDown, Pin, Pencil, Trash2, Download, PlayCircle,
   Copy, Check, AlertCircle, Info as InfoIcon, Heart, Droplets
@@ -22,7 +22,7 @@ interface WaveformBarProps {
 const WaveformBar: React.FC<WaveformBarProps> = ({ level }) => {
   const [randomFactor] = useState(() => 0.5 + Math.random());
   return (
-    <div 
+    <div
       className="w-[3px] bg-primary rounded-full transition-all duration-75"
       style={{ height: `${20 + (level * randomFactor)}%` }}
     ></div>
@@ -83,7 +83,7 @@ export default function Home() {
   const [audioLevel, setAudioLevel] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
-  const [mood] = useState("neutral"); 
+  const [mood] = useState("neutral");
   const [intimacyActive, setIntimacyActive] = useState(false);
   const [statusStage, setStatusStage] = useState<string>("DONE");
   const [statusMessage, setStatusMessage] = useState<string>("Idle");
@@ -205,10 +205,10 @@ export default function Home() {
     resumeAudioContext();
 
     if (trimmedInput === '/clear') {
-       fetch('/api/chat/history', { method: 'DELETE' }); 
-       setMessages([]); setInput("");
-       addToast("Chat history cleared", "info");
-       return;
+      fetch('/api/chat/history', { method: 'DELETE' });
+      setMessages([]); setInput("");
+      addToast("Chat history cleared", "info");
+      return;
     }
 
     // --- OPTIMISTIC UPDATE: Langsung tampilkan di layar ---
@@ -219,10 +219,10 @@ export default function Home() {
       timestamp: new Date().toISOString()
     };
     setMessages(prev => [...prev, userMsg]);
-    
-    setIsThinking(true); 
-    setStatusStage("BOOT");
-    setStatusMessage("Initializing MIA Resilience Layer...");
+
+    setIsThinking(true);
+    // setStatusStage("BOOT");
+    // setStatusMessage("Initializing MIA Resilience Layer...");
     setLastRequestTime(Date.now());
     playSFX('send');
     if (ws.current.readyState !== WebSocket.OPEN) {
@@ -238,10 +238,10 @@ export default function Home() {
       setIsThinking(false);
       return;
     }
-    
-    setInput(""); 
-    setShowCommands(false); 
-    setShowMentions(false); 
+
+    setInput("");
+    setShowCommands(false);
+    setShowMentions(false);
     setShowAttachMenu(false);
   }, [input, addToast, playSFX, resumeAudioContext]);
 
@@ -249,7 +249,7 @@ export default function Home() {
     try {
       // Prime audio on interaction
       resumeAudioContext();
-      
+
       const target = !intimacyActive;
       const res = await fetch(`/api/intimacy/toggle?active=${target}`, { method: 'POST' });
       const data = await res.json();
@@ -261,11 +261,11 @@ export default function Home() {
 
   // --- 6. PLAIN VALUES ---
   const paletteMenuItems = [
-    { icon: <Heart size={18} className={intimacyActive ? "text-pink-500 fill-pink-500" : ""}/>, name: intimacyActive ? "Deactivate Soulmate" : "Activate Soulmate", desc: "Phase Utama Keintiman", action: toggleIntimacy },
-    { icon: <Zap size={18}/>, name: "Kelola Aplikasi", desc: "Lihat kemampuan MIA", link: "/settings" },
-    { icon: <ImageIcon size={18}/>, name: "Change Background", desc: "Appearance settings", link: "/settings" },
-    { icon: <Database size={18}/>, name: "Clear Memory", desc: "Reset chat history", action: () => { setInput("/clear"); sendMessage(); setShowPalette(false); } },
-    { icon: <XCircle size={18}/>, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
+    { icon: <Heart size={18} className={intimacyActive ? "text-pink-500 fill-pink-500" : ""} />, name: intimacyActive ? "Deactivate Soulmate" : "Activate Soulmate", desc: "Phase Utama Keintiman", action: toggleIntimacy },
+    { icon: <Zap size={18} />, name: "Kelola Aplikasi", desc: "Lihat kemampuan MIA", link: "/settings" },
+    { icon: <ImageIcon size={18} />, name: "Change Background", desc: "Appearance settings", link: "/settings" },
+    { icon: <Database size={18} />, name: "Clear Memory", desc: "Reset chat history", action: () => { setInput("/clear"); sendMessage(); setShowPalette(false); } },
+    { icon: <XCircle size={18} />, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
   ];
 
 
@@ -292,7 +292,7 @@ export default function Home() {
       fetch('/api/intimacy/status')
         .then(res => res.json())
         .then(data => setIntimacyActive(data.intimacy_active))
-        .catch(() => {});
+        .catch(() => { });
     };
     fetchIntimacyStatus();
     const intimacyInterval = setInterval(fetchIntimacyStatus, 5000);
@@ -303,7 +303,7 @@ export default function Home() {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       // Rule: WebSocket MUST point to Backend (Port 8000)
       const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/api/chat/heartbeat`;
-      
+
       console.log(`[WS] Connecting to ${wsUrl}...`);
       const socket = new WebSocket(wsUrl);
       ws.current = socket;
@@ -318,12 +318,12 @@ export default function Home() {
         setStatus("Disconnected");
         setStatusStage("ERROR");
         setStatusMessage("Connection Lost");
-        
+
         // P-STABILITY: Exponential Backoff Reconnect
         if (reconnectAttempts.current < 10) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
           console.warn(`[WS] Connection lost. Retrying in ${delay}ms... (Attempt ${reconnectAttempts.current + 1})`);
-          
+
           reconnectTimeout.current = setTimeout(() => {
             reconnectAttempts.current++;
             connectWS();
@@ -333,26 +333,26 @@ export default function Home() {
 
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        
+
         if (data.type === 'ping') return;
 
         if (data.type === "message" || data.type === "system") {
-          setIsThinking(false); 
+          setIsThinking(false);
           setStatusStage("DONE");
           setStatusMessage("");
           playSFX('receive');
-          
+
           const isError = data.content.startsWith("[SYSTEM ERROR]");
           const role = (data.type === "system" || isError) ? "System" : "MIA";
           const cleanContent = isError ? data.content.replace("[SYSTEM ERROR]", "").trim() : data.content;
 
-          const newMessage = { 
-            id: data.id || Date.now(), 
-            role: role, 
-            content: cleanContent, 
-            audio: data.audio 
+          const newMessage = {
+            id: data.id || Date.now(),
+            role: role,
+            content: cleanContent,
+            audio: data.audio
           };
-          
+
           setMessages(prev => [...prev, newMessage]);
 
           // Only play audio if it's a real MIA message (not a system error/notification)
@@ -414,23 +414,12 @@ export default function Home() {
         if (elapsed > 30 && statusStage !== "DONE") {
           setIsThinking(false);
           setStatusStage("ERROR");
-          setStatusMessage("AI Hang Detected");
-          setMessages(prev => [...prev, {
-            id: Date.now(),
-            role: "System",
-            content: "Maafkan aku, Sayang... sepertinya ada badai di jalur sensoriku yang membuatku sedikit bingung. Aku sudah menenangkan diriku, bisakah kamu menyapaku lagi? 🛠️"
-          }]);
+          setStatusMessage("Connection Lost. Attempting reconnect...");
+          // We NO LONGER inject chat bubbles here to respect Backend SSOT.
           setLastRequestTime(0);
         } else if (elapsed > 12 && statusStage !== "DONE" && lastRequestTime > 0) {
-          // Inject timeout message internally
-          setMessages(prev => {
-            if (prev[prev.length - 1]?.content.includes("masih berpikir")) return prev;
-            return [...prev, {
-              id: Date.now(),
-              role: "System",
-              content: "Aku sedang meresapi setiap kata-katamu... tunggu sebentar ya, Sayang, aku ingin memberikan jawaban yang paling sempurna untukmu. 💫"
-            }];
-          });
+          // Just update the status box silently, no chat bubble injection
+          setStatusMessage("App-nya bikin emosi deh..");
           setLastRequestTime(0); // Trigger once at 12s, wait for 30s for full reset
         }
       }, 1000);
@@ -466,7 +455,7 @@ export default function Home() {
     // PERFORMANCE: Only process command/mention logic if strictly necessary
     const cursor = e.target.selectionStart || 0;
     const beforeCursor = val.slice(0, cursor);
-    
+
     // Check if we are currently "inside" a command or mention
     const words = beforeCursor.split(/\s/);
     const lastWord = words[words.length - 1];
@@ -569,7 +558,7 @@ export default function Home() {
         const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.wav');
-        
+
         setIsThinking(true);
         addToast("Transcribing audio...", "info");
         try {
@@ -586,7 +575,7 @@ export default function Home() {
         } finally {
           setIsThinking(false);
         }
-        
+
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -601,11 +590,11 @@ export default function Home() {
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     addToast(`Uploading ${type}: ${file.name}...`, "info");
     const formData = new FormData();
     formData.append('file', file);
-    
+
     try {
       const res = await fetch('/api/upload-bg', { // Shared endpoint for now
         method: 'POST',
@@ -679,119 +668,117 @@ export default function Home() {
   const uiOpacity = config.appearance.ui_opacity;
 
   return (
-    <div 
+    <div
       className={`w-full h-full flex flex-col p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto overflow-hidden transition-all ${isDragging ? 'scale-[0.98] blur-[2px]' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={(e) => { e.preventDefault(); setIsDragging(false); /* handleFileUpload can be adapted for drops */ }}
     >
-        {/* Sentiment-Based Mood Overlay */}
-        <div 
-          className={`fixed inset-0 z-0 transition-all duration-3000 pointer-events-none ${
-            intimacyActive ? 'bg-pink-500/5' :
-            mood === 'energetic' ? 'bg-primary/5' : 
-            mood === 'serious' ? 'bg-error/5' : 
-            mood === 'warm' ? 'bg-orange-500/10' : 'bg-transparent'
+      {/* Sentiment-Based Mood Overlay */}
+      <div
+        className={`fixed inset-0 z-0 transition-all duration-3000 pointer-events-none ${intimacyActive ? 'bg-pink-500/5' :
+          mood === 'energetic' ? 'bg-primary/5' :
+            mood === 'serious' ? 'bg-error/5' :
+              mood === 'warm' ? 'bg-orange-500/10' : 'bg-transparent'
           }`}
-        ></div>
+      ></div>
 
-        {/* Background Ducking Overlay (Cinema Mode) */}
-        <div 
-          className={`fixed inset-0 z-0 bg-black/60 backdrop-blur-md transition-all duration-1000 pointer-events-none ${
-            (isSpeaking || intimacyActive) ? 'opacity-100' : 'opacity-0'
+      {/* Background Ducking Overlay (Cinema Mode) */}
+      <div
+        className={`fixed inset-0 z-0 bg-black/60 backdrop-blur-md transition-all duration-1000 pointer-events-none ${(isSpeaking || intimacyActive) ? 'opacity-100' : 'opacity-0'
           } ${intimacyActive ? 'shadow-[inset_0_0_150px_rgba(255,100,150,0.3)]' : ''}`}
-        ></div>
-        {isDragging && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-primary/20 backdrop-blur-md border-4 border-dashed border-primary m-10 rounded-[3rem] animate-pulse">
-            <div className="text-center text-primary">
-              <Download size={64} className="mx-auto mb-4" />
-              <h2 className="text-3xl font-bold font-mono tracking-tighter">DROP TO ANALYZE</h2>
-            </div>
+      ></div>
+      {isDragging && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-primary/20 backdrop-blur-md border-4 border-dashed border-primary m-10 rounded-[3rem] animate-pulse">
+          <div className="text-center text-primary">
+            <Download size={64} className="mx-auto mb-4" />
+            <h2 className="text-3xl font-bold font-mono tracking-tighter">DROP TO ANALYZE</h2>
           </div>
-        )}
-        
-        {/* Floating Top Controls */}
-        <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-20 pointer-events-none">
-          {/* Left: Status & Aura */}
-          <div className="flex items-center gap-4 pointer-events-auto">
-            <div 
-              className="relative cursor-pointer group/aura"
-              onClick={handleTouch}
-            >
-              <Activity className={
-                intimacyActive ? "text-pink-500 animate-heartbeat z-10 relative" :
+        </div>
+      )}
+
+      {/* Floating Top Controls */}
+      <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-20 pointer-events-none">
+        {/* Left: Status & Aura */}
+        <div className="flex items-center gap-4 pointer-events-auto">
+          <div
+            className="relative cursor-pointer group/aura"
+            onClick={handleTouch}
+          >
+            <Activity className={
+              intimacyActive ? "text-pink-500 animate-heartbeat z-10 relative" :
                 status.includes("Connected") ? "text-primary animate-pulse z-10 relative" : "text-error z-10 relative"
-              } size={20} />
-              {(isSpeaking || (intimacyActive && audioLevel > 5)) && (
-                <div 
-                  className={`absolute inset-0 rounded-full blur-md transition-transform duration-75 ${intimacyActive ? 'bg-pink-500/40' : 'bg-primary/40'}`}
-                  style={{ transform: `scale(${1 + (audioLevel / 50)})`, opacity: 0.3 + (audioLevel / 150) }}
-                ></div>
-              )}
-            </div>
-            
-            {isSpeaking && (
-              <div className="flex items-center gap-2 bg-black/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Voice Active</span>
-                <div className="flex items-end gap-[2px] h-3">
-                  {[1,2,3,4,5].map(i => (
-                    <WaveformBar key={i} level={audioLevel} />
-                  ))}
-                </div>
-              </div>
+            } size={20} />
+            {(isSpeaking || (intimacyActive && audioLevel > 5)) && (
+              <div
+                className={`absolute inset-0 rounded-full blur-md transition-transform duration-75 ${intimacyActive ? 'bg-pink-500/40' : 'bg-primary/40'}`}
+                style={{ transform: `scale(${1 + (audioLevel / 50)})`, opacity: 0.3 + (audioLevel / 150) }}
+              ></div>
             )}
           </div>
 
-          {/* Right: Actions */}
-          <div className="flex items-center gap-4 pointer-events-auto bg-black/20 backdrop-blur-md p-2 rounded-full border border-white/5">
-            <button 
-              onClick={() => {
-                if (window.confirm("Hapus seluruh riwayat chat?")) {
-                  fetch('/api/chat/history', { method: 'DELETE' }); 
-                  setMessages([]); 
-                  addToast("Chat history cleared", "info");
-                }
-              }} 
-              className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-error"
-              title="Clear All Chat"
-            >
-              <Trash2 size={20} />
-            </button>
-            <button onClick={() => setIsTTSMuted(!isTTSMuted)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-              {isTTSMuted ? <VolumeX size={20} className="text-white/40" /> : <Volume2 size={20} className="text-primary" />}
-            </button>
-            <button 
-              onClick={toggleIntimacy} 
-              className={`p-2 hover:bg-white/10 rounded-full transition-all duration-500 ${intimacyActive ? 'text-pink-500 animate-pulse shadow-[0_0_15px_rgba(255,100,150,0.4)]' : 'text-white/40 hover:text-pink-400'}`}
-              title="Intimacy Mode (Soulmate Phase)"
-            >
-              <Droplets size={20} className={intimacyActive ? "fill-pink-500" : ""} />
-            </button>
-            <Link to="/settings" className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-primary">
-              <Settings2 size={20} />
-            </Link>
-          </div>
-        </div>
-
-
-        {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto mb-6 pr-2 space-y-6 custom-scrollbar scroll-smooth">
-          {messages.length === 0 && (
-            <div className="h-full flex items-center justify-center opacity-40">
-              <div className="px-6 py-4 rounded-2xl border border-white/10 font-mono text-white text-center">
-                <Brain className="mx-auto mb-2 opacity-50" size={40} />
-                Aku menunggumu menyapaku...<br/>
-                <span className="text-xs">Gunakan / untuk perintah, @ untuk memori</span>
+          {isSpeaking && (
+            <div className="flex items-center gap-2 bg-black/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Voice Active</span>
+              <div className="flex items-end gap-[2px] h-3">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <WaveformBar key={i} level={audioLevel} />
+                ))}
               </div>
             </div>
           )}
-          
-          {messages
-            .filter(msg => !(msg.role === 'System' && msg.content.includes("MIA Core Connected")))
-            .map((msg, idx) => (
-            <ChatBubble 
-              key={msg.id || idx} 
-              msg={msg} 
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-4 pointer-events-auto bg-black/20 backdrop-blur-md p-2 rounded-full border border-white/5">
+          <button
+            onClick={() => {
+              if (window.confirm("Hapus seluruh riwayat chat?")) {
+                fetch('/api/chat/history', { method: 'DELETE' });
+                setMessages([]);
+                addToast("Chat history cleared", "info");
+              }
+            }}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-error"
+            title="Clear All Chat"
+          >
+            <Trash2 size={20} />
+          </button>
+          <button onClick={() => setIsTTSMuted(!isTTSMuted)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+            {isTTSMuted ? <VolumeX size={20} className="text-white/40" /> : <Volume2 size={20} className="text-primary" />}
+          </button>
+          <button
+            onClick={toggleIntimacy}
+            className={`p-2 hover:bg-white/10 rounded-full transition-all duration-500 ${intimacyActive ? 'text-pink-500 animate-pulse shadow-[0_0_15px_rgba(255,100,150,0.4)]' : 'text-white/40 hover:text-pink-400'}`}
+            title="Intimacy Mode (Soulmate Phase)"
+          >
+            <Droplets size={20} className={intimacyActive ? "fill-pink-500" : ""} />
+          </button>
+          <Link to="/settings" className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-primary">
+            <Settings2 size={20} />
+          </Link>
+        </div>
+      </div>
+
+
+      {/* Chat Area */}
+      <div className="flex-1 overflow-y-auto mb-6 pr-2 space-y-6 custom-scrollbar scroll-smooth">
+        {messages.length === 0 && (
+          <div className="h-full flex items-center justify-center opacity-40">
+            <div className="px-6 py-4 rounded-2xl border border-white/10 font-mono text-white text-center">
+              <Brain className="mx-auto mb-2 opacity-50" size={40} />
+              Aku menunggumu menyapaku...<br />
+              <span className="text-xs">Gunakan / untuk perintah, @ untuk memori</span>
+            </div>
+          </div>
+        )}
+
+        {messages
+          .filter(msg => !(msg.role === 'System' && msg.content.includes("MIA Core Connected")))
+          .map((msg, idx) => (
+            <ChatBubble
+              key={msg.id || idx}
+              msg={msg}
               isMIA={msg.role === 'MIA'}
               isSys={msg.role === 'System'}
               config={config}
@@ -806,179 +793,176 @@ export default function Home() {
               onCancelEdit={() => setEditingId(null)}
             />
           ))}
-          <div ref={chatEndRef} />
-        </div>
+        <div ref={chatEndRef} />
+      </div>
 
-        {/* Input Area */}
-        <div className="relative flex flex-col gap-2 shrink-0">
-          {/* Status LEDs - Instrument Panel Style */}
-          <div className="absolute -bottom-5 left-7 flex gap-2.5 z-10 px-1">
-            <div className="flex flex-col items-center gap-0.5">
-              <div 
-                className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
-                  status.includes("Connected") 
-                  ? 'bg-primary shadow-[0_0_10px_rgba(0,255,204,1)] animate-pulse' 
-                  : 'bg-error shadow-[0_0_10px_rgba(255,68,68,1)]'
+      {/* Input Area */}
+      <div className="relative flex flex-col gap-2 shrink-0">
+        {/* Status LEDs - Instrument Panel Style */}
+        <div className="absolute -bottom-5 left-7 flex gap-2.5 z-10 px-1">
+          <div className="flex flex-col items-center gap-0.5">
+            <div
+              className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${status.includes("Connected")
+                ? 'bg-primary shadow-[0_0_10px_rgba(0,255,204,1)] animate-pulse'
+                : 'bg-error shadow-[0_0_10px_rgba(255,68,68,1)]'
                 }`}
-                title="Backend Link (LNK)"
-              ></div>
-              <span className="text-[6px] font-black tracking-tighter text-white/20 uppercase">Lnk</span>
-            </div>
-
-            <div className="flex flex-col items-center gap-0.5">
-              <div 
-                className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                  brainStatus === "Connected" 
-                  ? `bg-secondary shadow-[0_0_10px_rgba(255,255,0,1)] ${isThinking ? 'animate-ping' : 'animate-pulse'}` 
-                  : 'bg-error shadow-[0_0_10_rgba(255,68,68,1)]'
-                }`}
-                title="Brain Link (BRN)"
-              ></div>
-              <span className="text-[6px] font-black tracking-tighter text-white/20 uppercase">Brn</span>
-            </div>
+              title="Backend Link (LNK)"
+            ></div>
+            <span className="text-[6px] font-black tracking-tighter text-white/20 uppercase">Lnk</span>
           </div>
 
-          {showAttachMenu && (
-            <div className="absolute bottom-[110%] left-0 w-64 p-4 grid grid-cols-3 gap-3 bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-50">
-              <button onClick={() => document.getElementById('attach-img')?.click()} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
-                <ImageIcon size={20} />
-                <span className="text-[10px] font-mono">Image</span>
-              </button>
-              <button onClick={() => document.getElementById('attach-file')?.click()} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
-                <FileText size={20} />
-                <span className="text-[10px] font-mono">File</span>
-              </button>
-              <button onClick={captureScreen} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
-                <MonitorUp size={20} />
-                <span className="text-[10px] font-mono">Screen</span>
-              </button>
-            </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <div
+              className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${brainStatus === "Connected"
+                ? `bg-secondary shadow-[0_0_10px_rgba(255,255,0,1)] ${isThinking ? 'animate-ping' : 'animate-pulse'}`
+                : 'bg-error shadow-[0_0_10_rgba(255,68,68,1)]'
+                }`}
+              title="Brain Link (BRN)"
+            ></div>
+            <span className="text-[6px] font-black tracking-tighter text-white/20 uppercase">Brn</span>
+          </div>
+        </div>
 
-          )}
-
-          {(showCommands || showMentions) && (
-            <div className="absolute bottom-[110%] left-10 w-80 max-h-64 overflow-y-auto custom-scrollbar bg-black/90 backdrop-blur-2xl border border-white/10 rounded-xl py-2 shadow-2xl z-50 font-mono text-sm">
-              {showCommands && filteredCommands.map((c, i) => (
-                <button key={c.cmd} onClick={() => insertToken(c.cmd + " ")} className={`w-full flex items-center justify-between px-4 py-2 ${activeIndex === i ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/10'}`}>
-                  <div className="flex items-center gap-2">{c.icon} <b>{c.cmd}</b></div>
-                  <span className="text-[10px] opacity-50">{c.desc}</span>
-                </button>
-              ))}
-              {showMentions && filteredFiles.map((f, i) => (
-                <button key={f} onClick={() => insertToken("@" + f + " ")} className={`w-full flex items-center gap-2 px-4 py-2 ${activeIndex === i ? 'bg-secondary/20 text-secondary' : 'text-white/80 hover:bg-white/10'}`}>
-                  <FileText size={16} /> <b>@{f}</b>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Thinking Indicators & Status Message */}
-          {(isThinking || statusStage === "ERROR") && (
-            <div className="flex items-center gap-2 mb-2 px-1">
-              <div className="flex gap-1">
-                <span className={`w-2 h-2 rounded-full animate-pulse ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
-                <span className={`w-2 h-2 rounded-full animate-pulse delay-75 ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
-                <span className={`w-2 h-2 rounded-full animate-pulse delay-150 ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
-              </div>
-              <span className={`text-xs font-mono tracking-wider uppercase ${statusStage === "ERROR" || brainStatus !== "Connected" ? "text-red-400" : "text-primary/70"}`}>
-                {brainStatus !== "Connected" ? "BRAIN DISCONNECTED" : `${statusStage}: ${statusMessage}`}
-              </span>
-              {brainStatus !== "Connected" && (
-                <Link to="/settings?tab=resilience" className="text-[10px] font-black bg-red-500 text-black px-2 py-0.5 rounded animate-pulse hover:bg-white transition-colors">
-                  FIX MY BRAIN
-                </Link>
-              )}
-            </div>
-          )}
-
-          <div className={`flex items-center gap-3 p-3 rounded-full border border-white/20 backdrop-blur-xl shadow-2xl transition-all ${isThinking ? 'thinking-pulse border-primary shadow-[0_0_20px_rgba(0,255,204,0.3)]' : 'focus-within:border-primary/50'}`} style={{ backgroundColor: `rgba(0, 0, 0, ${uiOpacity + 0.1})` }}>
-            <button onClick={() => setShowAttachMenu(!showAttachMenu)} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${showAttachMenu ? 'text-primary' : 'text-white/60'}`}><Paperclip size={20} /></button>
-            
-            <input 
-              id="chat-input"
-              name="chat-input"
-              ref={inputRef} 
-              type="text" 
-              value={input} 
-              onChange={handleInputChange} 
-              onKeyDown={handleKeyDown} 
-              placeholder={brainStatus !== "Connected" ? "Brain Disconnected — Check System Resilience" : isThinking ? "MIA is thinking..." : "Message MIA..."} 
-              className="flex-1 bg-transparent border-none outline-none font-sans text-lg text-white" 
-              disabled={isThinking || brainStatus !== "Connected"} 
-            />
-            
-            <button onClick={handleMic} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${isRecording ? 'text-secondary animate-pulse' : 'text-white/60 hover:text-primary'}`}><Mic size={20} /></button>
-            
-            <button 
-              onClick={sendMessage}
-              disabled={!input.trim() || brainStatus !== "Connected"}
-              title={brainStatus !== "Connected" ? "Brain Disconnected — Check Resilience Audit" : "Send Message"}
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                (!input.trim() || brainStatus !== "Connected")
-                  ? "bg-white/5 text-white/20 cursor-not-allowed" 
-                  : "bg-primary text-black hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,255,204,0.3)]"
-              }`}
-            >
-              <Send size={18} />
+        {showAttachMenu && (
+          <div className="absolute bottom-[110%] left-0 w-64 p-4 grid grid-cols-3 gap-3 bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-50">
+            <button onClick={() => document.getElementById('attach-img')?.click()} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
+              <ImageIcon size={20} />
+              <span className="text-[10px] font-mono">Image</span>
+            </button>
+            <button onClick={() => document.getElementById('attach-file')?.click()} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
+              <FileText size={20} />
+              <span className="text-[10px] font-mono">File</span>
+            </button>
+            <button onClick={captureScreen} className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/10 text-white/80 hover:text-primary transition-colors">
+              <MonitorUp size={20} />
+              <span className="text-[10px] font-mono">Screen</span>
             </button>
           </div>
 
-          {/* Hidden File Inputs */}
-          <input type="file" id="attach-img" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'IMAGE')} />
-          <input type="file" id="attach-file" className="hidden" onChange={(e) => handleFileUpload(e, 'FILE')} />
-        </div>
+        )}
 
-        {/* Toast Notification Hub */}
-        <div className="toast-container">
-          {toasts.map(t => (
-            <div key={t.id} className="toast">
-              {t.type === 'error' ? <AlertCircle size={16} className="text-error"/> : t.type === 'success' ? <Check size={16} className="text-success"/> : <InfoIcon size={16} className="text-primary"/>}
-              {t.msg}
+        {(showCommands || showMentions) && (
+          <div className="absolute bottom-[110%] left-10 w-80 max-h-64 overflow-y-auto custom-scrollbar bg-black/90 backdrop-blur-2xl border border-white/10 rounded-xl py-2 shadow-2xl z-50 font-mono text-sm">
+            {showCommands && filteredCommands.map((c, i) => (
+              <button key={c.cmd} onClick={() => insertToken(c.cmd + " ")} className={`w-full flex items-center justify-between px-4 py-2 ${activeIndex === i ? 'bg-primary/20 text-primary' : 'text-white/80 hover:bg-white/10'}`}>
+                <div className="flex items-center gap-2">{c.icon} <b>{c.cmd}</b></div>
+                <span className="text-[10px] opacity-50">{c.desc}</span>
+              </button>
+            ))}
+            {showMentions && filteredFiles.map((f, i) => (
+              <button key={f} onClick={() => insertToken("@" + f + " ")} className={`w-full flex items-center gap-2 px-4 py-2 ${activeIndex === i ? 'bg-secondary/20 text-secondary' : 'text-white/80 hover:bg-white/10'}`}>
+                <FileText size={16} /> <b>@{f}</b>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Thinking Indicators & Status Message */}
+        {(isThinking || statusStage === "ERROR") && (
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <div className="flex gap-1">
+              <span className={`w-2 h-2 rounded-full animate-pulse ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
+              <span className={`w-2 h-2 rounded-full animate-pulse delay-75 ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
+              <span className={`w-2 h-2 rounded-full animate-pulse delay-150 ${statusStage === "ERROR" ? "bg-red-500" : "bg-primary"}`}></span>
             </div>
-          ))}
+            <span className={`text-xs font-mono tracking-wider uppercase ${statusStage === "ERROR" || brainStatus !== "Connected" ? "text-red-400" : "text-primary/70"}`}>
+              {brainStatus !== "Connected" ? "BRAIN DISCONNECTED" : `${statusStage}: ${statusMessage}`}
+            </span>
+            {brainStatus !== "Connected" && (
+              <Link to="/settings?tab=resilience" className="text-[10px] font-black bg-red-500 text-black px-2 py-0.5 rounded animate-pulse hover:bg-white transition-colors">
+                FIX MY BRAIN
+              </Link>
+            )}
+          </div>
+        )}
+
+        <div className={`flex items-center gap-3 p-3 rounded-full border border-white/20 backdrop-blur-xl shadow-2xl transition-all ${isThinking ? 'thinking-pulse border-primary shadow-[0_0_20px_rgba(0,255,204,0.3)]' : 'focus-within:border-primary/50'}`} style={{ backgroundColor: `rgba(0, 0, 0, ${uiOpacity + 0.1})` }}>
+          <button onClick={() => setShowAttachMenu(!showAttachMenu)} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${showAttachMenu ? 'text-primary' : 'text-white/60'}`}><Paperclip size={20} /></button>
+
+          <input
+            id="chat-input"
+            name="chat-input"
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder={brainStatus !== "Connected" ? "Brain Disconnected — Check System Resilience" : isThinking ? "MIA is thinking..." : "Message MIA..."}
+            className="flex-1 bg-transparent border-none outline-none font-sans text-lg text-white"
+            disabled={isThinking || brainStatus !== "Connected"}
+          />
+
+          <button onClick={handleMic} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${isRecording ? 'text-secondary animate-pulse' : 'text-white/60 hover:text-primary'}`}><Mic size={20} /></button>
+
+          <button
+            onClick={sendMessage}
+            disabled={!input.trim() || brainStatus !== "Connected"}
+            title={brainStatus !== "Connected" ? "Brain Disconnected — Check Resilience Audit" : "Send Message"}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${(!input.trim() || brainStatus !== "Connected")
+              ? "bg-white/5 text-white/20 cursor-not-allowed"
+              : "bg-primary text-black hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,255,204,0.3)]"
+              }`}
+          >
+            <Send size={18} />
+          </button>
         </div>
 
-        {/* Global Command Palette */}
-        {showPalette && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-md" onClick={() => setShowPalette(false)}></div>
-            <div className="relative w-full max-w-xl bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden">
-              <div className="p-6 border-b border-white/5 flex items-center gap-4">
-                <Search className="text-primary" size={20} />
-                <input 
-                  autoFocus
-                  placeholder="Type a command or search settings..."
-                  className="bg-transparent border-none outline-none text-white text-lg w-full font-sans"
-                />
-              </div>
-               <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                 <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-4 mb-2">Quick Actions</div>
-                  {paletteMenuItems.map((item, i) => (
-                  <div 
-                    key={i} 
-                    onClick={() => item.action ? item.action() : null}
-                    className="flex items-center justify-between p-4 rounded-2xl hover:bg-white/5 cursor-pointer group transition-all"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-primary transition-colors">{item.icon}</div>
-                      <div>
-                        <div className="text-sm font-bold text-white/80 group-hover:text-white">{item.name}</div>
-                        <div className="text-[10px] text-white/30">{item.desc}</div>
-                      </div>
+        {/* Hidden File Inputs */}
+        <input type="file" id="attach-img" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'IMAGE')} />
+        <input type="file" id="attach-file" className="hidden" onChange={(e) => handleFileUpload(e, 'FILE')} />
+      </div>
+
+      {/* Toast Notification Hub */}
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className="toast">
+            {t.type === 'error' ? <AlertCircle size={16} className="text-error" /> : t.type === 'success' ? <Check size={16} className="text-success" /> : <InfoIcon size={16} className="text-primary" />}
+            {t.msg}
+          </div>
+        ))}
+      </div>
+
+      {/* Global Command Palette */}
+      {showPalette && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-md" onClick={() => setShowPalette(false)}></div>
+          <div className="relative w-full max-w-xl bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden">
+            <div className="p-6 border-b border-white/5 flex items-center gap-4">
+              <Search className="text-primary" size={20} />
+              <input
+                autoFocus
+                placeholder="Type a command or search settings..."
+                className="bg-transparent border-none outline-none text-white text-lg w-full font-sans"
+              />
+            </div>
+            <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-4 mb-2">Quick Actions</div>
+              {paletteMenuItems.map((item, i) => (
+                <div
+                  key={i}
+                  onClick={() => item.action ? item.action() : null}
+                  className="flex items-center justify-between p-4 rounded-2xl hover:bg-white/5 cursor-pointer group transition-all"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-primary transition-colors">{item.icon}</div>
+                    <div>
+                      <div className="text-sm font-bold text-white/80 group-hover:text-white">{item.name}</div>
+                      <div className="text-[10px] text-white/30">{item.desc}</div>
                     </div>
-                    <div className="text-[10px] font-mono text-white/10 group-hover:text-primary transition-colors">ENTER</div>
                   </div>
-                ))}
-              </div>
-              <div className="p-4 bg-white/5 flex justify-between items-center">
-                <div className="text-[10px] text-white/20 font-mono">COMMAND PALETTE v1.0</div>
-                <div className="flex gap-2">
-                  <span className="px-2 py-0.5 rounded bg-white/10 text-[10px] text-white/40">ESC to close</span>
+                  <div className="text-[10px] font-mono text-white/10 group-hover:text-primary transition-colors">ENTER</div>
                 </div>
+              ))}
+            </div>
+            <div className="p-4 bg-white/5 flex justify-between items-center">
+              <div className="text-[10px] text-white/20 font-mono">COMMAND PALETTE v1.0</div>
+              <div className="flex gap-2">
+                <span className="px-2 py-0.5 rounded bg-white/10 text-[10px] text-white/40">ESC to close</span>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1001,14 +985,14 @@ interface ChatBubbleProps {
 
 function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin, isEditing, editValue, onEditChange, onSaveEdit, onCancelEdit }: ChatBubbleProps) {
   const [isCopied, setIsCopied] = useState(false);
-  
+
   // Helper to determine text color based on background luminance
   const getContrastYIQ = (color: string) => {
     if (!color) return 'white';
-    
+
     // P-VISUAL: Transparent bubbles on dark theme ALWAYS need white text
     if (color.includes('rgba')) return 'white';
-    
+
     try {
       let r, g, b;
       if (color.startsWith('#')) {
@@ -1028,7 +1012,7 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
       } else {
         return 'white';
       }
-      
+
       const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
       return (yiq >= 128) ? 'black' : 'white';
     } catch (e) {
@@ -1052,11 +1036,10 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
 
   return (
     <div className={`flex ${isMIA || isSys ? 'justify-start' : 'justify-end'} group relative mb-2 animate-chat-spring`}>
-      <div 
-        className={`max-w-[85%] p-6 rounded-[2.5rem] backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border transition-all duration-500 hover:scale-[1.01] ${
-          isMIA ? 'border-primary/30 rounded-tl-none' : isSys ? 'bg-black/40 border-secondary/20 italic' : 'border-white/20 rounded-tr-none'
-        } ${textColor}`}
-        style={{ 
+      <div
+        className={`max-w-[85%] p-6 rounded-[2.5rem] backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border transition-all duration-500 hover:scale-[1.01] ${isMIA ? 'border-primary/30 rounded-tl-none' : isSys ? 'bg-black/40 border-secondary/20 italic' : 'border-white/20 rounded-tr-none'
+          } ${textColor}`}
+        style={{
           backgroundColor: bubbleBg,
           background: !isSys ? `linear-gradient(145deg, ${bubbleBg}, ${bubbleBg}dd)` : undefined,
           boxShadow: isMIA ? `0 10px 40px -10px rgba(0, 255, 204, 0.2), 0 20px 50px rgba(0,0,0,0.3)` : `0 20px 50px rgba(0,0,0,0.3)`
@@ -1075,8 +1058,8 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
 
         {isEditing ? (
           <div className="flex flex-col gap-2">
-            <textarea 
-              value={editValue} 
+            <textarea
+              value={editValue}
               onChange={(e) => onEditChange(e.target.value)}
               className="w-full bg-black/40 border border-white/20 rounded-lg p-2 text-white font-sans outline-none focus:border-primary"
               rows={3}
@@ -1088,7 +1071,7 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
           </div>
         ) : (
           <div className={`prose ${textColor === 'text-black' ? 'prose-black' : 'prose-invert'} max-w-none prose-sm leading-relaxed tracking-wide`}>
-            <ReactMarkdown 
+            <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
                 code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
@@ -1115,16 +1098,16 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
 
         {videoUrl && (
           <div className="mt-4 rounded-xl overflow-hidden border border-white/10 bg-black/40">
-            <video 
-              src={videoUrl.startsWith('/') ? `/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl} 
-              controls 
+            <video
+              src={videoUrl.startsWith('/') ? `/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl}
+              controls
               className="w-full max-h-96"
             />
             <div className="p-2 flex justify-between items-center bg-black/60">
-              <span className="text-[10px] text-white/40 flex items-center gap-1"><PlayCircle size={12}/> MIA Generated Video</span>
-              <a 
-                href={videoUrl.startsWith('/') ? `/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl} 
-                download 
+              <span className="text-[10px] text-white/40 flex items-center gap-1"><PlayCircle size={12} /> MIA Generated Video</span>
+              <a
+                href={videoUrl.startsWith('/') ? `/api/video/play?path=${encodeURIComponent(videoUrl)}` : videoUrl}
+                download
                 className="p-1 hover:text-primary transition-colors"
                 title="Download Video"
               >
@@ -1145,9 +1128,9 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
                   <button onClick={() => msg.id && onLike(msg.id, 1)} className={`hover:text-primary transition-colors ${msg.is_liked === 1 ? 'text-primary' : 'text-white/40'}`}><ThumbsUp size={14} /></button>
                   <button onClick={() => msg.id && onLike(msg.id, -1)} className={`hover:text-error transition-colors ${msg.is_liked === -1 ? 'text-error' : 'text-white/40'}`}><ThumbsDown size={14} /></button>
                   <button onClick={() => msg.id && onPin(msg.id)} className={`hover:text-primary transition-colors ${msg.is_pinned ? 'text-primary' : 'text-white/40'}`}><Pin size={14} /></button>
-                  
+
                   {/* ARE Feedback: Robotic Response */}
-                  <button 
+                  <button
                     onClick={async () => {
                       try {
                         const res = await fetch('/api/chat/feedback/robotic', { method: 'POST' });

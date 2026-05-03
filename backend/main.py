@@ -56,6 +56,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MIA Backend API", lifespan=lifespan)
 intimacy_mode = False  # Global state for Intimacy Mode
+pending_intimacy_offer = False
+offer_timestamp = 0
 app_builder = AppBuilderService()
 
 # Initialize Studio Services (Phase 1)
@@ -71,6 +73,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# P4-X2: Global Traffic Monitor (Restoring "Informative" Backend)
+@app.middleware("http")
+async def log_requests(request, call_next):
+    print(f"[Traffic] {request.method} {request.url.path}")
+    response = await call_next(request)
+    return response
 
 # Mount static files from frontend public assets so backend can serve them
 assets_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "assets")
@@ -571,7 +580,12 @@ async def get_config():
 
 @app.post("/api/config")
 async def update_config(config: MIAConfig):
+    print(f"[Config] Received update request. Providers: {list(config.providers.keys())}")
     save_config(config)
+    
+    # HOT RELOAD: Instantly sync brain with new config
+    brain_orchestrator._refresh_brain_nodes()
+    
     mode_hub.set_mode(MIAMode(config.os_mode))
     await crone_daemon.broadcast_config_update()
     return {"status": "success"}
@@ -604,9 +618,11 @@ async def delete_provider(name: str):
 async def test_provider(name: str):
     config = load_config()
     if name not in config.providers:
+        print(f"[Test] Provider '{name}' not found in config keys: {list(config.providers.keys())}")
         return {"status": "error", "message": "Provider not found"}
 
     p = config.providers[name]
+    print(f"[Test] Testing provider: {name} (Model: {p.model_id}, URL: {p.base_url})")
 
     import time
     import httpx
@@ -635,9 +651,10 @@ async def test_provider(name: str):
             purpose = p.purpose
 
             # --- GRAND RESOLVER STEP ---
-            # MIA now resolves the TRUE endpoint and protocol in the background
-            resolved = provider_resolver.resolve(name, model_id, target_url)
+            # MIA now resolves            # Resolved Step: Cleans API Key and enforces v1beta
+            resolved = provider_resolver.resolve(name, model_id, target_url, api_key)
             final_url = resolved["url"]
+            final_api_key = resolved["api_key"]
             protocol = resolved["protocol"]
             
             print(f"[Test] Smart-Routing to: {final_url} (Protocol: {protocol})")
@@ -653,15 +670,15 @@ async def test_provider(name: str):
                     # Jalur Smart Gemini (Auto-inject API Key to URL)
                     if "key=" not in final_url:
                         sep = "&" if "?" in final_url else "?"
-                        final_url = f"{final_url}{sep}key={api_key}"
+                        final_url = f"{final_url}{sep}key={final_api_key}"
                     
                     resp = await client.post(final_url, json={"contents": [{"parts": [{"text": "ping"}]}]})
                     resp.raise_for_status()
                 elif protocol == "hf_native":
                     # Jalur Smart HuggingFace Hub (Native Payload)
                     headers = {"Content-Type": "application/json"}
-                    if api_key:
-                        headers["Authorization"] = f"Bearer {api_key}"
+                    if final_api_key:
+                        headers["Authorization"] = f"Bearer {final_api_key}"
                     
                     resp = await client.post(
                         final_url,
@@ -672,8 +689,8 @@ async def test_provider(name: str):
                 else:
                     # Jalur Smart OpenAI (HuggingFace Router, Groq, DeepSeek, dll)
                     headers = {"Content-Type": "application/json"}
-                    if api_key:
-                        headers["Authorization"] = f"Bearer {api_key}"
+                    if final_api_key:
+                        headers["Authorization"] = f"Bearer {final_api_key}"
 
                     resp = await client.post(
                         final_url,
@@ -691,44 +708,25 @@ async def test_provider(name: str):
                 resp.raise_for_status()
 
             latency = int((time.time() - start) * 1000)
-            p.latency = latency
-            p.health_ok += 1
-            save_config(config)
+            from core.stats_manager import stats_manager
+            stats_manager.update_stats(name, True, latency)
 
             return {"status": "success", "latency": latency}
 
     except Exception as e:
-        print(f"Smart Handshake failed for {name}: {e}")
-        p.health_fail += 1
-        p.latency = 9999
-        save_config(config)
-        return {"status": "error", "message": str(e)}
-
-    except Exception as e:
-        print(f"Full Handshake failed for {name}: {e}")
-
-        p.health_fail += 1
-        p.latency = 9999
-        save_config(config)
+        print(f"Handshake failed for {name}: {e}")
+        from core.stats_manager import stats_manager
+        stats_manager.update_stats(name, False, 0)
 
         return {
             "status": "error",
-            "message": str(e),
+            "message": str(e)
         }
 
 
 # --- APPEARANCE ENDPOINTS ---(For Settings GUI) ---
 
-@app.get("/api/config", response_model=MIAConfig)
-async def get_config():
-    """Retrieve current system configuration."""
-    return load_config()
 
-@app.post("/api/config")
-async def update_config(config: MIAConfig):
-    """Save new configuration from GUI."""
-    save_config(config)
-    return {"status": "success", "message": "Configuration saved successfully."}
 
 class TestConnectionRequest(BaseModel):
     provider_name: str
@@ -745,6 +743,7 @@ async def test_connection(req: TestConnectionRequest):
     based on the provider protocol to verify key validity and reachability.
     """
     import time, httpx
+    print(f"[Test-Connection] Request for: {req.provider_name} ({req.model_id})")
     if not req.api_key:
         return {"status": "error", "message": "API Key tidak boleh kosong."}
 
@@ -757,21 +756,38 @@ async def test_connection(req: TestConnectionRequest):
             is_chat_based = purpose in ["Inti Logika & Pikiran", "Persepsi Visual & Imajinasi", "Analisis Data & Pengetahuan"]
             
             if is_chat_based:
-                if "gemini" in protocol:
-                    # Gemini: Real handshake via generateContent
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{req.model_id}:generateContent?key={req.api_key}"
+                # --- UNIVERSAL RESOLVER STEP ---
+                # We use the same resolver as the main engine to ensure 100% consistency
+                resolved = provider_resolver.resolve(req.provider_name, req.model_id, req.base_url, req.api_key)
+                final_url = resolved["url"]
+                final_api_key = resolved["api_key"]
+                protocol = resolved["protocol"]
+                print(f"[Test-Connection] Smart-Routing to: {final_url} (Protocol: {protocol})")
+
+                if protocol == "gemini":
+                    # Gemini: Inject API Key to URL
+                    if "key=" not in final_url:
+                        sep = "&" if "?" in final_url else "?"
+                        final_url = f"{final_url}{sep}key={final_api_key}"
                     payload = {"contents": [{"parts": [{"text": "ping"}]}]}
-                    resp = await client.post(url, json=payload)
-                elif protocol == "groq":
-                    url = "https://api.groq.com/openai/v1/chat/completions"
-                    payload = {"model": req.model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}
-                    resp = await client.post(url, headers={"Authorization": f"Bearer {req.api_key}"}, json=payload)
+                    resp = await client.post(final_url, json=payload)
+                elif protocol == "hf_native":
+                    # HF Native Hub
+                    headers = {"Content-Type": "application/json"}
+                    if final_api_key:
+                        headers["Authorization"] = f"Bearer {final_api_key}"
+                    resp = await client.post(final_url, headers=headers, json={"inputs": "ping"})
                 else:
-                    # OpenAI-compatible / HuggingFace / DeepSeek
-                    base = req.base_url.rstrip('/') if req.base_url else "https://api.openai.com/v1"
-                    url = f"{base}/chat/completions"
-                    payload = {"model": req.model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}
-                    resp = await client.post(url, headers={"Authorization": f"Bearer {req.api_key}"}, json=payload)
+                    # OpenAI Compatible (Groq, DeepSeek, etc.)
+                    headers = {"Content-Type": "application/json"}
+                    if final_api_key:
+                        headers["Authorization"] = f"Bearer {final_api_key}"
+                    payload = {
+                        "model": req.model_id,
+                        "messages": [{"role": "user", "content": "ping"}],
+                        "max_tokens": 5
+                    }
+                    resp = await client.post(final_url, headers=headers, json=payload)
             else:
                 # Specialized: Simple Ping
                 url = req.base_url or "https://google.com"
@@ -794,8 +810,10 @@ async def test_connection(req: TestConnectionRequest):
             else:
                 return {"status": "error", "message": f"Server merespons dengan status {resp.status_code}."}
     except httpx.ConnectTimeout:
+        print(f"[Test-Connection] Error: Connection Timeout")
         return {"status": "error", "message": "Koneksi timeout. Periksa jaringan atau URL provider."}
     except Exception as e:
+        print(f"[Test-Connection] Critical Error: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/diagnostic")
@@ -823,15 +841,35 @@ async def upload_background(file: UploadFile = File(...)):
 
 @app.post("/api/intimacy/toggle")
 async def toggle_intimacy(active: bool):
-    """Manually toggle the Intimacy Mode (Phase Utama Keintiman)."""
-    global intimacy_mode
-    intimacy_mode = active
-    return {"status": "success", "intimacy_active": intimacy_mode}
+    """Manually toggle the Intimacy Mode with Strict Validation Gate."""
+    global intimacy_mode, pending_intimacy_offer, offer_timestamp
+    import time
+    
+    if active:
+        # VALIDATE: Only allow ON if pending offer exists and hasn't expired (3 mins)
+        now = time.time()
+        if pending_intimacy_offer and (now - offer_timestamp < 180):
+            intimacy_mode = True
+            pending_intimacy_offer = False
+            return {"status": "success", "intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
+        else:
+            # Revert pending if expired, reject activation
+            pending_intimacy_offer = False
+            return {"status": "error", "message": "Activation denied: Requires explicit offer.", "intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
+    else:
+        # Turning off is always allowed
+        intimacy_mode = False
+        pending_intimacy_offer = False
+        return {"status": "success", "intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
 
 @app.get("/api/intimacy/status")
 async def get_intimacy_status():
-    global intimacy_mode
-    return {"intimacy_active": intimacy_mode}
+    global intimacy_mode, pending_intimacy_offer, offer_timestamp
+    import time
+    # Check expiration on read
+    if pending_intimacy_offer and (time.time() - offer_timestamp >= 180):
+        pending_intimacy_offer = False
+    return {"intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
 
 # Legacy intimacy_touch removed - consolidated into handle_touch
 
@@ -943,7 +981,8 @@ async def pin_message(message_id: int):
             # Sync to Tier 3 Memory (ChromaDB / Vector RAG)
             await memory_orchestrator.add_memory(
                 msg['content'], 
-                metadata={"source": "pinned_chat", "role": msg['role']}
+                metadata={"source": "pinned_chat", "role": msg['role']},
+                is_intimate=intimacy_mode
             )
     return {"status": "success"}
 
@@ -1038,7 +1077,7 @@ async def websocket_heartbeat(websocket: WebSocket):
                 })
             except: 
                 break
-            await asyncio.sleep(5)
+            await asyncio.sleep(30) # Reduced frequency to lower latency and log noise
 
     heartbeat_task = asyncio.create_task(heartbeat_ping())
     
@@ -1067,23 +1106,21 @@ async def websocket_heartbeat(websocket: WebSocket):
                     
                     if not commands:
                         # Patch B: Memory logging is now non-blocking background task
-                        await crone_daemon.log_episodic_memory("User", data)
-                        
-                        await websocket.send_json({"type": "status", "content": "Retrieving Memories..."})
+                        pass # Memory is synced via history_manager.py
                         
                         clean_query = " ".join([w for w in words if not w.startswith('@')])
                         mentions = [w for w in words if w.startswith('@')]
                         clean_mentions = [m.lstrip('@') for m in mentions]
+
+                        await websocket.send_json({"type": "status", "content": "Retrieving Memories..."})
                         
-                        context = await memory_orchestrator.assemble_context(clean_query, clean_mentions)
+                        # SECTION 6.1: Trigger tidak berbasis keyword. Only use strict intimacy_mode.
+                        is_intimate_turn = intimacy_mode
+                        
+                        context = await memory_orchestrator.assemble_context(clean_query, clean_mentions, is_intimate=is_intimate_turn)
                         
                         await websocket.send_json({"type": "status", "content": "Thinking..."})
                         emotion_manager.on_user_interaction()
-                        
-                        is_intimate_turn = (
-                            intimacy_mode or 
-                            any(mark in clean_query.lower() for mark in ["sayang", "cinta", "kangen", "manja"])
-                        )
 
                         # Patch E — TIMEOUT WAJIB DI AI EXECUTION (Strict 8s)
                         try:
@@ -1094,12 +1131,25 @@ async def websocket_heartbeat(websocket: WebSocket):
                                 timeout=60.0
                             )
                         except asyncio.TimeoutError:
-                            response_text = "Maaf Bos, pikiranku sedikit macet (Timeout). Coba tanya lagi ya? 💫"
+                            response_text = brain_orchestrator._local_heart_fallback("timeout")
                             await websocket.send_json({"type": "status", "content": "TIMEOUT", "message": "AI Execution Exceeded 8s"})
+
+                        # ZERO-LATENCY TRAP INTERCEPTION & OUTBOUND ENFORCEMENT
+                        global pending_intimacy_offer, offer_timestamp
+                        if "[REQ_INTIMACY]" in response_text:
+                            if emotion_manager.intimacy_gate():
+                                import time
+                                pending_intimacy_offer = True
+                                offer_timestamp = time.time()
+                                response_text = response_text.replace("[REQ_INTIMACY]", "").strip()
+                                await websocket.send_json({"type": "intimacy_offer_active"})
+                            else:
+                                # OUTBOUND ENFORCEMENT: Fail-Closed Full Substitution
+                                response_text = emotion_manager.soft_deflect_response()
 
                         # Persist MIA Message
                         mia_msg_id = history_manager.add_message("MIA", response_text)
-                        await crone_daemon.log_episodic_memory("MIA", response_text)
+                        pass # Memory is synced via history_manager.py
                         
                         await websocket.send_json({"type": "status", "content": "Speaking..."})
                         current_state = emotion_manager.get_state()
