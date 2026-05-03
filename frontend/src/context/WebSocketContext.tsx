@@ -48,7 +48,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       try {
         const data = JSON.parse(event.data);
         WS_EVENT_BUS.dispatchEvent(new CustomEvent('ws:message', { detail: data }));
-        if (data.type) {
+        if (data.type && data.type !== 'message') {
           WS_EVENT_BUS.dispatchEvent(new CustomEvent(`ws:${data.type}`, { detail: data }));
         }
       } catch (err) {

@@ -1099,6 +1099,7 @@ async def websocket_heartbeat(websocket: WebSocket):
                 try:
                     # Persist User Message (Patch C WAL mode makes this safe)
                     msg_id = history_manager.add_message("You", data)
+                    await crone_daemon.broadcast_event("history_updated")
                     
                     # --- CMD / MENTION PARSER ---
                     words = data.split()
@@ -1164,12 +1165,13 @@ async def websocket_heartbeat(websocket: WebSocket):
                         current_state = emotion_manager.get_state()
                         is_intimate_audio = intimacy_mode or current_state["mood"] in ["Intense", "Affectionate", "Glow"]
                         
-                        # 1. Send Text immediately (Rule 2: Pacing Start)
+                        # 1. Send Signal and Status (Rule 2: Pacing Start)
+                        await crone_daemon.broadcast_event("history_updated")
                         await websocket.send_json({
                             "type": "message", 
-                            "content": response_text,
                             "id": mia_msg_id,
-                            "audio": None # No audio yet
+                            "content": "", # Payload is now fetched via REST
+                            "audio": None 
                         })
 
                         # 2. Slice and stream audio (Rule 2: Pacing)

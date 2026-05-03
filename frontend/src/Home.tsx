@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useWebSocket, useWebSocketMessage, useWebSocketEvent, type WSMessage } from './hooks/useWebSocket';
-import { useMemoryFiles, useIntimacyStatus, queryKeys } from './hooks/useMIAQueries';
+import { useMemoryFiles, useIntimacyStatus, useChatHistory, queryKeys } from './hooks/useMIAQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Mic, Send, Activity, Settings2, Eye, Brain, Paperclip,
@@ -65,7 +65,7 @@ export default function Home() {
   const location = useLocation();
   // --- 1. STATES ---
   const { config, loading: configLoading } = useConfig();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { data: messages = [] } = useChatHistory();
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Disconnected");
   const [brainStatus, setBrainStatus] = useState("Disconnected");
@@ -208,8 +208,9 @@ export default function Home() {
 
     if (trimmedInput === '/clear') {
       fetch('/api/chat/history', { method: 'DELETE' });
-      setMessages([]); setInput("");
-      queryClient.invalidateQueries({ queryKey: queryKeys.history });
+      // Clear cache immediately
+      queryClient.setQueryData(queryKeys.history, []);
+      setInput("");
       addToast("Chat history cleared", "info");
       return;
     }
@@ -221,7 +222,8 @@ export default function Home() {
       content: trimmedInput,
       timestamp: new Date().toISOString()
     };
-    setMessages(prev => [...prev, userMsg]);
+    // setMessages(prev => [...prev, userMsg]); // We'll rely on signal or optimistic cache
+    queryClient.setQueryData(queryKeys.history, (old: Message[] | undefined) => [...(old || []), userMsg]);
 
     setIsThinking(true);
     // setStatusStage("BOOT");
@@ -282,18 +284,11 @@ export default function Home() {
       setStatusMessage("");
       playSFX('receive');
 
-      const isError = data.content.startsWith("[SYSTEM ERROR]");
+      // Invalidasi history agar TanStack Query fetch pesan terbaru dari DB
+      queryClient.invalidateQueries({ queryKey: queryKeys.history });
+
+      const isError = data.content?.startsWith("[SYSTEM ERROR]");
       const role = (data.type === "system" || isError) ? "System" : "MIA";
-      const cleanContent = isError ? data.content.replace("[SYSTEM ERROR]", "").trim() : data.content;
-
-      const newMessage = {
-        id: data.id || Date.now(),
-        role: role,
-        content: cleanContent,
-        audio: data.audio
-      };
-
-      setMessages(prev => [...prev, newMessage]);
 
       if (data.audio && !isTTSMutedRef.current && role === "MIA") {
         playAudioRef.current?.(data.audio);
@@ -319,7 +314,7 @@ export default function Home() {
         setStatusMessage("Brain Disconnected");
       }
     }
-  }, [playSFX]));
+  }, [playSFX, queryClient]));
 
   // Sync connection status from global WebSocket
   useEffect(() => {
@@ -345,15 +340,6 @@ export default function Home() {
 
   // --- 7. EFFECTS ---
   useEffect(() => {
-    // History, Memory and Intimacy fetching still needed locally or can be moved to context
-    const fetchHistory = () => {
-      fetch('/api/chat/history')
-        .then(res => res.json())
-        .then(data => setMessages(data.history || []))
-        .catch(() => setTimeout(fetchHistory, 1000));
-    };
-    fetchHistory();
-
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); toggleIntimacy(); }
       if (e.key === 'Escape') setShowPalette(false);
@@ -590,7 +576,7 @@ export default function Home() {
 
   const handleDelete = async (id: number) => {
     await fetch(`/api/chat/message/${id}`, { method: 'DELETE' });
-    setMessages(prev => prev.filter(m => m.id !== id));
+    queryClient.invalidateQueries({ queryKey: queryKeys.history });
   };
 
   const handleEdit = (id: number, content: string) => {
@@ -605,7 +591,7 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message_id: editingId, content: editValue })
     });
-    setMessages(prev => prev.map(m => m.id === editingId ? { ...m, content: editValue } : m));
+    queryClient.invalidateQueries({ queryKey: queryKeys.history });
     setEditingId(null);
   };
 
@@ -615,12 +601,12 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message_id: id, liked })
     });
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, is_liked: liked } : m));
+    queryClient.invalidateQueries({ queryKey: queryKeys.history });
   };
 
   const handlePin = async (id: number) => {
     await fetch(`/api/chat/pin/${id}`, { method: 'POST' });
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, is_pinned: true } : m));
+    queryClient.invalidateQueries({ queryKey: queryKeys.history });
   };
 
   if (configLoading || !config) return <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse bg-transparent">Membangunkan jiwa MIA...</div>;
@@ -695,7 +681,7 @@ export default function Home() {
             onClick={() => {
               if (window.confirm("Hapus seluruh riwayat chat?")) {
                 fetch('/api/chat/history', { method: 'DELETE' });
-                setMessages([]);
+                queryClient.setQueryData(queryKeys.history, []);
                 addToast("Chat history cleared", "info");
               }
             }}
