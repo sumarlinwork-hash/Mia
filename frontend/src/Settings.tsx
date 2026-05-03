@@ -7,6 +7,9 @@ import {
 import { Link, useLocation } from 'react-router-dom';
 import ThemeTab from './components/settings/ThemeTab';
 import { useConfig } from './hooks/useConfig';
+import { useInstalledSkills, queryKeys } from './hooks/useMIAQueries';
+import { useQueryClient } from '@tanstack/react-query';
+import { useWebSocketEvent } from './hooks/useWebSocket';
 
 import type { MIAConfig, ProviderConfig } from './types/config';
 import type { App as Skill } from './utils/viewModel';
@@ -65,7 +68,13 @@ export default function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [editName, setEditName] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [skills, setSkills] = useState<Skill[]>([]);
+  const { data: skills = [] } = useInstalledSkills();
+  const queryClient = useQueryClient();
+
+  useWebSocketEvent('skills_updated', useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+  }, [queryClient]));
+
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
   const [skillCode, setSkillCode] = useState("");
   const [testCountdown, setTestCountdown] = useState<number>(0);
@@ -138,12 +147,6 @@ export default function Settings() {
         if (isMounted) setOriginalConfig(config);
       }, 0);
     }
-
-    fetch('/api/skills/installed')
-      .then(res => res.json())
-      .then(data => {
-        if (isMounted) setSkills(data);
-      });
 
     return () => { isMounted = false; };
   }, [config, originalConfig]);
@@ -325,7 +328,7 @@ export default function Settings() {
       const res = await fetch(`/api/skills/uninstall/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.status === 'success') {
-        setSkills(prev => prev.filter(s => s.id !== id));
+        queryClient.invalidateQueries({ queryKey: queryKeys.skills });
         addToast("Skill dihapus", "success");
       }
     } catch { addToast("Gagal menghapus skill", "error"); }
@@ -371,6 +374,7 @@ export default function Settings() {
       });
       const data = await res.json();
       if (data.status === 'success') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.skills });
         addToast("Logic skill berhasil diperbarui!", "success");
         setEditingSkill(null);
       }

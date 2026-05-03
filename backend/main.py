@@ -127,13 +127,17 @@ async def install_skill(skill_id: str):
 
 @app.delete("/api/skills/uninstall/{skill_id}")
 async def uninstall_skill(skill_id: str):
-    return skill_manager.uninstall_skill(skill_id)
+    result = skill_manager.uninstall_skill(skill_id)
+    await crone_daemon.broadcast_event("skills_updated")
+    return result
 
 @app.post("/api/skills/upload")
 async def upload_skill(file: UploadFile = File(...)):
     contents = await file.read()
     name = file.filename or f"skill_{int(time.time())}.py"
-    return skill_manager.save_skill(name, contents.decode('utf-8'))
+    result = skill_manager.save_skill(name, contents.decode('utf-8'))
+    await crone_daemon.broadcast_event("skills_updated")
+    return result
 
 class SkillSaveRequest(BaseModel):
     name: str
@@ -199,7 +203,9 @@ async def websocket_studio_graph_stream(websocket: WebSocket, execution_id: str,
 
 @app.post("/api/skills/save")
 async def save_skill(req: SkillSaveRequest):
-    return skill_manager.save_skill(req.name, req.code)
+    result = skill_manager.save_skill(req.name, req.code)
+    await crone_daemon.broadcast_event("skills_updated")
+    return result
 
 @app.get("/metrics")
 async def get_metrics():
@@ -851,6 +857,7 @@ async def toggle_intimacy(active: bool):
         if pending_intimacy_offer and (now - offer_timestamp < 180):
             intimacy_mode = True
             pending_intimacy_offer = False
+            await crone_daemon.broadcast_event("intimacy_updated")
             return {"status": "success", "intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
         else:
             # Revert pending if expired, reject activation
@@ -860,6 +867,7 @@ async def toggle_intimacy(active: bool):
         # Turning off is always allowed
         intimacy_mode = False
         pending_intimacy_offer = False
+        await crone_daemon.broadcast_event("intimacy_updated")
         return {"status": "success", "intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
 
 @app.get("/api/intimacy/status")
@@ -1102,6 +1110,7 @@ async def websocket_heartbeat(websocket: WebSocket):
                             history_manager.clear_history()
                             await memory_orchestrator.clear_memory()
                             await websocket.send_json({"type": "clear", "content": ""})
+                            await crone_daemon.broadcast_event("history_updated")
                             continue
                     
                     if not commands:

@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ThemeProvider } from './context/ThemeProvider';
 import Sidebar from './Sidebar';
 import Home from './Home';
@@ -12,31 +12,12 @@ import { StudioPage } from './mia_studio/components/StudioPage';
 import { FileStoreProvider } from './mia_studio/context/FileStoreContext';
 import ZenModeOverlay from './components/ZenModeOverlay';
 import ResonantOrchestrator from './components/ResonantOrchestrator';
-
-import type { MIAConfig } from './types/config';
+import { useConfig } from './hooks/useConfig';
 
 function App() {
-  const [config, setConfig] = useState<MIAConfig | null>(null);
+  const { config } = useConfig();
   const [isZenMode, setIsZenMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  useEffect(() => {
-    const fetchConfig = () => {
-      fetch('/api/config')
-        .then(res => res.json())
-        .then(data => setConfig(data))
-        .catch(() => setTimeout(fetchConfig, 1000));
-    };
-    
-    fetchConfig();
-
-    // Global Config Sync: Listen for browser events (dispatched by ConfigContext WS)
-    window.addEventListener('configUpdated', fetchConfig);
-    
-    return () => {
-      window.removeEventListener('configUpdated', fetchConfig);
-    };
-  }, []);
 
   const bgUrl = config?.appearance?.background_url || '';
   

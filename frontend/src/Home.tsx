@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useWebSocket, useWebSocketMessage, useWebSocketEvent, type WSMessage } from './hooks/useWebSocket';
+import { useMemoryFiles, useIntimacyStatus, queryKeys } from './hooks/useMIAQueries';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Mic, Send, Activity, Settings2, Eye, Brain, Paperclip,
   Image as ImageIcon, FileText, MonitorUp, Volume2, VolumeX,
@@ -72,7 +75,9 @@ export default function Home() {
   const [editValue, setEditValue] = useState("");
   const [showCommands, setShowCommands] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
-  const [memoryFiles, setMemoryFiles] = useState<string[]>([]);
+  const { data: memoryFiles = [] } = useMemoryFiles();
+  const { data: intimacyActive = false } = useIntimacyStatus();
+  const queryClient = useQueryClient();
   const [filteredFiles, setFilteredFiles] = useState<string[]>([]);
   const [filteredCommands, setFilteredCommands] = useState(COMMANDS);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -84,13 +89,12 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [mood] = useState("neutral");
-  const [intimacyActive, setIntimacyActive] = useState(false);
   const [statusStage, setStatusStage] = useState<string>("DONE");
   const [statusMessage, setStatusMessage] = useState<string>("Idle");
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
 
   // --- 2. REFS ---
-  const ws = useRef<WebSocket | null>(null);
+  const { send, status: wsStatus } = useWebSocket();
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
@@ -102,8 +106,6 @@ export default function Home() {
   const animationFrame = useRef<number | null>(null);
   const playAudioRef = useRef<((src: string) => void) | null>(null);
   const isTTSMutedRef = useRef(false);
-  const reconnectAttempts = useRef(0);
-  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // --- 3. UTILITY CALLBACKS ---
   const addToast = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info') => {
@@ -199,7 +201,7 @@ export default function Home() {
   // --- 5. SYSTEM & CHAT LOGIC ---
   const sendMessage = useCallback(() => {
     const trimmedInput = input.trim();
-    if (!trimmedInput || !ws.current) return;
+    if (!trimmedInput) return;
 
     // Prime the audio context on user gesture
     resumeAudioContext();
@@ -207,6 +209,7 @@ export default function Home() {
     if (trimmedInput === '/clear') {
       fetch('/api/chat/history', { method: 'DELETE' });
       setMessages([]); setInput("");
+      queryClient.invalidateQueries({ queryKey: queryKeys.history });
       addToast("Chat history cleared", "info");
       return;
     }
@@ -225,13 +228,13 @@ export default function Home() {
     // setStatusMessage("Initializing MIA Resilience Layer...");
     setLastRequestTime(Date.now());
     playSFX('send');
-    if (ws.current.readyState !== WebSocket.OPEN) {
+    if (wsStatus !== 'connected') {
       addToast("Connection not ready. Retrying...", "error");
       return;
     }
 
     try {
-      ws.current.send(trimmedInput);
+      send(trimmedInput);
     } catch (err) {
       console.error("[WS] Send failed:", err);
       addToast("Failed to send message", "error");
@@ -243,7 +246,7 @@ export default function Home() {
     setShowCommands(false);
     setShowMentions(false);
     setShowAttachMenu(false);
-  }, [input, addToast, playSFX, resumeAudioContext]);
+  }, [input, addToast, playSFX, resumeAudioContext, send, wsStatus, queryClient]);
 
   const toggleIntimacy = useCallback(async () => {
     try {
@@ -253,11 +256,11 @@ export default function Home() {
       const target = !intimacyActive;
       const res = await fetch(`/api/intimacy/toggle?active=${target}`, { method: 'POST' });
       const data = await res.json();
-      setIntimacyActive(data.intimacy_active);
+      queryClient.setQueryData(queryKeys.intimacy, data.intimacy_active);
       addToast(data.intimacy_active ? "Fase Keintiman Diaktifkan... Aku milikmu sepenuhnya 💖" : "Kembali ke Mode Kerja... Aku siap melayanimu, Bos 💼", data.intimacy_active ? "success" : "info");
       setShowPalette(false);
     } catch { addToast("Failed to toggle intimacy mode", "error"); }
-  }, [intimacyActive, addToast, resumeAudioContext]);
+  }, [intimacyActive, addToast, resumeAudioContext, queryClient]);
 
   // --- 6. PLAIN VALUES ---
   const paletteMenuItems = [
@@ -268,6 +271,77 @@ export default function Home() {
     { icon: <XCircle size={18} />, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
   ];
 
+
+  // Global WebSocket message handler
+  useWebSocketMessage(useCallback((data: WSMessage) => {
+    if (data.type === 'ping') return;
+
+    if (data.type === "message" || data.type === "system") {
+      setIsThinking(false);
+      setStatusStage("DONE");
+      setStatusMessage("");
+      playSFX('receive');
+
+      const isError = data.content.startsWith("[SYSTEM ERROR]");
+      const role = (data.type === "system" || isError) ? "System" : "MIA";
+      const cleanContent = isError ? data.content.replace("[SYSTEM ERROR]", "").trim() : data.content;
+
+      const newMessage = {
+        id: data.id || Date.now(),
+        role: role,
+        content: cleanContent,
+        audio: data.audio
+      };
+
+      setMessages(prev => [...prev, newMessage]);
+
+      if (data.audio && !isTTSMutedRef.current && role === "MIA") {
+        playAudioRef.current?.(data.audio);
+      }
+    } else if (data.type === "audio_chunk") {
+      if (data.audio && !isTTSMutedRef.current) {
+        playAudioRef.current?.(data.audio);
+      }
+    } else if (data.type === "status") {
+      if (data.stage) {
+        setStatusStage(data.stage);
+        setStatusMessage(data.message || "");
+        setIsThinking(data.stage !== "DONE" && data.stage !== "ERROR");
+      } else {
+        setStatus(`Connected (${data.content})`);
+        setIsThinking(data.content === "Thinking...");
+      }
+    } else if (data.type === "health") {
+      setStatus(data.backend === "ok" ? "Connected" : "Disconnected");
+      setBrainStatus(data.brain === "ok" ? "Connected" : "Disconnected");
+      if (data.brain !== "ok") {
+        setStatusStage("ERROR");
+        setStatusMessage("Brain Disconnected");
+      }
+    }
+  }, [playSFX]));
+
+  // Sync connection status from global WebSocket
+  useEffect(() => {
+    if (wsStatus === 'connected') {
+      setStatus("Connected (Heartbeat Active)");
+    } else if (wsStatus === 'disconnected') {
+      setStatus("Disconnected");
+      setStatusStage("ERROR");
+      setStatusMessage("Connection Lost");
+    }
+  }, [wsStatus]);
+
+  // Listen for backend data-change signals and invalidate queries
+  useWebSocketEvent('history_updated', useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.history });
+  }, [queryClient]));
+  useWebSocketEvent('intimacy_updated', useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.intimacy });
+  }, [queryClient]));
+  useWebSocketEvent('skills_updated', useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+  }, [queryClient]));
 
   // --- 7. EFFECTS ---
   useEffect(() => {
@@ -280,113 +354,6 @@ export default function Home() {
     };
     fetchHistory();
 
-    const fetchMemory = () => {
-      fetch('/api/memory/files')
-        .then(res => res.json())
-        .then(data => setMemoryFiles(data.files || []))
-        .catch(() => setTimeout(fetchMemory, 1000));
-    };
-    fetchMemory();
-
-    const fetchIntimacyStatus = () => {
-      fetch('/api/intimacy/status')
-        .then(res => res.json())
-        .then(data => setIntimacyActive(data.intimacy_active))
-        .catch(() => { });
-    };
-    fetchIntimacyStatus();
-    const intimacyInterval = setInterval(fetchIntimacyStatus, 5000);
-
-    const connectWS = () => {
-      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // Rule: WebSocket MUST point to Backend (Port 8000)
-      const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/api/chat/heartbeat`;
-
-      console.log(`[WS] Connecting to ${wsUrl}...`);
-      const socket = new WebSocket(wsUrl);
-      ws.current = socket;
-
-      socket.onopen = () => {
-        console.log("[WS] Connected");
-        setStatus("Connected (Heartbeat Active)");
-        reconnectAttempts.current = 0;
-      };
-
-      socket.onclose = () => {
-        setStatus("Disconnected");
-        setStatusStage("ERROR");
-        setStatusMessage("Connection Lost");
-
-        // P-STABILITY: Exponential Backoff Reconnect
-        if (reconnectAttempts.current < 10) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-          console.warn(`[WS] Connection lost. Retrying in ${delay}ms... (Attempt ${reconnectAttempts.current + 1})`);
-
-          reconnectTimeout.current = setTimeout(() => {
-            reconnectAttempts.current++;
-            connectWS();
-          }, delay);
-        }
-      };
-
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'ping') return;
-
-        if (data.type === "message" || data.type === "system") {
-          setIsThinking(false);
-          setStatusStage("DONE");
-          setStatusMessage("");
-          playSFX('receive');
-
-          const isError = data.content.startsWith("[SYSTEM ERROR]");
-          const role = (data.type === "system" || isError) ? "System" : "MIA";
-          const cleanContent = isError ? data.content.replace("[SYSTEM ERROR]", "").trim() : data.content;
-
-          const newMessage = {
-            id: data.id || Date.now(),
-            role: role,
-            content: cleanContent,
-            audio: data.audio
-          };
-
-          setMessages(prev => [...prev, newMessage]);
-
-          // Only play audio if it's a real MIA message (not a system error/notification)
-          if (data.audio && !isTTSMutedRef.current && role === "MIA") {
-            playAudioRef.current?.(data.audio);
-          }
-        } else if (data.type === "audio_chunk") {
-          // Rule 3: Smart Queue for Pacing
-          if (data.audio && !isTTSMutedRef.current) {
-            playAudioRef.current?.(data.audio);
-          }
-        } else if (data.type === "status") {
-          if (data.stage) {
-            setStatusStage(data.stage);
-            setStatusMessage(data.message || "");
-            setIsThinking(data.stage !== "DONE" && data.stage !== "ERROR");
-          } else {
-            // Backward compatibility for old status messages
-            setStatus(`Connected (${data.content})`);
-            setIsThinking(data.content === "Thinking...");
-          }
-        } else if (data.type === "health") {
-          setStatus(data.backend === "ok" ? "Connected" : "Disconnected");
-          setBrainStatus(data.brain === "ok" ? "Connected" : "Disconnected");
-          if (data.brain !== "ok") {
-            setStatusStage("ERROR");
-            setStatusMessage("Brain Disconnected");
-          }
-        }
-      };
-    };
-
-    connectWS();
-
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); toggleIntimacy(); }
       if (e.key === 'Escape') setShowPalette(false);
@@ -394,17 +361,10 @@ export default function Home() {
     window.addEventListener('keydown', handleGlobalShortcuts);
 
     return () => {
-      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-      if (ws.current) {
-        // Prevent onclose from triggering reconnect during unmount
-        ws.current.onclose = null;
-        ws.current.close();
-      }
       stopAudio(); // Rule 1: Stop on page change
       window.removeEventListener('keydown', handleGlobalShortcuts);
-      clearInterval(intimacyInterval);
     };
-  }, [playSFX, stopAudio, toggleIntimacy]);
+  }, [stopAudio, toggleIntimacy]);
 
   // Phase 4: Timeout Watcher (Strict Behavior)
   useEffect(() => {

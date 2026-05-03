@@ -293,6 +293,18 @@ class CroneDaemon:
             except Exception as e:
                 print(f"[Crone] Failed to broadcast config_update: {e}")
 
+    async def broadcast_event(self, event_type: str):
+        """Generic event broadcaster for UI sync signals."""
+        if self._websocket_ref:
+            try:
+                await self._websocket_ref.send_json({
+                    "type": event_type,
+                    "timestamp": time.time()
+                })
+                print(f"[Crone] Broadcasted {event_type} to UI.")
+            except Exception as e:
+                print(f"[Crone] Failed to broadcast {event_type}: {e}")
+
     async def trigger_job(self, job_id: str):
         job = self.scheduler.get_job(job_id)
         if job:
