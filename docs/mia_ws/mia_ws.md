@@ -28,6 +28,7 @@ Semua pesan WebSocket diproses melalui `WebSocketContext.tsx` dan dipublikasikan
 | `status` | Update tahap eksekusi (Thinking, Speaking, dll). | Update UI Thinking Indicator |
 | `audio_chunk` | Potongan suara (TTS) untuk diputar real-time. | `playAudio(chunk)` |
 | `health` | Status kesehatan koneksi Backend & Brain. | Update LED Status (LNK/BRN) |
+| `intimacy_offer_active` | MIA menawarkan/membuka pintu fase keintiman (soulmate). | Tampilkan toast penawaran & `invalidateQueries(['intimacy'])` |
 
 ---
 

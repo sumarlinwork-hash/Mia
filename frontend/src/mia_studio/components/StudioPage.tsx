@@ -19,6 +19,24 @@ import { ResilienceMonitor } from './ResilienceMonitor';
 import clsx from 'clsx';
 import { useConfig } from '../../hooks/useConfig';
 
+interface ShadTelemetryPayload {
+  snapshot?: {
+    health_score?: number;
+    mode?: string;
+  };
+  nodes?: {
+    name: string;
+    success: boolean;
+    latency: number;
+  }[];
+  suggestions?: {
+    id: string;
+    label: string;
+    description: string;
+    severity: string;
+  }[];
+}
+
 export const StudioPage: React.FC = () => {
   const { config } = useConfig();
   const { currentProjectId, currentSessionId } = useFileStore();
@@ -82,7 +100,7 @@ export const StudioPage: React.FC = () => {
   const handleFileOpen = async (path: string) => {
     tabs.openTab(path);
     if (!fileStore.files[path] && currentSessionId) {
-      await draftController.loadFile(path, currentSessionId);
+      await draftController.loadFile(path);
     }
   };
 
@@ -172,7 +190,7 @@ export const StudioPage: React.FC = () => {
     if (tabs.activeTab && currentSessionId) {
       const file = fileStore.files[tabs.activeTab];
       if (file && file.isDirty) {
-        await draftController.saveFile(tabs.activeTab, file.content, currentSessionId);
+        await draftController.saveFile(tabs.activeTab, file.content);
       }
     }
   };
@@ -196,7 +214,7 @@ export const StudioPage: React.FC = () => {
     // Save all dirty files before run (P2 requirement hardened)
     const dirtyFiles = Object.entries(fileStore.files).filter(([, f]) => f.isDirty);
     for (const [path, file] of dirtyFiles) {
-      await draftController.saveFile(path, file.content, sessionId);
+      await draftController.saveFile(path, file.content);
     }
 
     // Run entry point
@@ -209,7 +227,10 @@ export const StudioPage: React.FC = () => {
 
   // Extract SHAD-CSA Data from resilience stream
   const lastShadEvent = [...resilienceStream.graphEvents].reverse().find(e => e.type === 'SHAD_CSA_TELEMETRY');
-  const shadData = lastShadEvent?.payload as Record<string, unknown>;
+  const rawPayload = lastShadEvent?.payload;
+  const shadData = (rawPayload && typeof rawPayload === 'object')
+    ? (rawPayload as ShadTelemetryPayload)
+    : undefined;
 
   const activeFile = tabs.activeTab ? fileStore.files[tabs.activeTab] : null;
 
@@ -261,7 +282,7 @@ export const StudioPage: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => execution.stopCode(sessionId)}
+              onClick={() => currentSessionId && execution.stopCode(currentSessionId)}
               disabled={execution.state !== 'RUNNING'}
               className={clsx(
                 "flex items-center gap-2 px-3 py-1 rounded-md transition-all duration-300 text-xs font-bold uppercase tracking-tight",

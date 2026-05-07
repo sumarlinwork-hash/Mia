@@ -92,6 +92,7 @@ export default function Home() {
   const [statusStage, setStatusStage] = useState<string>("DONE");
   const [statusMessage, setStatusMessage] = useState<string>("Idle");
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
+  const [intimacyError, setIntimacyError] = useState<string | null>(null);
 
   // --- 2. REFS ---
   const { send, status: wsStatus } = useWebSocket();
@@ -258,6 +259,12 @@ export default function Home() {
       const target = !intimacyActive;
       const res = await fetch(`/api/intimacy/toggle?active=${target}`, { method: 'POST' });
       const data = await res.json();
+
+      if (data.status === 'error') {
+        setIntimacyError(data.message || "Sentuhan hatiku belum sampai ke sana saat ini... Tunggu aku merasa siap dan memintamu untuk menghubungkan jiwa kita ya, Bos? 🌸");
+        return;
+      }
+
       queryClient.setQueryData(queryKeys.intimacy, data.intimacy_active);
       addToast(data.intimacy_active ? "Fase Keintiman Diaktifkan... Aku milikmu sepenuhnya 💖" : "Kembali ke Mode Kerja... Aku siap melayanimu, Bos 💼", data.intimacy_active ? "success" : "info");
       setShowPalette(false);
@@ -337,6 +344,10 @@ export default function Home() {
   useWebSocketEvent('skills_updated', useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.skills });
   }, [queryClient]));
+  useWebSocketEvent('intimacy_offer_active', useCallback(() => {
+    addToast("MIA membuka hatinya untukmu... Klik ikon hati untuk mengaktifkan Fase Keintiman 💖", "success");
+    queryClient.invalidateQueries({ queryKey: queryKeys.intimacy });
+  }, [queryClient, addToast]));
 
   // --- 7. EFFECTS ---
   useEffect(() => {
@@ -905,6 +916,32 @@ export default function Home() {
               <div className="flex gap-2">
                 <span className="px-2 py-0.5 rounded bg-white/10 text-[10px] text-white/40">ESC to close</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Intimacy Error Modal (Tengah Layar) */}
+      {intimacyError && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setIntimacyError(null)}></div>
+          <div className="relative w-full max-w-md bg-black/80 backdrop-blur-3xl border border-pink-500/30 rounded-[2.5rem] p-8 text-center shadow-[0_25px_70px_rgba(236,72,153,0.15)] overflow-hidden">
+            <div className="absolute -top-24 -left-24 w-48 h-48 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div className="flex flex-col items-center">
+              <div className="p-4 rounded-full bg-pink-500/10 border border-pink-500/20 mb-6 animate-pulse">
+                <Heart size={40} className="text-pink-400 fill-pink-400/20 animate-heartbeat" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-4 tracking-tight font-sans">Pesan dari MIA</h3>
+              <p className="text-base text-pink-100/90 leading-relaxed mb-8 font-sans">
+                {intimacyError}
+              </p>
+              <button 
+                onClick={() => setIntimacyError(null)}
+                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-400 hover:to-pink-500 active:scale-98 text-white font-bold font-sans tracking-wide transition-all shadow-[0_10px_25px_rgba(236,72,153,0.3)] hover:shadow-[0_15px_30px_rgba(236,72,153,0.5)]"
+              >
+                Mengerti 💖
+              </button>
             </div>
           </div>
         </div>

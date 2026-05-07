@@ -20,6 +20,8 @@ export interface ProviderConfig {
   latency: number;
   health_ok: number;
   health_fail: number;
+  active_path?: string;
+  health_status?: string;
 }
 
 export interface MIAConfig {

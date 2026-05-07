@@ -48,6 +48,8 @@ class ProviderConfig(BaseModel):
     failure_count: int = 0
     last_failure_time: float = 0
     circuit_breaker_until: float = 0
+    active_path: str = ""
+    health_status: str = "Healthy"
 
 
 class AppearanceConfig(BaseModel):

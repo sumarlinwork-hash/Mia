@@ -40,6 +40,12 @@ class ProviderResolver:
                 url = re.sub(r"/models/[^/:]+", f"/models/{model_id}", url)
                 protocol = "gemini"
             
+            # HF Direct Inference Pattern (OpenAI Compatible inside HuggingFace Router)
+            elif "router.huggingface.co/hf-inference" in url:
+                url = url.replace("{model_id}", model_id)
+                url = re.sub(r"/models/[^/]+", f"/models/{model_id}", url)
+                protocol = "openai"
+            
             # HF Native Hub Pattern: .../models/MODEL_NAME (Supports owner/model_name)
             elif "api-inference.huggingface.co" in url:
                 url = re.sub(r"/models/.*", f"/models/{model_id}", url)

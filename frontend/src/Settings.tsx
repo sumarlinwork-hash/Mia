@@ -28,8 +28,7 @@ const PRESETS: Record<string, Partial<ProviderConfig & { endpoint: string }>> = 
   "DeepSeek": { protocol: "OpenAI Compatible", base_url: "https://api.deepseek.com", endpoint: "/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
   "Mistral": { protocol: "OpenAI Compatible", base_url: "https://api.mistral.ai", endpoint: "/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
   "Perplexity": { protocol: "OpenAI Compatible", base_url: "https://api.perplexity.ai", endpoint: "/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[3] },
-  "HF Router": { protocol: "OpenAI Compatible", base_url: "https://router.huggingface.co", endpoint: "/v1/chat/completions", cost_label: COSTS[0], purpose: PURPOSES[0] },
-  "HF Native Hub": { protocol: "OpenAI Compatible", base_url: "https://api-inference.huggingface.co", endpoint: "/models/{model_id}", cost_label: COSTS[0], purpose: PURPOSES[0] },
+  "HuggingFace (Auto)": { protocol: "OpenAI Compatible", base_url: "https://router.huggingface.co", endpoint: "/v1/chat/completions", cost_label: COSTS[0], purpose: PURPOSES[0] },
   "Together AI": { protocol: "OpenAI Compatible", base_url: "https://api.together.xyz", endpoint: "/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
   "OpenRouter": { protocol: "OpenAI Compatible", base_url: "https://openrouter.ai", endpoint: "/api/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
   "Cohere": { protocol: "OpenAI Compatible", base_url: "https://api.cohere.ai", endpoint: "/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
@@ -500,6 +499,22 @@ export default function Settings() {
                         <span>Latency(avg):</span>
                         <span className="text-primary">{p.latency} ms</span>
                       </div>
+                      {p.active_path && (
+                        <div className="flex justify-between">
+                          <span>Route Strategy:</span>
+                          <span className="text-amber-400 font-bold">{p.active_path}</span>
+                        </div>
+                      )}
+                      {p.health_status && p.health_status !== "Healthy" && (
+                        <div className="flex justify-between">
+                          <span>Route Health:</span>
+                          <span className={
+                            p.health_status === "Fallback Active" ? "text-amber-400 font-bold" :
+                            p.health_status === "Degraded" ? "text-orange-500 font-bold" :
+                            "text-error font-bold"
+                          }>{p.health_status}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span>Health:</span>
                         <span className={p.health_fail > 0 ? 'text-error' : 'text-green-400'}>

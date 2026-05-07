@@ -30,6 +30,9 @@ class BrainOrchestrator:
         self.compiler = GraphCompiler(tool_registry=agent_tools.get_tool_names())
         self.active_graphs: Dict[str, ExecutionGraph] = {}
         self.graph_timestamps: Dict[str, float] = {}
+        # HuggingFace Smart Failover States (RAM Memory Runtime)
+        self.hf_runtime_states = {} # {"HuggingFace (Auto)": {"active_path": "", "health_status": "Healthy"}}
+        self.hf_circuit_breakers = {} # {"HuggingFace (Auto)": {"failures": 0, "open_until": 0.0}}
         # Brain starts with a refresh to be ready
         self._refresh_brain_nodes()
 
@@ -86,6 +89,152 @@ class BrainOrchestrator:
             print(f"[Memory] Cleaning up old graph: {gid}")
             del self.active_graphs[gid]
             del self.graph_timestamps[gid]
+
+    def _normalize_hf_router_model(self, model_id: str) -> str:
+        last_part = model_id.split("/")[-1]
+        if ":" in last_part:
+            return model_id
+        return f"{model_id}:preferred"
+
+    def _build_hf_native_payload(self, model_id: str, system_prompt: str, user_message: str) -> dict:
+        prompt = f"<|system|>\n{system_prompt}\n<|user|>\n{user_message}\n<|assistant|>\n"
+        return {
+            "inputs": prompt,
+            "parameters": {"max_new_tokens": 512, "return_full_text": False}
+        }
+
+    async def _call_openai_compatible_direct(self, url: str, model_id: str, api_key: str, system_prompt: str, user_message: str, images: list, timeout: float) -> str:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        user_content = user_message
+        if images:
+            user_content = [{"type": "text", "text": user_message}]
+            for img in images:
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{img['mime']};base64,{img['data']}"}
+                })
+
+        payload = {
+            "model": model_id,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_content}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 4096
+        }
+        resp = await self.client.post(url, headers=headers, json=payload, timeout=timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+    def get_runtime_state(self, provider_name: str) -> dict:
+        return self.hf_runtime_states.get(provider_name, {
+            "active_path": "",
+            "health_status": "Healthy"
+        })
+
+    async def _call_huggingface_smart(self, p: ProviderConfig, system_prompt: str, user_message: str, images: list) -> str:
+        name = p.display_name or "HuggingFace (Auto)"
+        
+        # Ensure structures exist in memory RAM
+        if name not in self.hf_runtime_states:
+            self.hf_runtime_states[name] = {"active_path": "", "health_status": "Healthy"}
+        if name not in self.hf_circuit_breakers:
+            self.hf_circuit_breakers[name] = {"failures": 0, "open_until": 0.0}
+            
+        cb = self.hf_circuit_breakers[name]
+        now = time.time()
+        
+        # Budgeted Timeout Configuration
+        TOTAL_BUDGET = 12.0
+        deadline = now + TOTAL_BUDGET
+        
+        clean_model_id = p.model_id.split(":")[0] if ":" in p.model_id else p.model_id
+        actual_api_key = p.api_key.strip()
+        
+        # Determine paths to attempt
+        paths = []
+        is_direct_open = cb["failures"] >= 3 and now < cb["open_until"]
+        
+        if is_direct_open:
+            print(f"[HF-Smart] Circuit Breaker is OPEN for Path 1 (Direct) of {name}. Skipping to Router Path.")
+            self.hf_runtime_states[name]["health_status"] = "Fallback Active"
+            paths.extend(["router", "native"])
+        else:
+            paths.extend(["direct", "router", "native"])
+            
+        last_errors = []
+        
+        for path in paths:
+            remaining_budget = deadline - time.time()
+            if remaining_budget <= 1.0:
+                print("[HF-Smart] Budget exhausted! Aborting remaining chain.")
+                break
+                
+            attempt_timeout = min(5.0, remaining_budget) if path != "native" else min(4.0, remaining_budget)
+            
+            try:
+                if path == "direct":
+                    direct_url = f"https://router.huggingface.co/hf-inference/models/{clean_model_id}/v1/chat/completions"
+                    print(f"[HF-Smart] Trying Path 1: Direct -> {direct_url} (Timeout: {attempt_timeout:.1f}s)")
+                    res = await self._call_openai_compatible_direct(
+                        direct_url, clean_model_id, actual_api_key, system_prompt, user_message, images, timeout=attempt_timeout
+                    )
+                    cb["failures"] = 0
+                    cb["open_until"] = 0.0
+                    self.hf_runtime_states[name]["active_path"] = "Direct Path"
+                    self.hf_runtime_states[name]["health_status"] = "Healthy"
+                    return res
+                    
+                elif path == "router":
+                    router_url = "https://router.huggingface.co/v1/chat/completions"
+                    router_model_id = self._normalize_hf_router_model(p.model_id)
+                    print(f"[HF-Smart] Trying Path 2: Router -> {router_url} with model {router_model_id} (Timeout: {attempt_timeout:.1f}s)")
+                    res = await self._call_openai_compatible_direct(
+                        router_url, router_model_id, actual_api_key, system_prompt, user_message, images, timeout=attempt_timeout
+                    )
+                    self.hf_runtime_states[name]["active_path"] = "Router Path"
+                    self.hf_runtime_states[name]["health_status"] = "Fallback Active"
+                    return res
+                    
+                elif path == "native":
+                    native_url = f"https://api-inference.huggingface.co/models/{clean_model_id}"
+                    print(f"[HF-Smart] Trying Path 3: Native Hub -> {native_url} (Timeout: {attempt_timeout:.1f}s)")
+                    native_payload = self._build_hf_native_payload(clean_model_id, system_prompt, user_message)
+                    
+                    headers = {"Authorization": f"Bearer {actual_api_key}", "Content-Type": "application/json"}
+                    resp = await self.client.post(native_url, headers=headers, json=native_payload, timeout=attempt_timeout)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    
+                    res_text = ""
+                    if isinstance(data, list) and len(data) > 0:
+                        res_text = data[0].get("generated_text", str(data[0]))
+                    else:
+                        res_text = str(data)
+                        
+                    self.hf_runtime_states[name]["active_path"] = "Native Path"
+                    self.hf_runtime_states[name]["health_status"] = "Fallback Active"
+                    return res_text
+                    
+            except Exception as e:
+                print(f"[WARN] HF Path '{path}' failed: {str(e)}")
+                last_errors.append(f"{path}: {str(e)}")
+                
+                if path == "direct":
+                    cb["failures"] += 1
+                    if cb["failures"] >= 3:
+                        cb["open_until"] = time.monotonic() + 60.0
+                        print(f"[HF-Smart] Path 1 (Direct) failed 3x. Circuit breaker OPEN for 60s.")
+                        self.hf_runtime_states[name]["health_status"] = "Fallback Active"
+                        
+        self.hf_runtime_states[name]["active_path"] = "Offline"
+        self.hf_runtime_states[name]["health_status"] = "Offline"
+        raise Exception(f"HF Smart Fabric total failure: {', '.join(last_errors)}")
 
     def _build_system_prompt(self, config, is_intimate: bool = False) -> str:
         """
@@ -587,6 +736,10 @@ If you use a tool, I will execute it and provide the result in the next turn.
         Supports: Gemini API, Groq, OpenAI, DeepSeek, OpenAI-compatible.
         """
         # --- GRAND RESOLVER STEP ---
+        # INTERCEPTOR: HuggingFace Smart Failover Fabric
+        if "huggingface" in p.display_name.lower() or "huggingface" in (p.base_url or "").lower():
+            return await self._call_huggingface_smart(p, system_prompt, user_message, images)
+
         # 2. RESOLVE & RECONCILE (Enforce URL/Protocol Integrity)
         resolved = provider_resolver.resolve(p.display_name, p.model_id, p.base_url, p.api_key)
         target_url = resolved["url"]
@@ -727,7 +880,8 @@ If you use a tool, I will execute it and provide the result in the next turn.
             # Step 2: If standard fails and it's HuggingFace, try Native Inference API
             if "huggingface" in url.lower():
                 print(f"[Brain] Chat API failed for HF, trying Native Inference API for {p.model_id}...")
-                native_url = f"https://api-inference.huggingface.co/models/{p.model_id}"
+                clean_model_id = p.model_id.split(":")[0] if ":" in p.model_id else p.model_id
+                native_url = f"https://api-inference.huggingface.co/models/{clean_model_id}"
                 native_payload = {
                     "inputs": f"<|system|>\n{system_prompt}\n<|user|>\n{user_message}\n<|assistant|>\n",
                     "parameters": {"max_new_tokens": 1024, "return_full_text": False}

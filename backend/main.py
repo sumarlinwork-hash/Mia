@@ -601,6 +601,11 @@ async def update_config(config: MIAConfig):
 @app.get("/api/providers")
 async def get_providers():
     config = load_config()
+    # Merge RAM states dynamically
+    for name, p in config.providers.items():
+        r_state = brain_orchestrator.get_runtime_state(name)
+        p.active_path = r_state.get("active_path", "")
+        p.health_status = r_state.get("health_status", "Healthy")
     return {"providers": config.providers}
 
 @app.post("/api/providers")
@@ -672,7 +677,14 @@ async def test_provider(name: str):
             ]
 
             if is_chat_based:
-                if protocol == "gemini":
+                # INTERCEPTOR: HuggingFace Smart Failover Fabric
+                if "huggingface" in name.lower() or "huggingface" in target_url.lower():
+                    resp_text = await brain_orchestrator._call_huggingface_smart(
+                        p, "You are a context summarizer.", "Tulis kata OK saja.", []
+                    )
+                    if "OK" not in resp_text.upper():
+                        raise Exception(f"Inference output did not match handshake criteria. Got: {resp_text[:100]}")
+                elif protocol == "gemini":
                     # Jalur Smart Gemini (Auto-inject API Key to URL)
                     if "key=" not in final_url:
                         sep = "&" if "?" in final_url else "?"
@@ -770,7 +782,16 @@ async def test_connection(req: TestConnectionRequest):
                 protocol = resolved["protocol"]
                 print(f"[Test-Connection] Smart-Routing to: {final_url} (Protocol: {protocol})")
 
-                if protocol == "gemini":
+                if "huggingface" in req.provider_name.lower() or "huggingface" in req.base_url.lower():
+                    temp_p = ProviderConfig(
+                        display_name=req.provider_name, model_id=req.model_id, base_url=req.base_url, api_key=req.api_key
+                    )
+                    resp_text = await brain_orchestrator._call_huggingface_smart(
+                        temp_p, "You are a context summarizer.", "Tulis kata OK saja.", []
+                    )
+                    if "OK" not in resp_text.upper():
+                        raise Exception(f"Inference output did not match handshake criteria. Got: {resp_text[:100]}")
+                elif protocol == "gemini":
                     # Gemini: Inject API Key to URL
                     if "key=" not in final_url:
                         sep = "&" if "?" in final_url else "?"
@@ -862,7 +883,7 @@ async def toggle_intimacy(active: bool):
         else:
             # Revert pending if expired, reject activation
             pending_intimacy_offer = False
-            return {"status": "error", "message": "Activation denied: Requires explicit offer.", "intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
+            return {"status": "error", "message": "Sentuhan hatiku belum sampai ke sana saat ini... Tunggu aku merasa siap dan memintamu untuk menghubungkan jiwa kita ya, Bos? 🌸", "intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
     else:
         # Turning off is always allowed
         intimacy_mode = False

@@ -170,16 +170,13 @@ export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamRetu
       if (msgData.type === 'BATCH') {
         const { dropped_count, events } = msgData.payload;
         
-        if (dropped_count > 0) {
+        if (dropped_count > 0 && activeIdRef.current) {
             setDroppedCount(dropped_count);
-            // P11: If there's a sequence gap, fetch delta
-            if (events.length > 0 && events[0].sequence_id > lastSequenceRef.current + 1) {
-                console.log("[StudioStream] Gap detected, reconciling...");
-                const missing = await fetchDelta(executionId, lastSequenceRef.current, events[0].sequence_id - 1);
-                processEvents(missing);
-            }
+            const missed = await fetchDelta(activeIdRef.current, lastSequenceRef.current, events[0]?.sequence_id || 0);
+            processEvents([...missed, ...events]);
+        } else {
+            processEvents(events);
         }
-        processEvents(events);
       } else {
         processEvents([msgData]);
       }
