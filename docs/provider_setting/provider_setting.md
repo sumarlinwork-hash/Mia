@@ -94,4 +94,26 @@ Untuk menjamin konsistensi total, sistem ini mewajibkan:
 
 ---
 
-**Sekarang "Konstitusi" MIA sudah lengkap, Bos. config.json resmi menjadi Raja. Siap eksekusi?**
+## 10. Production Hardening Updates (Strategic Phase 7)
+
+Dalam rangka pengerasan keandalan tingkat industri (*industrial-grade operational hardening*), sistem perutean MIA telah ditingkatkan dengan standar stabilitas asinkron aseli:
+
+### A. Persistensi Observabilitas Terpadu (SQLite WAL Mode)
+*   **Database Terintegrasi:** Menggantikan berkas datar `provider_stats.json` dengan database relasional terpadu **SQLite (`provider_stats.db`)** yang berjalan dalam mode **WAL (Write-Ahead Logging)** dan sinkronisasi **NORMAL** untuk menangani pembacaan simultan yang agresif dan penulisan konkuren yang aman di multi-worker.
+*   **Single Writer Queue:** Meminimalkan interferensi I/O disk terhadap event-loop utama dengan mendelegasikan proses commit data ke loop antrean background thread asinkron via `asyncio.to_thread`.
+*   **Pencegahan Tekanan Balik (Duplicate Suppression Set):** Menambahkan in-memory set `_pending_flush` di hulu antrean untuk membatasi ukuran maksimal `asyncio.Queue`. Sinyal penulisan duplikat untuk provider yang sama langsung dibuang, menjamin alokasi memori datar (*flat*) tanpa kebocoran (*memory drift*).
+
+### B. Normalisasi Kesalahan Terstruktur (Unified Error Normalization)
+*   **Kelas ProviderError:** Mengonversi aneka pengecualian raw (HTTPX, Timeout, Network ISP failure) menjadi representasi kesalahan yang seragam (`kind`, `message`, `status_code`, `retryable`).
+*   **Retry Deterministik:** Mesin perutean murni memutuskan logika coba-ulang (*retries*) berdasarkan bendera `.retryable` dari objek kesalahan yang dinormalisasi untuk meniadakan ambiguitas runtime.
+
+### C. Manajemen Sisa Anggaran Waktu (Dynamic Budget-Aware Routing)
+*   **Daftar Lewatan (Skip Policy):** Sebelum memanggil penyedia layanan (maupun loop fallback rekursif), sistem menghitung sisa anggaran waktu menuju batas global 25 detik (`remaining = pipeline_deadline - time.time()`). Jika `remaining < 2.5` detik, penyedia dilewati (*skipped*) guna mengoptimalkan sisa budget untuk opsi fallback berikutnya.
+*   **Timeout HTTP Dinamis:** Seluruh request API kini menggunakan kalkulasi timeout dinamis: `final_timeout = min(provider_timeout, remaining - 0.5)`.
+
+### D. Higienitas Telemetri (Telemetry Hygiene)
+*   Endpoint uji coba manual admin `/api/providers/test/{name}` kini mengirim parameter `mutate_stats=False` secara default. Dengan ini, aktivitas pemeliharaan koneksi tidak akan mencemari/mengotori grafik statistik performa produksi riil di UI.
+
+---
+
+**Sekarang "Konstitusi" MIA sudah lengkap dan diperkeras secara militer, Bos. Sistem siap menghadapi beban ekstrim!**

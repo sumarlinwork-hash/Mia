@@ -626,7 +626,7 @@ async def delete_provider(name: str):
     return {"status": "error", "message": "Provider not found"}
 
 @app.post("/api/providers/test/{name}")
-async def test_provider(name: str):
+async def test_provider(name: str, mutate_stats: bool = Query(False)):
     config = load_config()
     if name not in config.providers:
         print(f"[Test] Provider '{name}' not found in config keys: {list(config.providers.keys())}")
@@ -727,15 +727,17 @@ async def test_provider(name: str):
                 resp.raise_for_status()
 
             latency = int((time.time() - start) * 1000)
-            from core.stats_manager import stats_manager
-            stats_manager.update_stats(name, True, latency)
+            if mutate_stats:
+                from core.stats_manager import stats_manager
+                stats_manager.update_stats(name, True, latency)
 
             return {"status": "success", "latency": latency}
 
     except Exception as e:
         print(f"Handshake failed for {name}: {e}")
-        from core.stats_manager import stats_manager
-        stats_manager.update_stats(name, False, 0)
+        if mutate_stats:
+            from core.stats_manager import stats_manager
+            stats_manager.update_stats(name, False, 0)
 
         return {
             "status": "error",

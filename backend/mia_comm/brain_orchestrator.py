@@ -356,10 +356,14 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 
         return clean_text, images
 
-    async def execute_request(self, prompt: str, context: str = "", is_intimate: bool = False, on_status: Optional[Callable] = None) -> str:
+    async def execute_request(self, prompt: str, context: str = "", is_intimate: bool = False, on_status: Optional[Callable] = None, test_mode: bool = False, mutate_stats: bool = False) -> str:
         """
         Hardened Entry Point: Enforces Global Timeout (Contract Section 0.3)
         """
+        self.test_mode = test_mode
+        self.mutate_stats = mutate_stats if test_mode else True
+        self.pipeline_start_time = time.time()
+        self.pipeline_deadline = self.pipeline_start_time + 25.0
         try:
             return await asyncio.wait_for(
                 self._execute_pipeline(prompt, context, is_intimate, on_status),
@@ -511,7 +515,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
                     break
 
             latency = int((time.time() - start_time) * 1000)
-            await self._update_metrics(name, True, latency)
+            await self._update_metrics(name, True, latency, mutate_stats=getattr(self, 'mutate_stats', True))
             
             # Step 9: Emotion Rendering (Isolated Layer B/C)
             await emit("DONE", "Response generated.")
@@ -542,7 +546,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
             print(traceback.format_exc())
             
             if locals().get('name'):
-                await self._update_metrics(locals()['name'], False, 0)
+                await self._update_metrics(locals()['name'], False, 0, mutate_stats=getattr(self, 'mutate_stats', True))
             
             await emit("FALLBACK", "Connection lost. Attempting recovery...")
             return await self._fallback_execute(locals().get('visited_providers', []), system_prompt, locals().get('current_context', context), locals().get('clean_prompt', prompt), locals().get('current_images', []), str(e), on_status, depth=0)
@@ -707,6 +711,17 @@ If you use a tool, I will execute it and provide the result in the next turn.
         try:
             # Select next best provider, excluding those already tried
             name, p = await routing_service.select_best_provider(purpose="llm", exclude=visited)
+            
+            # --- BUDGET CHECK: SKIP PROVIDER FLOW ---
+            now = time.time()
+            remaining = getattr(self, "pipeline_deadline", now + 25.0) - now
+            minimum_viable_timeout = 2.5
+            
+            if remaining < minimum_viable_timeout:
+                print(f"[Brain] Remaining time too small ({remaining:.2f}s < {minimum_viable_timeout}s). Skipping provider '{name}' and looking for alternative.")
+                visited.append(name) # Mark as visited to skip in next recursion
+                return await self._fallback_execute(visited, system_prompt, context, prompt, images, "MIA_SYSTEM_ALERT::BUDGET_EXHAUSTED", on_status, depth=depth + 1)
+
             if on_status:
                 await on_status({"type": "status", "stage": "FALLBACK", "message": f"Trying alternate brain path: {name}...", "timestamp": int(time.time() * 1000)})
             
@@ -717,7 +732,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 # For fallback, we do a single-shot call (no tool loop to keep it fast/stable)
                 response = await self._call_api(p, system_prompt, context, prompt, images)
                 latency = int((time.time() - start_time) * 1000)
-                await self._update_metrics(name, True, latency)
+                await self._update_metrics(name, True, latency, mutate_stats=getattr(self, 'mutate_stats', True))
                 
                 # Append transparency hint in development mode
                 config = load_config()
@@ -728,7 +743,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
                     await on_status({"type": "status", "stage": "DONE", "message": "Recovered via fallback.", "timestamp": int(time.time() * 1000)})
                 return await self._apply_realism(response, config)
             except Exception as e:
-                await self._update_metrics(name, False, 0)
+                await self._update_metrics(name, False, 0, mutate_stats=getattr(self, 'mutate_stats', True))
                 print(f"[Brain] Fallback {name} failed: {e}")
                 return await self._fallback_execute(visited, system_prompt, context, prompt, images, str(e), on_status, depth=depth + 1)
                 
@@ -764,14 +779,16 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 else:
                     return await self._call_openai_compatible(p, target_url, actual_api_key, system_prompt, user_message, images)
             except Exception as e:
+                from core.provider_error import normalize_provider_error
+                p_err = normalize_provider_error(e)
                 # Retry on rate limits or transient errors
-                if "429" in str(e) or "503" in str(e) or "500" in str(e):
+                if p_err.retryable:
                     if attempt < max_retries:
                         wait_time = (attempt + 1) * 2 # 2s, 4s
-                        print(f"[Brain] {p.protocol} failed (Attempt {attempt+1}). Retrying in {wait_time}s...")
+                        print(f"[Brain] {p.display_name} failed with {p_err.kind} (Attempt {attempt+1}). Retrying in {wait_time}s...")
                         await asyncio.sleep(wait_time)
                         continue
-                raise e
+                raise p_err
 
     async def _call_gemini(self, p: ProviderConfig, resolved_url: str, actual_api_key: str, system_prompt: str, user_message: str, images: list) -> str:
         """
@@ -812,10 +829,15 @@ If you use a tool, I will execute it and provide the result in the next turn.
             ]
         }
 
+        now = time.time()
+        remaining = getattr(self, 'pipeline_deadline', now + 25.0) - now
+        calculated_timeout = max(1.0, remaining - 0.5)
+        final_timeout = min(10.0, calculated_timeout)
+
         resp = await self.client.post(
             final_url, json=payload,
             headers={"Content-Type": "application/json"},
-            timeout=10.0 # Strict production timeout
+            timeout=final_timeout
         )
         resp.raise_for_status()
         data = resp.json()
@@ -839,7 +861,12 @@ If you use a tool, I will execute it and provide the result in the next turn.
             }
         }
 
-        resp = await self.client.post(url, json=payload, headers=headers, timeout=15.0)
+        now = time.time()
+        remaining = getattr(self, 'pipeline_deadline', now + 25.0) - now
+        calculated_timeout = max(1.0, remaining - 0.5)
+        final_timeout = min(15.0, calculated_timeout)
+
+        resp = await self.client.post(url, json=payload, headers=headers, timeout=final_timeout)
         resp.raise_for_status()
         data = resp.json()
 
@@ -880,7 +907,12 @@ If you use a tool, I will execute it and provide the result in the next turn.
 
         # Step 1: Attempt standard Chat Completions
         try:
-            resp = await self.client.post(url, headers=headers, json=payload, timeout=10.0)
+            now = time.time()
+            remaining = getattr(self, 'pipeline_deadline', now + 25.0) - now
+            calculated_timeout = max(1.0, remaining - 0.5)
+            final_timeout = min(10.0, calculated_timeout)
+
+            resp = await self.client.post(url, headers=headers, json=payload, timeout=final_timeout)
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"]
@@ -906,8 +938,10 @@ If you use a tool, I will execute it and provide the result in the next turn.
                     raise Exception(f"HF Chat API & Native API both failed. Last: {str(native_err)}")
             raise e
 
-    async def _update_metrics(self, name: str, success: bool, latency: int):
+    async def _update_metrics(self, name: str, success: bool, latency: int, mutate_stats: bool = True):
         """Update provider health metrics via StatsManager (External File)."""
+        if not mutate_stats:
+            return
         from core.stats_manager import stats_manager
         stats_manager.update_stats(name, success, latency)
 
