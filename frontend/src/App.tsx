@@ -8,8 +8,10 @@ import IamMia from './IamMia';
 import Crone from './Crone';
 import EmotionDashboard from './EmotionDashboard';
 import SkillMarketplace from './SkillMarketplace';
-import { StudioPage } from './mia_studio/components/StudioPage';
+import { lazy, Suspense } from 'react';
 import { FileStoreProvider } from './mia_studio/context/FileStoreContext';
+
+const StudioPageLazy = lazy(() => import('./mia_studio/components/StudioPage').then(m => ({ default: m.StudioPage })));
 import ZenModeOverlay from './components/ZenModeOverlay';
 import ResonantOrchestrator from './components/ResonantOrchestrator';
 import { useConfig } from './hooks/useConfig';
@@ -84,7 +86,13 @@ function App() {
               <Route path="/skills" element={<SkillMarketplace />} />
               <Route path="/studio" element={
                 <FileStoreProvider>
-                  <StudioPage />
+                  <Suspense fallback={
+                    <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse bg-transparent">
+                      Memuat Studio Module...
+                    </div>
+                  }>
+                    <StudioPageLazy />
+                  </Suspense>
                 </FileStoreProvider>
               } />
             </Routes>

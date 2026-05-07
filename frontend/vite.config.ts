@@ -46,12 +46,24 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-ui': ['framer-motion', 'lucide-react'],
-          'vendor-utils': ['clsx', 'tailwind-merge'],
+          vendor: [
+            'react',
+            'react-dom',
+            '@tanstack/react-query',
+            'react-router-dom'
+          ],
+          studio: [
+            '@monaco-editor/react',
+            'reactflow'
+          ],
+          markdown: [
+            'react-markdown',
+            'remark-gfm',
+            'react-syntax-highlighter'
+          ],
         },
       },
     },
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 500,
   },
 })

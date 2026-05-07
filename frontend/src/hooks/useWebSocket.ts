@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 
 export const WS_EVENT_BUS = new EventTarget();
 
@@ -31,21 +31,31 @@ export function useWebSocket() {
 }
 
 export function useWebSocketMessage<T = WSMessage>(handler: (data: T) => void) {
+  const handlerRef = useRef(handler);
+  useEffect(() => {
+    handlerRef.current = handler;
+  }, [handler]);
+
   useEffect(() => {
     const listener = (e: Event) => {
-      handler((e as CustomEvent).detail as T);
+      handlerRef.current((e as CustomEvent).detail as T);
     };
     WS_EVENT_BUS.addEventListener('ws:message', listener);
     return () => WS_EVENT_BUS.removeEventListener('ws:message', listener);
-  }, [handler]);
+  }, []); // Bind once on mount
 }
 
 export function useWebSocketEvent<T = WSMessage>(type: string, handler: (data: T) => void) {
+  const handlerRef = useRef(handler);
+  useEffect(() => {
+    handlerRef.current = handler;
+  }, [handler]);
+
   useEffect(() => {
     const listener = (e: Event) => {
-      handler((e as CustomEvent).detail as T);
+      handlerRef.current((e as CustomEvent).detail as T);
     };
     WS_EVENT_BUS.addEventListener(`ws:${type}`, listener);
     return () => WS_EVENT_BUS.removeEventListener(`ws:${type}`, listener);
-  }, [type, handler]);
+  }, [type]); // Rebind only if event type changes
 }

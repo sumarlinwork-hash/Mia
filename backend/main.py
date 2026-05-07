@@ -674,6 +674,7 @@ async def test_provider(name: str):
                 "Inti Logika & Pikiran",
                 "Persepsi Visual & Imajinasi",
                 "Analisis Data & Pengetahuan",
+                "Khusus Intimacy & Uncensored",
             ]
 
             if is_chat_based:
@@ -771,7 +772,12 @@ async def test_connection(req: TestConnectionRequest):
     config = load_config()
     try:
         async with httpx.AsyncClient(timeout=float(config.test_timeout)) as client:
-            is_chat_based = purpose in ["Inti Logika & Pikiran", "Persepsi Visual & Imajinasi", "Analisis Data & Pengetahuan"]
+            is_chat_based = purpose in [
+                "Inti Logika & Pikiran", 
+                "Persepsi Visual & Imajinasi", 
+                "Analisis Data & Pengetahuan",
+                "Khusus Intimacy & Uncensored"
+            ]
             
             if is_chat_based:
                 # --- UNIVERSAL RESOLVER STEP ---
@@ -1081,6 +1087,7 @@ async def save_memory_file(req: MemorySaveRequest):
 
 # --- WEBSOCKET ENDPOINT (For Home Hub / Heartbeat) ---
 
+@app.websocket("/ws/chat/heartbeat")
 @app.websocket("/api/chat/heartbeat")
 async def websocket_heartbeat(websocket: WebSocket):
     """
@@ -1117,13 +1124,23 @@ async def websocket_heartbeat(websocket: WebSocket):
                 data = await websocket.receive_text()
                 crone_daemon.update_activity()
                 
+                # Parse JSON envelope safely to support client_id matching
+                import json
+                try:
+                    payload = json.loads(data)
+                    user_text = payload.get("content", data)
+                    client_id = payload.get("client_id")
+                except Exception:
+                    user_text = data
+                    client_id = None
+                
                 try:
                     # Persist User Message (Patch C WAL mode makes this safe)
-                    msg_id = history_manager.add_message("You", data)
+                    msg_id = history_manager.add_message("You", user_text)
                     await crone_daemon.broadcast_event("history_updated")
                     
                     # --- CMD / MENTION PARSER ---
-                    words = data.split()
+                    words = user_text.split()
                     commands = [w for w in words if w.startswith('/')]
                     
                     if commands:
@@ -1153,11 +1170,18 @@ async def websocket_heartbeat(websocket: WebSocket):
                         await websocket.send_json({"type": "status", "content": "Thinking..."})
                         emotion_manager.on_user_interaction()
 
+                        # Safe status delivery handler
+                        async def handle_status_update(status_data):
+                            try:
+                                await websocket.send_json(status_data)
+                            except Exception as se:
+                                print(f"[Status Feed] Error: {se}")
+
                         # Patch E — TIMEOUT WAJIB DI AI EXECUTION (Strict 8s)
                         try:
                             response_text = await asyncio.wait_for(
                                 brain_orchestrator.execute_request(
-                                    clean_query, context, is_intimate=is_intimate_turn
+                                    clean_query, context, is_intimate=is_intimate_turn, on_status=handle_status_update
                                 ),
                                 timeout=60.0
                             )
@@ -1191,7 +1215,9 @@ async def websocket_heartbeat(websocket: WebSocket):
                         await websocket.send_json({
                             "type": "message", 
                             "id": mia_msg_id,
-                            "content": "", # Payload is now fetched via REST
+                            "user_msg_id": msg_id, # Database ID of user's message
+                            "client_id": client_id, # Temporary ID for frontend matching
+                            "content": response_text, # Send actual text response immediately
                             "audio": None 
                         })
 

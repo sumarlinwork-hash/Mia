@@ -16,7 +16,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     }
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/api/chat/heartbeat`;
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/heartbeat`;
 
     console.log(`[WS] Connecting to ${wsUrl}...`);
     setStatus('connecting');

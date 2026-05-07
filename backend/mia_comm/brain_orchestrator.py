@@ -385,7 +385,15 @@ If you use a tool, I will execute it and provide the result in the next turn.
         """
         Full 9-Step Execution Pipeline with Vision Support.
         """
+        last_stage = None
+        last_msg = None
+
         async def emit(stage: str, message: str):
+            nonlocal last_stage, last_msg
+            if stage == last_stage and message == last_msg:
+                return
+            last_stage = stage
+            last_msg = message
             if on_status:
                 await on_status({"type": "status", "stage": stage, "message": message, "timestamp": int(time.time() * 1000)})
 

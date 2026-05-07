@@ -237,7 +237,11 @@ export default function Home() {
     }
 
     try {
-      send(trimmedInput);
+      send(JSON.stringify({
+        type: 'chat',
+        content: trimmedInput,
+        client_id: userMsg.id
+      }));
     } catch (err) {
       console.error("[WS] Send failed:", err);
       addToast("Failed to send message", "error");
@@ -284,19 +288,45 @@ export default function Home() {
   // Global WebSocket message handler
   useWebSocketMessage(useCallback((data: WSMessage) => {
     if (data.type === 'ping') return;
-
+ 
     if (data.type === "message" || data.type === "system") {
       setIsThinking(false);
       setStatusStage("DONE");
       setStatusMessage("");
       playSFX('receive');
 
-      // Invalidasi history agar TanStack Query fetch pesan terbaru dari DB
-      queryClient.invalidateQueries({ queryKey: queryKeys.history });
+      // Optimistic cache update before query refetch runs in the background
+      queryClient.setQueryData(queryKeys.history, (old: Message[] = []) => {
+        // 1. Reconcile user's temporary message ID with the persistent DB ID
+        const nextHistory = old.map((m: Message) => {
+          if (data.client_id && m.id === data.client_id) {
+            return { ...m, id: data.user_msg_id as number };
+          }
+          return m;
+        });
 
+        // 2. Reconcile MIA's response (append if new, update if already exists)
+        const exists = nextHistory.some((m: Message) => m.id === data.id);
+        if (exists) {
+          return nextHistory.map((m: Message) => m.id === data.id ? { ...m, content: data.content || "" } : m);
+        } else {
+          const isError = data.content?.startsWith("[SYSTEM ERROR]");
+          const role = (data.type === "system" || isError) ? "System" : "MIA";
+          return [...nextHistory, { 
+            id: data.id as number, 
+            role: role, 
+            content: data.content || "", 
+            timestamp: new Date().toISOString() 
+          }];
+        }
+      });
+
+      // Background validation (silent background fetch)
+      queryClient.invalidateQueries({ queryKey: queryKeys.history });
+ 
       const isError = data.content?.startsWith("[SYSTEM ERROR]");
       const role = (data.type === "system" || isError) ? "System" : "MIA";
-
+ 
       if (data.audio && !isTTSMutedRef.current && role === "MIA") {
         playAudioRef.current?.(data.audio);
       }
