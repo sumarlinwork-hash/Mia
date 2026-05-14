@@ -46,6 +46,8 @@
   --color-surface-variant: var(--color-surface-variant);
   --color-primary: var(--color-primary);
   --color-primary-hover: var(--color-primary-hover);
+  --color-primary-soft: var(--color-primary-soft);
+  --color-primary-surface: var(--color-primary-surface);
   --color-secondary: var(--color-secondary);
   --color-accent: var(--color-accent);
   --color-error: var(--color-error);
@@ -61,6 +63,79 @@
   --color-border: var(--color-border);
   --color-text-muted: var(--color-text-muted);
 }
+
+/* Semantic Surfaces (Elite UI Contract) */
+@layer components {
+  .surface-root {
+    @apply bg-black/20 backdrop-blur-xl;
+  }
+  
+  .surface-navigation {
+    @apply bg-black/40 backdrop-blur-3xl;
+  }
+  
+  .surface-focus {
+    /* Strong attenuation for editor focus */
+    @apply bg-black/80 backdrop-blur-3xl;
+  }
+
+  .surface-floating {
+    @apply bg-black/60 backdrop-blur-3xl shadow-2xl shadow-black/50 border border-white/10;
+  }
+
+  .panel-glass {
+    @apply bg-white/5 border border-white/10 backdrop-blur-md;
+  }
+
+  .panel-workspace {
+    @apply bg-black/80 backdrop-blur-3xl border border-white/5;
+  }
+
+  .panel-toolbar {
+    @apply bg-black/40 backdrop-blur-3xl border-b border-white/10;
+  }
+
+  .adaptive-guardrail {
+    @apply absolute inset-0 bg-black/60 pointer-events-none transition-opacity duration-500;
+  }
+  
+  /* Semantic Motion */
+  .motion-micro {
+    @apply transition-all duration-100 ease-out;
+  }
+  
+  .motion-structural {
+    @apply transition-all duration-300 ease-out;
+  }
+  
+  .motion-interruptive {
+    @apply transition-all duration-500 ease-[cubic-bezier(0.175,0.885,0.32,1.275)];
+  }
+  
+  .motion-ambient {
+    animation: ambient-pulse 3s infinite ease-in-out;
+  }
+
+  /* Typography System */
+  .text-label {
+    @apply text-[11px] font-medium tracking-wide text-white/40 uppercase;
+  }
+  
+  .text-body {
+    @apply text-[14px] font-normal text-white/90;
+  }
+  
+  .text-header {
+    @apply font-semibold text-white;
+  }
+}
+
+@keyframes ambient-pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; filter: drop-shadow(0 0 8px var(--color-primary)); }
+  100% { opacity: 0.7; }
+}
+
 
 @keyframes fade-in {
   from {

@@ -4,7 +4,7 @@
 ### VISION & OBJECTIVE
 MIA Architect Studio (MIA-AS) adalah antarmuka khusus pengembang (Developer Console) di dalam ekosistem MIA yang memungkinkan kolaborasi coding tingkat lanjut antara User dan MIA. Studio ini mentransformasi MIA dari sekadar Chatbot menjadi **Autonomous Pair-Programmer**.
 
-- Menyediakan lingkungan coding profesional (IDE-like) di dalam browser (Path: `frontend/src/mia_studio`).
+- Menyediakan entry launcher `My Garden` di route `/studio`, lalu lingkungan coding profesional (IDE-like) di dalam browser (Path: `frontend/src/mia_studio`).
 - Menghilangkan friksi copy-paste kode dari chat.
 - Memberikan visibilitas 100% terhadap logika internal (Graph) MIA.
 - Menjamin keamanan sistem melalui **Strict Sandbox Isolation** dan **Proxy File Access**.
@@ -39,6 +39,7 @@ Lifecycle proses harus eksplisit (Execution ID, Registry, Hard Kill). Tidak bole
 
 MIA-AS adalah:
 
+* My Garden launcher untuk build prompt awal di route `/studio`
 * IDE-like environment di browser
 * Autonomous pair-programmer (human + MIA)
 * Full visibility ke execution graph
@@ -64,6 +65,8 @@ FINAL CAPABILITIES:
 FRONTEND:
 
 * React + Vite
+* Full-viewport `/studio` shell for My Garden (global MIA sidebar/background hidden on this route)
+* Garden launcher -> IDE workspace mode switch
 * Monaco Editor
 * WebSocket client
 
@@ -108,10 +111,12 @@ BACKEND: `backend/studio/`
 - `models.py`: Studio-specific data schemas.
 
 FRONTEND: `frontend/src/mia_studio/`
-- `components/`: Studio UI components (Monaco, Graph, Terminal).
+- `components/GardenLauncher.tsx`: First-screen My Garden launcher styled as a dark Codex-like build workspace.
+- `components/StudioPage.tsx`: Studio shell owner; manages `launcher | workspace` mode and preserves the IDE workspace after prompt submit.
+- `components/`: Studio UI components (Monaco, Graph, Terminal, Explorer, Monitor).
 - `hooks/`: Custom hooks for session and streaming.
 - `services/`: API and WebSocket client wrappers.
-- `StudioLayout.tsx`: Main studio interface.
+- Route shell: `/studio` hides the global MIA sidebar/background so My Garden can occupy the full viewport.
 
 ============================================================
 4. MASTER DEVELOPMENT PHASES
@@ -153,6 +158,7 @@ SCOPE: SINGLE FILE ONLY
 
 FEATURE:
 
+[ ] My Garden Launcher (first screen) - `frontend/src/mia_studio/components/GardenLauncher.tsx`
 [ ] Monaco Editor (Single tab) - `frontend/src/mia_studio`
 [ ] File Read (via Proxy Service)
 [ ] Save to Draft (Isolated storage)
@@ -336,6 +342,46 @@ PHASE 3: INTERACTION & MULTI-FILE ARCHITECTURE
 ### [P3-C] TAB & STATE SYNC
 ✔ **1 File = 1 State:** State file di memori harus tunggal meskipun dibuka di banyak tab.
 ✔ UI wajib mendeteksi perubahan eksternal dan mencegah *silent overwrite*.
+
+============================================================
+IMPLEMENTED UI UPDATE: MY GARDEN LAUNCHER
+============================================================
+
+STATUS: IMPLEMENTED IN FRONTEND
+
+Route `/studio` now starts in `launcher` mode before opening the IDE workspace.
+
+Frontend contract:
+- `frontend/src/App.tsx` treats `/studio` as a full-viewport route and hides the global MIA sidebar, background layer, and resonant orchestrator on that route only.
+- `frontend/src/mia_studio/components/StudioPage.tsx` owns `studioMode: 'launcher' | 'workspace'`, stores the submitted build prompt, renders `GardenLauncher` first, and preserves the previous IDE workspace after submit.
+- `frontend/src/mia_studio/components/GardenLauncher.tsx` renders the My Garden first screen: dark Codex-like shell, 300px left sidebar, centered build prompt, toolbar controls, and suggestion rows.
+
+Launcher behavior:
+- Empty prompt cannot submit.
+- Enter submits unless Shift+Enter is used.
+- Suggestion rows populate the prompt.
+- Submit transitions from launcher to workspace without deleting editor, terminal, graph, file explorer, or monitor capabilities.
+- Workspace action bar includes a `My Garden` back button to return to launcher mode.
+
+### LAUNCHER BUTTON WIRING & IDE BRIDGE (FACT-BASE)
+
+**1. Active Wired Features (Frontend & Backend Synced)**
+- **Zen Mode (`EyeOff`):** Mengaktifkan Privacy Screen global. Tersedia di Workspace Action Bar & My Garden Launcher (Pojok kanan atas). Mendukung double-click area kosong & `CTRL+SHIFT+Z`.
+- **Local IDE Launcher (`Monitor` & Dropdown):** Jembatan aman untuk meluncurkan *sandbox* proyek ke IDE lokal (VS Code, Cursor, IntelliJ).
+  - *Backend Guard:* Menggunakan `GET /api/studio/ide/list` dan `POST /api/studio/ide/open`. Proses OS dibatasi secara mutlak menggunakan `StudioFileService._get_project_root` untuk menangkal *path traversal*.
+- **Settings (`⚙️`):** Mengarahkan router ke `/settings`.
+- **Plugins (`LayoutGrid`):** Mengarahkan router ke `/skills`.
+
+**2. Visual Buttons with Missing/Pending Backend Features**
+Tombol-tombol berikut sudah dirender di UI `GardenLauncher`, namun integrasi fitur fungsional di *backend*-nya berstatus **Pending**:
+- **New Garden (`Edit3`):** Fitur pembuatan sesi taman/proyek baru yang terisolasi secara cepat.
+- **Search (`Search`):** Pencarian lintasan file, konten, atau proyek global.
+- **Automations (`TerminalSquare`):** Manajemen *cron job* atau *event listener* otonom tingkat studio.
+- **Auto-review (`Bot`):** Agen pemeriksa konteks/kode pra-terbang (*pre-flight check*) sebelum eksekusi *prompt*.
+- **Add Attachment (`Plus`):** Modul untuk melampirkan berkas konteks tambahan ke dalam prompt My Garden.
+- **Voice Input (`Mic`):** Dikte suara (integrasi STT) langsung ke dalam *textarea* prompt.
+- **Model Selector (`5.5 Medium`):** Sistem sakelar (*switcher*) model LLM per sesi eksekusi.
+- **Get Plus / Upgrade (`Sparkles`):** Indikator visual *placeholder* untuk sistem tiering.
 
 ============================================================
 4. FAILURE HANDLING MATRIX (MANDATORY)

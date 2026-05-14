@@ -22,6 +22,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     root.style.setProperty('--color-primary', selectedTheme.primary);
     root.style.setProperty('--color-primary-hover', selectedTheme.primaryHover);
+    root.style.setProperty('--color-primary-soft', selectedTheme.primarySoft);
+    root.style.setProperty('--color-primary-surface', selectedTheme.primarySurface);
     root.style.setProperty('--neon-glow-color', selectedTheme.glow);
     
     if (isDark) {

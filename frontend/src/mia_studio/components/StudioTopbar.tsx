@@ -16,14 +16,14 @@ interface StudioTopbarProps {
 
 export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemStatus }) => {
   return (
-    <div className="h-12 border-b border-white/5 bg-[#0a0a0a] flex items-center justify-between px-4 z-30 select-none">
+    <div className="h-12 flex items-center justify-between px-4 z-30 select-none panel-toolbar">
       {/* Left Section: Logo & Project */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Shield size={14} className="text-white" />
+          <div className="w-6 h-6 bg-primary rounded flex items-center justify-center shadow-lg shadow-primary/20">
+            <Shield size={14} className="text-black" />
           </div>
-          <span className="text-xs font-bold tracking-widest text-white/90">MIA<span className="text-blue-500">AS</span></span>
+          <span className="text-xs font-bold tracking-widest text-white/90">MIA<span className="text-primary">AS</span></span>
         </div>
         
         <div className="h-4 w-px bg-white/10 mx-2" />
@@ -45,7 +45,7 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
             name="search"
             type="text" 
             placeholder="Search commands or files... (Ctrl + P)"
-            className="w-full bg-white/[0.03] border border-white/5 rounded-md py-1.5 pl-10 pr-4 text-xs text-white/80 placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:bg-white/[0.05] transition-all"
+            className="w-full bg-white/[0.03] border border-white/5 rounded-md py-1.5 pl-10 pr-4 text-xs text-white/80 placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:bg-white/[0.05] transition-all"
             readOnly
           />
         </div>
@@ -58,7 +58,7 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
           <div className="flex items-center gap-2">
             <Cpu size={14} className="text-white/30" />
             <div className="w-16 h-1 bg-white/5 rounded-full overflow-hidden">
-              <div className="w-1/3 h-full bg-blue-500/50" />
+              <div className="w-1/3 h-full bg-primary/50" />
             </div>
           </div>
 
@@ -76,9 +76,9 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
         <div className="flex items-center gap-3">
           <button className="text-white/40 hover:text-white transition-colors relative">
             <Bell size={18} />
-            <div className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#0a0a0a]" />
+            <div className="absolute top-0 right-0 w-2 h-2 bg-primary rounded-full border-2 border-[#0a0a0a]" />
           </button>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 border border-white/10 flex items-center justify-center text-[10px] font-bold shadow-inner">
+          <div className="w-8 h-8 rounded-full bg-primary-soft border border-white/10 flex items-center justify-center text-[10px] font-bold shadow-inner text-primary">
             JD
           </div>
         </div>

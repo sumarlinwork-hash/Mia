@@ -24,13 +24,13 @@ const SidebarIcon: React.FC<SidebarIconProps> = ({ icon, label, active, onClick,
     onClick={onClick}
     className={clsx(
       "w-12 h-12 flex items-center justify-center transition-all duration-200 relative group",
-      active ? "text-blue-500 border-l-2 border-blue-500 bg-blue-500/5" : "text-white/30 hover:text-white/70"
+      active ? "text-primary border-l-2 border-primary bg-primary-surface" : "text-white/30 hover:text-white/70"
     )}
     title={label}
   >
     {icon}
     {badge && (
-      <div className="absolute top-2 right-2 min-w-[14px] h-[14px] bg-blue-600 rounded-full flex items-center justify-center text-[8px] font-bold text-white px-0.5 border border-[#0a0a0a]">
+      <div className="absolute top-2 right-2 min-w-[14px] h-[14px] bg-primary rounded-full flex items-center justify-center text-[8px] font-bold text-black px-0.5 border border-[#0a0a0a]">
         {badge}
       </div>
     )}
@@ -52,9 +52,9 @@ export const StudioSidebar: React.FC<StudioSidebarProps> = ({ children, title })
   const [activeTab, setActiveTab] = useState('explorer');
 
   return (
-    <div className="flex h-full border-r border-white/5 bg-[#0a0a0a]">
+    <div className="flex h-full border-r border-white/5 surface-navigation">
       {/* Icon Bar */}
-      <div className="w-12 flex flex-col items-center py-2 gap-1 border-r border-white/5">
+      <div className="w-12 flex flex-col items-center py-2 gap-1 border-r border-white/5 z-10">
         <SidebarIcon 
           icon={<Files size={20} />} 
           label="Explorer" 
@@ -110,9 +110,9 @@ export const StudioSidebar: React.FC<StudioSidebarProps> = ({ children, title })
       </div>
 
       {/* Panel Area */}
-      <div className="w-64 flex flex-col bg-[#050505]/40 backdrop-blur-sm overflow-hidden animate-in slide-in-from-left duration-300">
+      <div className="w-64 flex flex-col surface-navigation overflow-hidden animate-in slide-in-from-left duration-300">
         <div className="h-9 px-4 flex items-center justify-between border-b border-white/5">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">{title}</span>
+          <span className="text-label">{title}</span>
         </div>
         <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/5">
           {children}

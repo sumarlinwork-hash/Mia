@@ -10,6 +10,6 @@ WAJIB SELALU:
 - jangan merubah apapun selain file2 dari scope yang sedang dikerjakan
 - dilarang coding tanpa menyampaikan hasil analisa fact-check, palning dan meminta izin coding.
 - tunggu dikatakan ya, oke dan semisalnya barulah boleh coding
-- run D:\ProjectBuild\projects\mia\stop_mia.bat sebelum coding.
-- run danperbaiki error setelah coding D:\ProjectBuild\projects\mia\run_check_all.bat.
+- run D:\ProjectBuild\projects\mia\stop_mia.bat (dan matikan terminalnya setelah anda gunakan) sebelum coding JIKA app ternyata masih sedang berjalan.
+- run danperbaiki error setelah coding D:\ProjectBuild\projects\mia\run_check_all.bat dan matikan terminalnya setelah anda gunakan.
 - nyalakan kembali app untuk dicoba user D:\ProjectBuild\projects\mia\start_mia.bat

@@ -390,6 +390,41 @@ async def studio_rollback_snapshot(req: StudioRollbackRequest):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+class StudioIdeRequest(BaseModel):
+    project_id: str
+    ide_command: str
+
+@app.get("/api/studio/ide/list")
+async def studio_list_ides():
+    """Detect local IDEs."""
+    import shutil
+    ides = []
+    if shutil.which("code"): ides.append({"id": "code", "name": "VS Code"})
+    if shutil.which("cursor"): ides.append({"id": "cursor", "name": "Cursor"})
+    if shutil.which("idea64"): ides.append({"id": "idea64", "name": "IntelliJ IDEA"})
+    if shutil.which("webstorm"): ides.append({"id": "webstorm", "name": "WebStorm"})
+    return {"status": "success", "ides": ides}
+
+@app.post("/api/studio/ide/open")
+async def studio_open_ide(req: StudioIdeRequest):
+    """Open project in local IDE safely."""
+    try:
+        import subprocess
+        import shutil
+        # P4-X2: Path Guard - validate project root via StudioFileService to prevent traversal
+        target_dir = studio_file_service._get_project_root(req.project_id, "drafts")
+        
+        # Verify IDE is actually installed
+        ide_path = shutil.which(req.ide_command)
+        if not ide_path:
+            return {"status": "error", "message": f"IDE '{req.ide_command}' not found on system."}
+            
+        # Launch IDE without blocking
+        subprocess.Popen([ide_path, target_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/studio/project/metadata")
 async def studio_get_metadata(project_id: str, session_id: str):
     try:

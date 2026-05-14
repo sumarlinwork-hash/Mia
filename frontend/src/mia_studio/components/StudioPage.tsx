@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Play, Square, Save } from 'lucide-react';
+import { ArrowLeft, Play, Square, Save, EyeOff } from 'lucide-react';
 import { useExecution } from '../hooks/useExecution';
 import { useStudioStream } from '../hooks/useStudioStream';
 import { useProject, useProjectEvents } from '../hooks/useProject';
@@ -16,8 +16,8 @@ import { StudioTopbar } from './StudioTopbar';
 import { StudioSidebar } from './StudioSidebar';
 import { StudioBottomBar } from './StudioBottomBar';
 import { ResilienceMonitor } from './ResilienceMonitor';
+import { GardenLauncher } from './GardenLauncher';
 import clsx from 'clsx';
-import { useConfig } from '../../hooks/useConfig';
 
 interface ShadTelemetryPayload {
   snapshot?: {
@@ -37,9 +37,14 @@ interface ShadTelemetryPayload {
   }[];
 }
 
-export const StudioPage: React.FC = () => {
-  const { config } = useConfig();
+export interface StudioPageProps {
+  onToggleZen?: () => void;
+}
+
+export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
   const { currentProjectId, currentSessionId } = useFileStore();
+  const [studioMode, setStudioMode] = React.useState<'launcher' | 'workspace'>('launcher');
+  const [launchPrompt, setLaunchPrompt] = React.useState('');
 
   const [impactModal, setImpactModal] = React.useState<{
     isOpen: boolean;
@@ -96,6 +101,18 @@ export const StudioPage: React.FC = () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [execution.state]);
+
+  // Keyboard Shortcut for Zen Mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        onToggleZen?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onToggleZen]);
 
   const handleFileOpen = async (path: string) => {
     tabs.openTab(path);
@@ -234,8 +251,38 @@ export const StudioPage: React.FC = () => {
 
   const activeFile = tabs.activeTab ? fileStore.files[tabs.activeTab] : null;
 
+  const handleBuildPromptSubmit = (prompt: string) => {
+    setLaunchPrompt(prompt);
+    setStudioMode('workspace');
+  };
+
+  if (studioMode === 'launcher') {
+    return (
+      <GardenLauncher
+        projectName={project.metadata?.name || currentProjectId || 'mia'}
+        onSubmit={handleBuildPromptSubmit}
+        onToggleZen={onToggleZen}
+      />
+    );
+  }
+
   return (
-    <div className="flex flex-col h-screen text-white overflow-hidden font-sans selection:bg-blue-500/30">
+    <div 
+      className="flex flex-col h-screen text-white overflow-hidden font-sans selection:bg-primary/30 surface-root relative"
+      onDoubleClick={(e) => {
+        const target = e.target as HTMLElement;
+        // Trigger Zen Mode on empty areas
+        if (
+          target === e.currentTarget || 
+          target.classList.contains('panel-toolbar') || 
+          target.classList.contains('panel-workspace') ||
+          (target.closest('.panel-workspace') && !tabs.activeTab)
+        ) {
+          onToggleZen?.();
+        }
+      }}
+    >
+      <div className="adaptive-guardrail" />
       {/* Top Bar */}
       <StudioTopbar 
         projectName={project.metadata?.name || "Untitled Project"} 
@@ -265,10 +312,17 @@ export const StudioPage: React.FC = () => {
           />
 
           {/* Action Bar (Refactored from old sidebar) */}
-          <div 
-            className="h-10 border-b border-white/5 flex items-center px-4 gap-4"
-            style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.4})` }}
-          >
+          <div className="h-10 flex items-center px-4 gap-4 panel-toolbar relative z-10">
+             <button
+              onClick={() => setStudioMode('launcher')}
+              className="flex items-center gap-2 px-3 py-1 rounded-md transition-all duration-300 text-xs font-bold uppercase tracking-tight bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+            >
+              <ArrowLeft size={14} />
+              My Garden
+            </button>
+
+            <div className="w-px h-4 bg-white/10" />
+
              <button 
               onClick={handleRun}
               disabled={execution.state !== 'IDLE' && execution.state !== 'COMPLETED' && execution.state !== 'ERROR'}
@@ -298,24 +352,39 @@ export const StudioPage: React.FC = () => {
             <button 
               onClick={handleSaveActive}
               className={clsx(
-                "flex items-center gap-2 px-3 py-1 rounded-md transition-all duration-300 text-xs font-bold uppercase tracking-tight relative",
-                activeFile?.isDirty ? "bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white" : "bg-white/5 text-white/40"
+                "flex items-center gap-2 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-tight relative motion-hover",
+                activeFile?.isDirty ? "bg-primary/10 text-primary hover:bg-primary hover:text-black" : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white"
               )}
             >
               <Save size={14} />
               Save
-              {activeFile?.isDirty && <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />}
+              {activeFile?.isDirty && <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-primary rounded-full motion-ambient" />}
             </button>
+
+            <div className="w-px h-4 bg-white/10" />
+
+            <button 
+              onClick={() => onToggleZen?.()}
+              className="flex items-center gap-2 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-tight bg-white/5 text-white/40 hover:bg-white/10 hover:text-primary motion-hover"
+              title="Zen Mode (Ctrl+Shift+Z)"
+            >
+              <EyeOff size={14} />
+              Zen Mode
+            </button>
+
+
+            {launchPrompt && (
+              <div className="ml-auto min-w-0 max-w-[42%] truncate rounded-md bg-white/5 px-3 py-1 text-[11px] font-medium text-white/45">
+                Build prompt: {launchPrompt}
+              </div>
+            )}
           </div>
 
           {/* Content Area */}
           <div className="flex-1 flex overflow-hidden p-4 gap-4">
             {/* Left: Editor & Terminal */}
-            <div className="flex-1 flex flex-col gap-4 min-w-0">
-              <div 
-                className="flex-1 relative rounded-lg border border-white/5 overflow-hidden"
-                style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.8})` }}
-              >
+            <div className="flex-1 flex flex-col gap-4 min-w-0 relative z-10">
+              <div className="flex-1 relative rounded-lg overflow-hidden panel-workspace">
                 {tabs.activeTab ? (
                   <MonacoEditor 
                     code={activeFile?.content || ""} 
@@ -335,11 +404,8 @@ export const StudioPage: React.FC = () => {
             </div>
 
             {/* Right Panel: Graph & Info */}
-            <div className="w-80 flex flex-col gap-4 flex-shrink-0">
-              <div 
-                className="flex-1 rounded-lg border border-white/5 overflow-hidden"
-                style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.8})` }}
-              >
+            <div className="w-80 flex flex-col gap-4 flex-shrink-0 relative z-10">
+              <div className="flex-1 rounded-lg overflow-hidden panel-workspace">
                 <GraphViewer events={stream.graphEvents} />
               </div>
 
@@ -353,10 +419,10 @@ export const StudioPage: React.FC = () => {
               />
                
                {/* Hardened Project Metadata Card */}
-               <div className="p-4 bg-blue-500/[0.03] border border-blue-500/10 rounded-lg backdrop-blur-sm">
+               <div className="p-4 surface-floating rounded-lg">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Live Synchronization</h4>
+                    <div className="w-2 h-2 rounded-full bg-primary motion-ambient" />
+                    <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Live Synchronization</h4>
                   </div>
                   
                   <div className="space-y-3">

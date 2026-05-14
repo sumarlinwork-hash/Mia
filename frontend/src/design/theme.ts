@@ -3,26 +3,36 @@ export const theme = {
     teal: {
       primary: '#00ffcc',
       primaryHover: '#33ffdd',
+      primarySoft: 'rgba(0, 255, 204, 0.15)',
+      primarySurface: 'rgba(0, 255, 204, 0.05)',
       glow: 'rgba(0, 255, 204, 0.4)',
     },
     violet: {
       primary: '#bc13fe',
       primaryHover: '#d455ff',
+      primarySoft: 'rgba(188, 19, 254, 0.15)',
+      primarySurface: 'rgba(188, 19, 254, 0.05)',
       glow: 'rgba(188, 19, 254, 0.4)',
     },
     amber: {
       primary: '#ffaa00',
       primaryHover: '#ffcc33',
+      primarySoft: 'rgba(255, 170, 0, 0.15)',
+      primarySurface: 'rgba(255, 170, 0, 0.05)',
       glow: 'rgba(255, 170, 0, 0.4)',
     },
     emerald: {
       primary: '#00ff66',
       primaryHover: '#33ff88',
+      primarySoft: 'rgba(0, 255, 102, 0.15)',
+      primarySurface: 'rgba(0, 255, 102, 0.05)',
       glow: 'rgba(0, 255, 102, 0.4)',
     },
     rose: {
       primary: '#fd007fff',
       primaryHover: '#fc5dacff',
+      primarySoft: 'rgba(252, 45, 148, 0.15)',
+      primarySurface: 'rgba(252, 45, 148, 0.05)',
       glow: 'rgba(252, 45, 148, 0.4)',
     }
   },

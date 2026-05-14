@@ -14,7 +14,7 @@ export const StudioTabs: React.FC<StudioTabsProps> = ({ tabs, activeTab, onTabCl
   const { files } = useFileStore();
 
   return (
-    <div className="flex h-10 bg-[#0a0a0a] border-b border-white/5 overflow-x-auto custom-scrollbar no-scrollbar">
+    <div className="flex h-10 surface-navigation border-b border-white/5 overflow-x-auto custom-scrollbar no-scrollbar">
       {tabs.map(path => {
         const isActive = activeTab === path;
         const fileName = path.split('/').pop();
@@ -25,14 +25,14 @@ export const StudioTabs: React.FC<StudioTabsProps> = ({ tabs, activeTab, onTabCl
             key={path}
             onClick={() => onTabClick(path)}
             className={clsx(
-              "flex items-center gap-2 px-4 border-r border-white/5 cursor-pointer transition-all min-w-[120px] max-w-[200px] group",
-              isActive ? "bg-white/5 text-blue-400" : "text-white/40 hover:bg-white/[0.02] hover:text-white/60"
+              "flex items-center gap-2 px-4 border-r border-white/5 cursor-pointer min-w-[120px] max-w-[200px] group motion-structural",
+              isActive ? "bg-primary-surface text-primary border-b-2 border-b-primary" : "text-white/40 hover:bg-white/[0.02] hover:text-white/60"
             )}
           >
-            <FileCode size={14} className={clsx(isActive ? "text-blue-400" : "text-white/20")} />
-            <span className="text-xs truncate flex-1">{fileName}</span>
+            <FileCode size={14} className={clsx(isActive ? "text-primary" : "text-white/20")} />
+            <span className="text-body text-xs truncate flex-1">{fileName}</span>
             
-            {isDirty && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
+            {isDirty && <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 motion-ambient" />}
             
             <button 
               onClick={(e) => {
@@ -40,7 +40,7 @@ export const StudioTabs: React.FC<StudioTabsProps> = ({ tabs, activeTab, onTabCl
                 onTabClose(path);
               }}
               className={clsx(
-                "p-0.5 rounded-md hover:bg-white/10 hover:text-white transition-colors opacity-0 group-hover:opacity-100",
+                "p-0.5 rounded-md hover:bg-primary-soft hover:text-primary motion-micro opacity-0 group-hover:opacity-100",
                 isActive ? "opacity-100" : ""
               )}
             >

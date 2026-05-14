@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { ThemeProvider } from './context/ThemeProvider';
 import Sidebar from './Sidebar';
@@ -17,17 +17,27 @@ import ResonantOrchestrator from './components/ResonantOrchestrator';
 import { useConfig } from './hooks/useConfig';
 
 function App() {
+  return (
+    <ThemeProvider>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppShell />
+      </Router>
+    </ThemeProvider>
+  );
+}
+
+function AppShell() {
   const { config } = useConfig();
   const [isZenMode, setIsZenMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const location = useLocation();
+  const isStudioRoute = location.pathname.startsWith('/studio');
 
   const bgUrl = config?.appearance?.background_url || '';
   
 
 
   return (
-    <ThemeProvider>
-      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <div className="relative min-h-screen bg-background overflow-hidden flex">
           
           {config && (
@@ -59,23 +69,25 @@ function App() {
 
 
           {/* Sidebar Navigation */}
-          <div 
-            className={`transition-all duration-700 ease-in-out relative z-[100] ${isZenMode ? 'opacity-0 -translate-x-20 pointer-events-none' : 'opacity-100 translate-x-0'}`}
-          >
-            <Sidebar 
-              isZenMode={isZenMode} 
-              onToggleZen={() => setIsZenMode(!isZenMode)} 
-              collapsed={sidebarCollapsed}
-              setCollapsed={setSidebarCollapsed}
-            />
-          </div>
+          {!isStudioRoute && (
+            <div 
+              className={`transition-all duration-700 ease-in-out relative z-[100] ${isZenMode ? 'opacity-0 -translate-x-20 pointer-events-none' : 'opacity-100 translate-x-0'}`}
+            >
+              <Sidebar 
+                isZenMode={isZenMode} 
+                onToggleZen={() => setIsZenMode(!isZenMode)} 
+                collapsed={sidebarCollapsed}
+                setCollapsed={setSidebarCollapsed}
+              />
+            </div>
+          )}
 
           {/* Main Content Area */}
           <main 
             className={`relative z-10 flex-1 h-screen overflow-y-auto custom-scrollbar transition-all duration-700 ease-in-out ${
               isZenMode ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
             }`}
-            style={{ paddingLeft: sidebarCollapsed ? '5rem' : '16rem' }}
+            style={{ paddingLeft: isStudioRoute ? 0 : (sidebarCollapsed ? '5rem' : '16rem') }}
           >
             <Routes>
               <Route path="/" element={<Home />} />
@@ -91,7 +103,7 @@ function App() {
                       Memuat Studio Module...
                     </div>
                   }>
-                    <StudioPageLazy />
+                    <StudioPageLazy onToggleZen={() => setIsZenMode(true)} />
                   </Suspense>
                 </FileStoreProvider>
               } />
@@ -103,10 +115,8 @@ function App() {
             onExit={() => setIsZenMode(false)} 
           />
           
-          <ResonantOrchestrator />
+          {!isStudioRoute && <ResonantOrchestrator />}
         </div>
-      </Router>
-    </ThemeProvider>
   );
 }
 
