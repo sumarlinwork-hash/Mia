@@ -9,9 +9,21 @@ const ResonantOrchestrator: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const heartbeatBufferRef = useRef<AudioBuffer | null>(null);
+  const lastPulseRef = useRef(0);
   const [bpm, setBpm] = useState(60);
   const isEmotionView = location.pathname === '/emotion';
   const bpmRef = useRef(bpm);
+
+  const ensureAudioContext = () => {
+    if (audioContextRef.current) return audioContextRef.current;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return null;
+    audioContextRef.current = new AudioContextClass();
+    return audioContextRef.current;
+  };
 
   useEffect(() => {
     bpmRef.current = bpm;
@@ -36,6 +48,8 @@ const ResonantOrchestrator: React.FC = () => {
 
   // 2. Authentic Heartbeat Audio Engine
   useEffect(() => {
+    let cancelled = false;
+
     // Only play if on Emotion Dashboard
     if (!isEmotionView) {
       if (sourceNodeRef.current) {
@@ -46,14 +60,10 @@ const ResonantOrchestrator: React.FC = () => {
     }
 
     const initAudio = async () => {
-      if (!audioContextRef.current) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        audioContextRef.current = new AudioContextClass();
-      }
-
-      const ctx = audioContextRef.current;
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
       if (ctx.state === 'suspended') await ctx.resume();
+      if (cancelled || !isEmotionView) return;
 
       // 1. Create Analyser for VU Meter
       if (!analyserRef.current) {
@@ -85,16 +95,20 @@ const ResonantOrchestrator: React.FC = () => {
 
       // Load and Play Loop
       try {
-        const response = await fetch('/audio/heartbeat.mp3');
-        const arrayBuffer = await response.arrayBuffer();
-        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        if (!heartbeatBufferRef.current) {
+          const response = await fetch('/audio/heartbeat.mp3');
+          const arrayBuffer = await response.arrayBuffer();
+          heartbeatBufferRef.current = await ctx.decodeAudioData(arrayBuffer);
+        }
+
+        if (cancelled || !isEmotionView) return;
 
         if (sourceNodeRef.current) {
           sourceNodeRef.current.stop();
         }
 
         const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
+        source.buffer = heartbeatBufferRef.current;
         source.loop = true;
 
         source.playbackRate.value = (bpmRef.current / 60) * 0.75;
@@ -110,6 +124,7 @@ const ResonantOrchestrator: React.FC = () => {
     initAudio();
 
     return () => {
+      cancelled = true;
       if (sourceNodeRef.current) {
         sourceNodeRef.current.stop();
         sourceNodeRef.current = null;
@@ -117,7 +132,6 @@ const ResonantOrchestrator: React.FC = () => {
     };
   }, [isEmotionView]);
 
-  const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
   // Update Playback Rate when BPM changes is already handled by the first useEffect (lines 16-21)
@@ -129,10 +143,14 @@ const ResonantOrchestrator: React.FC = () => {
         const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
         analyserRef.current.getByteFrequencyData(dataArray);
         const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        const now = performance.now();
         
-        // Broadcast normalized pulse level (0 to 1)
-        const pulseEvent = new CustomEvent('heartbeatPulse', { detail: average / 128 });
-        window.dispatchEvent(pulseEvent);
+        // Throttle UI broadcasts so My Heart does not rerender on every animation frame.
+        if (now - lastPulseRef.current > 80) {
+          lastPulseRef.current = now;
+          const pulseEvent = new CustomEvent('heartbeatPulse', { detail: Math.min(1, average / 128) });
+          window.dispatchEvent(pulseEvent);
+        }
       }
       animationFrameRef.current = requestAnimationFrame(updatePulse);
     };
@@ -154,8 +172,9 @@ const ResonantOrchestrator: React.FC = () => {
 
     const handleGlobalClick = async (e: MouseEvent) => {
       // 1. Resume AudioContext if suspended (Browser Policy)
-      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
+      const ctx = ensureAudioContext();
+      if (ctx?.state === 'suspended') {
+        ctx.resume().catch(() => {});
       }
 
       const id = Date.now();

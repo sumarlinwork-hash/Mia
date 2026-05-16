@@ -51,6 +51,10 @@ class ProviderConfig(BaseModel):
     active_path: str = ""
     health_status: str = "Healthy"
 
+    class Config:
+        extra = "allow"
+        arbitrary_types_allowed = True
+
 
 class AppearanceConfig(BaseModel):
     background_type: str = "video" # "video", "image", "color"
@@ -60,6 +64,10 @@ class AppearanceConfig(BaseModel):
     ui_opacity: float = 0.8 # Range 0.0 - 1.0
     language: str = "id-ID"
     theme_hue: str = "teal"
+
+    class Config:
+        extra = "allow"
+        arbitrary_types_allowed = True
 
 class MIAConfig(BaseModel):
     bot_name: str = "MIA"
@@ -88,6 +96,10 @@ class MIAConfig(BaseModel):
     appearance: AppearanceConfig = AppearanceConfig()
     test_timeout: int = 30
 
+    class Config:
+        extra = "allow"
+        arbitrary_types_allowed = True
+
 def get_default_config() -> MIAConfig:
     default_providers = {
         "Gemini": ProviderConfig(
@@ -106,10 +118,17 @@ def get_default_config() -> MIAConfig:
     return MIAConfig(providers=default_providers)
 
 
-def load_config() -> MIAConfig:
+_cached_config: Optional[MIAConfig] = None
+
+def load_config(force_reload: bool = False) -> MIAConfig:
+    global _cached_config
+    if _cached_config and not force_reload:
+        return _cached_config
+
     if not os.path.exists(CONFIG_FILE):
         default_config = get_default_config()
         save_config(default_config)
+        _cached_config = default_config
         return default_config
     
     try:
@@ -121,12 +140,15 @@ def load_config() -> MIAConfig:
             data["appearance"]["theme_hue"] = normalize_theme_hue(
                 data["appearance"].get("theme_hue")
             )
-            return MIAConfig(**data)
+            _cached_config = MIAConfig(**data)
+            return _cached_config
     except Exception as e:
         print(f"Error loading config: {e}. Using default.")
         return get_default_config()
 
 def save_config(config: MIAConfig):
+    global _cached_config
+    _cached_config = config
     with open(CONFIG_FILE, "w") as f:
         # Pydantic v2 compatible serialization
         try:

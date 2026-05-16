@@ -32,6 +32,7 @@ export interface MIAConfig {
   appearance: AppearanceConfig;
   providers: Record<string, ProviderConfig>;
   tts_engine: string;
+  stt_engine: string;
   openai_api_key?: string;
   elevenlabs_api_key?: string;
   elevenlabs_voice_id?: string;

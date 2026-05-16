@@ -1,32 +1,39 @@
-import { useState, useEffect } from 'react';
-import { Save, FileText, CheckCircle } from 'lucide-react';
+import { useState, useEffect, useTransition } from 'react';
+import { Save, FileText, CheckCircle, Loader2 } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
+import { useMemoryFiles, useMemoryFileContent } from './hooks/useMIAQueries';
 
 export default function IamMia() {
   const { config } = useConfig();
-  const [files, setFiles] = useState<string[]>([]);
+  const { data: files = [] } = useMemoryFiles();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  
+  // Use TanStack Query for content
+  const { data: fileData, isLoading: contentLoading } = useMemoryFileContent(selectedFile);
+  
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const loadFile = (filename: string) => {
-    setSelectedFile(filename);
-    fetch(`/api/memory/file?name=${encodeURIComponent(filename)}`)
-      .then(res => res.json())
-      .then(data => setContent(data.content || ""));
+  // Sync internal content state with fetched data
+  useEffect(() => {
+    if (fileData?.content !== undefined) {
+      setContent(fileData.content);
+    }
+  }, [fileData]);
+
+  const handleFileSelect = (filename: string) => {
+    startTransition(() => {
+      setSelectedFile(filename);
+    });
   };
 
   useEffect(() => {
-    fetch('/api/memory/files')
-      .then(res => res.json())
-      .then(data => {
-        setFiles(data.files || []);
-        if (data.files && data.files.length > 0) {
-          loadFile(data.files[0]);
-        }
-      });
-  }, []);
+    if (files.length > 0 && !selectedFile) {
+      handleFileSelect(files[0]);
+    }
+  }, [files, selectedFile]);
 
   const handleSave = async () => {
     if (!selectedFile) return;
@@ -58,12 +65,12 @@ export default function IamMia() {
           {files.map(f => (
             <button
               key={f}
-              onClick={() => loadFile(f)}
-              className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                selectedFile === f ? 'bg-primary/20 text-primary border border-primary/30' : 'hover:bg-white/5 text-white/70'
-              }`}
+              onClick={() => handleFileSelect(f)}
+              className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                selectedFile === f ? 'bg-primary/20 text-primary border border-primary/30 shadow-[0_0_10px_rgba(0,255,204,0.1)]' : 'hover:bg-white/5 text-white/70'
+              } ${isPending && selectedFile === f ? 'opacity-50' : ''}`}
             >
-              <FileText size={16} />
+              <FileText size={16} className={isPending && selectedFile === f ? 'animate-spin' : ''} />
               <span className="truncate text-sm">{f}</span>
             </button>
           ))}
@@ -80,11 +87,13 @@ export default function IamMia() {
           style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.4})` }}
         >
           <h3 className="text-white/90 font-bold flex items-center gap-2">
-            <FileText size={18} className="text-primary" /> {selectedFile || "No File Selected"}
+            <FileText size={18} className="text-primary" /> 
+            {selectedFile || "No File Selected"}
+            {contentLoading && <Loader2 size={14} className="animate-spin text-primary/50" />}
           </h3>
           <button 
             onClick={handleSave}
-            disabled={saving || !selectedFile}
+            disabled={saving || !selectedFile || contentLoading}
             className="flex items-center gap-2 px-4 py-2 bg-primary/20 text-primary hover:bg-primary border border-primary/50 hover:text-black rounded-lg transition-all shadow-[0_0_15px_rgba(0,255,204,0.2)] disabled:opacity-50"
           >
             {saveSuccess ? <CheckCircle size={16} /> : <Save size={16} />}
@@ -92,16 +101,24 @@ export default function IamMia() {
           </button>
         </div>
         
-        <textarea
-          id="memory-editor"
-          name="memory-editor"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          className="flex-1 w-full text-white/90 p-6 outline-none resize-none custom-scrollbar font-mono text-sm leading-relaxed"
-          style={{ backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.3})` }}
-          placeholder="Write markdown here..."
-          spellCheck={false}
-        />
+        <div className="flex-1 relative">
+          {contentLoading && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+               <div className="flex flex-col items-center gap-4">
+                  <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <div className="text-primary/60 text-xs tracking-widest font-mono animate-pulse">RECALLING MEMORY...</div>
+               </div>
+            </div>
+          )}
+          <textarea
+            id="memory-editor"
+            name="memory-editor"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            disabled={contentLoading}
+            className={`w-full h-full text-white/90 p-6 outline-none resize-none custom-scrollbar font-mono text-sm leading-relaxed transition-opacity duration-300 ${contentLoading ? 'opacity-20' : 'opacity-100'}`}
+          />
+        </div>
       </div>
     </div>
   );

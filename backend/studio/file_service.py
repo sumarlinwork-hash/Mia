@@ -80,13 +80,16 @@ class StudioFileService:
         for entry in os.scandir(target_dir):
             if entry.name.startswith(".") or entry.name.endswith(".tmp"): continue
             rel_entry_path = os.path.relpath(entry.path, project_sandbox)
+            
+            # P4-X2: Optimized for Ivy Bridge - NO RECURSION, NO HASHING on list
+            # We only provide metadata. Hash will be fetched on demand.
             item = {
-                "name": entry.name, "path": rel_entry_path, "is_dir": entry.is_dir(),
+                "name": entry.name, 
+                "path": rel_entry_path, 
+                "is_dir": entry.is_dir(),
                 "size": entry.stat().st_size if entry.is_file() else 0,
-                "hash": self._calculate_hash(entry.path) if entry.is_file() else None
+                "hash": None # Removed for performance
             }
-            if entry.is_dir():
-                item["children"] = self.list_files(project_id, rel_entry_path)
             items.append(item)
         return sorted(items, key=lambda x: (not x["is_dir"], x["name"]))
 

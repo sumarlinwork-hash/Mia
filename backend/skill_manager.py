@@ -1,6 +1,7 @@
 import os
 import ast
 import subprocess
+import asyncio
 import json
 import sys
 import shutil
@@ -20,16 +21,26 @@ class SkillManager:
         self.plugins = {}
         self.execution_cache = {}
         self.cache_ttl = timedelta(minutes=5)
+        self._cached_metadata = {} # {directory: [skills]}
+        self._folder_mtime = {}   # {directory: last_mtime}
 
     def scan_skills(self, directory=None):
         """Scan a directory and load plugin modules or extract legacy metadata."""
         if directory is None:
             directory = self.SKILLS_DIR
             
-        skills = []
         if not os.path.exists(directory):
             return []
+
+        # Optimization: Check mtime of the folder
+        try:
+            current_mtime = os.path.getmtime(directory)
+            if directory in self._folder_mtime and self._folder_mtime[directory] == current_mtime:
+                return self._cached_metadata.get(directory, [])
+        except:
+            pass
             
+        skills = []
         for entry in os.listdir(directory):
             full_path = os.path.join(directory, entry)
             
@@ -46,6 +57,10 @@ class SkillManager:
                 if directory == self.MARKETPLACE_DIR:
                     metadata["is_installed"] = self.is_installed(skill_id)
                 skills.append(metadata)
+        
+        # Update cache
+        self._cached_metadata[directory] = skills
+        self._folder_mtime[directory] = current_mtime
         return skills
 
     def is_installed(self, skill_id):
@@ -210,17 +225,22 @@ class SkillManager:
 
         args_json = json.dumps(args or {})
         try:
-            result = subprocess.run(
-                [sys.executable, filepath, args_json],
-                capture_output=True, text=True, timeout=30
+            # FLAGSHIP PERFORMANCE: Use true async subprocess
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, filepath, args_json,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-            if result.returncode == 0:
-                res = {"status": "success", "output": result.stdout.strip()}
-                # Cache successful legacy runs too
+            
+            stdout, stderr = await proc.communicate()
+            
+            if proc.returncode == 0:
+                res = {"status": "success", "output": stdout.decode().strip()}
+                # Cache successful legacy runs
                 cache_key = f"{skill_id}:{args_json}"
                 self.execution_cache[cache_key] = (res, datetime.now())
                 return res
-            return {"status": "error", "message": result.stderr.strip()}
+            return {"status": "error", "message": stderr.decode().strip()}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 

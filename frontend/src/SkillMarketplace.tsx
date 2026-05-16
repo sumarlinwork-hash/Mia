@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Search, Zap, Plus, Book, Music, MessageCircle, CheckCircle, Star, Sparkles, X, ChevronRight } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from './hooks/useMIAQueries';
 import AppWizard from './components/SkillWizard';
 import AppExecutor from './components/SkillExecutor';
 import SetupFlow from './components/SetupFlow';
@@ -26,10 +28,8 @@ export interface AppManifest {
 
 const SkillMarketplace: React.FC = () => {
   const { config } = useConfig();
-  const [apps, setApps] = useState<App[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
-  const [loading, setLoading] = useState(true);
   
   // Modals state
   const [showModeSelector, setShowModeSelector] = useState(false);
@@ -37,7 +37,22 @@ const SkillMarketplace: React.FC = () => {
   const [showWizard, setShowWizard] = useState(false);
   const [generatedAppData, setGeneratedAppData] = useState<{ manifest: AppManifest, logic: string } | null>(null);
   const [previewingApp, setPreviewingApp] = useState<App | null>(null);
-  const [recommendations, setRecommendations] = useState<App[]>([]);
+  
+  const { data: apps = [], isLoading: loading, refetch: fetchApps } = useQuery({
+    queryKey: queryKeys.marketplace,
+    queryFn: async () => {
+      const res = await fetch('/api/skills/marketplace');
+      return res.json();
+    }
+  });
+
+  const { data: recommendations = [] } = useQuery({
+    queryKey: queryKeys.recommendations,
+    queryFn: async () => {
+      const res = await fetch('/api/apps/recommendations');
+      return res.json();
+    }
+  });
   
   const [executingApp, setExecutingApp] = useState<App | null>(null);
   const [settingUpApp, setSettingUpApp] = useState<App | null>(null);
@@ -48,31 +63,6 @@ const SkillMarketplace: React.FC = () => {
     setToasts(prev => [...prev, { id, msg, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
   }, []);
-
-  const fetchApps = useCallback(() => {
-    fetch('/api/skills/marketplace')
-      .then(res => res.json())
-      .then(data => {
-        setApps(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        console.log('Apps API fallback');
-        setLoading(false);
-      });
-  }, []);
-
-  const fetchRecommendations = useCallback(() => {
-    fetch('/api/apps/recommendations')
-      .then(res => res.json())
-      .then(data => setRecommendations(data))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    fetchApps();
-    fetchRecommendations();
-  }, [fetchApps, fetchRecommendations]);
 
   const handleInstall = async (id: string) => {
     try {

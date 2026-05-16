@@ -1,12 +1,86 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
 export const queryKeys = {
+  bootstrap: ['bootstrap'] as const,
   history: ['history'] as const,
   memory: ['memory'] as const,
   intimacy: ['intimacy'] as const,
   skills: ['skills'] as const,
+  marketplace: ['marketplace'] as const,
+  recommendations: ['recommendations'] as const,
   config: ['config'] as const,
+  emotion: ['emotion'] as const,
+  crone: ['crone'] as const,
+  memoryContent: (name: string) => ['memory', 'content', name] as const,
 };
+
+export function useMemoryFileContent(name: string | null) {
+  return useQuery({
+    queryKey: queryKeys.memoryContent(name || ''),
+    queryFn: async () => {
+      if (!name) return { content: '' };
+      const res = await fetch(`/api/memory/file?name=${encodeURIComponent(name)}`);
+      if (!res.ok) throw new Error('Failed to fetch file content');
+      return res.json();
+    },
+    enabled: !!name,
+    staleTime: 600000, // 10 minutes cache
+  });
+}
+
+export function usePrefetchMemoryContent() {
+  const queryClient = useQueryClient();
+  
+  return useCallback(async (files: string[]) => {
+    const promises = files.map(file => 
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.memoryContent(file),
+        queryFn: async () => {
+          const res = await fetch(`/api/memory/file?name=${encodeURIComponent(file)}`);
+          return res.json();
+        },
+        staleTime: 600000
+      })
+    );
+    await Promise.all(promises);
+  }, [queryClient]);
+}
+
+export function useMIABootstrap() {
+  const queryClient = useQueryClient();
+  const prefetchMemory = usePrefetchMemoryContent();
+
+  return useQuery({
+    queryKey: queryKeys.bootstrap,
+    queryFn: async () => {
+      const res = await fetch('/api/bootstrap');
+      if (!res.ok) throw new Error('Bootstrap failed');
+      const data = await res.json();
+      
+      // Aggressive cache seeding
+      queryClient.setQueryData(queryKeys.config, data.config);
+      queryClient.setQueryData(queryKeys.history, data.history);
+      queryClient.setQueryData(queryKeys.memory, data.memory_files);
+      queryClient.setQueryData(queryKeys.skills, data.skills);
+      queryClient.setQueryData(queryKeys.intimacy, data.intimacy.intimacy_active);
+      queryClient.setQueryData(queryKeys.emotion, data.emotion);
+      queryClient.setQueryData(queryKeys.crone, data.crone);
+      
+      // Seed marketplace if provided
+      if (data.marketplace) queryClient.setQueryData(queryKeys.marketplace, data.marketplace);
+      if (data.recommendations) queryClient.setQueryData(queryKeys.recommendations, data.recommendations);
+      
+      // Eager Prefetching for Memory Files (Instant Switch)
+      if (data.memory_files) {
+        prefetchMemory(data.memory_files);
+      }
+
+      return data;
+    },
+    staleTime: Infinity, // One-time bootstrap
+  });
+}
 
 export function useChatHistory() {
   return useQuery({

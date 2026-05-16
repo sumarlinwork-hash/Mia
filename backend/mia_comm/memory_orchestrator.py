@@ -1,8 +1,10 @@
 import os
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
+os.environ["ANONYMIZED_TELEMETRY"] = "false"
+os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
 import chromadb
 from chromadb.config import Settings
 import json
+import asyncio
 from config import load_config
 from core.mode_hub import mode_hub, MIAMode
 import httpx
@@ -79,7 +81,8 @@ class MemoryOrchestrator:
         
         target_collection = self.collection_intimate if is_intimate else self.collection_general
         
-        target_collection.add(
+        await asyncio.to_thread(
+            target_collection.add,
             ids=[doc_id],
             documents=[text],
             embeddings=[embedding],
@@ -95,7 +98,8 @@ class MemoryOrchestrator:
         try:
             target_collection = self.collection_intimate if is_intimate else self.collection_general
             
-            results = target_collection.query(
+            results = await asyncio.to_thread(
+                target_collection.query,
                 query_embeddings=[embedding],
                 n_results=n_results
             )
@@ -169,10 +173,10 @@ class MemoryOrchestrator:
     async def clear_memory(self):
         """Wipe all episodic memories from both namespaces."""
         try:
-            self.client.delete_collection(name="mia_general")
-            self.client.delete_collection(name="mia_intimate")
-            self.collection_general = self.client.get_or_create_collection(name="mia_general")
-            self.collection_intimate = self.client.get_or_create_collection(name="mia_intimate")
+            await asyncio.to_thread(self.client.delete_collection, name="mia_general")
+            await asyncio.to_thread(self.client.delete_collection, name="mia_intimate")
+            self.collection_general = await asyncio.to_thread(self.client.get_or_create_collection, name="mia_general")
+            self.collection_intimate = await asyncio.to_thread(self.client.get_or_create_collection, name="mia_intimate")
             self.collection = self.collection_general
         except Exception as e:
             print(f"[Error] Failed to clear memory: {e}")

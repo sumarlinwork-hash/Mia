@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Heart, Zap, Thermometer, RefreshCw } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useConfig } from './hooks/useConfig';
 
 interface EmotionState {
@@ -59,58 +59,68 @@ const EmotionDashboard: React.FC = () => {
     }
   };
 
-  const [pulseLevel, setPulseLevel] = useState(0);
+  const pulseLevel = useMotionValue(0);
+  const smoothPulse = useSpring(pulseLevel, { stiffness: 380, damping: 24, mass: 0.35 });
+  const ambientScale = useTransform(smoothPulse, value => 1 + (value * 0.1));
+  const ambientOpacity = useTransform(smoothPulse, value => 0.05 + (value * 0.1));
+  const heartScale = useTransform(smoothPulse, value => toggles.bio_sync ? 1 + (Math.pow(value, 1.5) * 1.2) : 1);
+  const heartFilter = useTransform(smoothPulse, value => toggles.bio_sync
+    ? `drop-shadow(0 0 ${Math.max(0.1, value * 25)}px rgba(0,255,204,0.8))`
+    : 'drop-shadow(0 0 0px rgba(0,255,204,0))'
+  );
+  const ringScale = useTransform(smoothPulse, value => 1 + (value * 3.5));
+  const ringOpacity = useTransform(smoothPulse, value => 0.4 - (value * 0.4));
+  const glowScale = useTransform(smoothPulse, value => 1 + (value * 2.5));
+  const glowOpacity = useTransform(smoothPulse, value => 0.15 - (value * 0.15));
 
   useEffect(() => {
     const handlePulse = (e: CustomEvent<number>) => {
-      setPulseLevel(e.detail);
+      pulseLevel.set(e.detail);
     };
     window.addEventListener('heartbeatPulse', handlePulse as EventListener);
     return () => window.removeEventListener('heartbeatPulse', handlePulse as EventListener);
-  }, []);
+  }, [pulseLevel]);
 
   const bpm = 60 + (emotion.arousal * 0.6);
+  const heartbeatDuration = `${Math.max(0.65, 60 / Math.max(45, bpm))}s`;
 
-  const stats = [
+  const stats = useMemo(() => [
     { label: 'Attention Echo', value: emotion.echo, color: 'text-blue-400', icon: RefreshCw },
     { label: 'Arousal', value: emotion.arousal, color: 'text-rose-500', icon: Zap },
     { label: 'Warmth', value: emotion.warmth, color: 'text-orange-400', icon: Thermometer },
-  ];
+  ], [emotion.arousal, emotion.echo, emotion.warmth]);
 
   return (
-    <div className="p-8 max-w-5xl mx-auto relative">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto relative">
       {/* Bio-Sync Pulse Background (Reacts to Audio too) */}
       {toggles.bio_sync && (
         <motion.div 
-          animate={{ 
-            scale: 1 + (pulseLevel * 0.1), 
-            opacity: 0.05 + (pulseLevel * 0.1) 
-          }}
+          style={{ scale: ambientScale, opacity: ambientOpacity }}
           className="fixed inset-0 pointer-events-none bg-rose-500/10 blur-[100px] z-0"
         />
       )}
 
-      <header className="mb-12 relative z-10 flex justify-between items-end">
+      <header className="mb-8 sm:mb-12 relative z-10 flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-end">
         <div>
-          <h1 className="text-4xl font-bold text-white mb-2 tracking-tighter">Affective Resonance Engine</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2 tracking-tighter">Affective Resonance Engine</h1>
           <p className="text-white/40 uppercase tracking-widest text-[10px] font-mono flex items-center gap-2">
             <RefreshCw size={12} className="animate-spin-slow" /> MIA Core Psychological State
           </p>
         </div>
-        <div className="text-right">
+        <div className="text-left sm:text-right">
           <div className="text-[10px] font-mono text-white/20 uppercase tracking-tighter">Heart Rate Sync</div>
           <div className="text-2xl font-black text-rose-500/80">{Math.round(bpm)} <span className="text-xs">BPM</span></div>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 relative z-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8 sm:mb-12 relative z-10">
         {stats.map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="p-6 rounded-[2rem] border border-white/10 backdrop-blur-3xl relative overflow-hidden group hover:border-white/20 transition-all duration-500"
+            className="p-5 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-white/10 backdrop-blur-3xl relative overflow-hidden group hover:border-white/20 transition-all duration-500"
             style={{ backgroundColor: `rgba(0, 0, 0, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
           >
             <div className={`absolute top-0 right-0 p-6 opacity-5 ${stat.color} group-hover:opacity-10 transition-opacity`}>
@@ -122,7 +132,7 @@ const EmotionDashboard: React.FC = () => {
                 <stat.icon size={16} />
                 <span className="text-[10px] font-bold uppercase tracking-widest">{stat.label}</span>
               </div>
-              <div className="text-4xl font-black text-white mb-4 tracking-tighter">{Math.round(stat.value)}%</div>
+              <div className="text-3xl sm:text-4xl font-black text-white mb-4 tracking-tighter">{Math.round(stat.value)}%</div>
               <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: 0 }}
@@ -135,9 +145,9 @@ const EmotionDashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-8 relative z-10">
         <div 
-          className="p-8 rounded-[2.5rem] border border-white/10 backdrop-blur-3xl transition-all duration-500"
+          className="p-5 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-white/10 backdrop-blur-3xl transition-all duration-500"
           style={{ backgroundColor: `rgba(0, 0, 0, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
         >
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -151,7 +161,7 @@ const EmotionDashboard: React.FC = () => {
             ].map(module => (
               <div 
                 key={module.id} 
-                className="flex items-center justify-between p-5 rounded-3xl border border-white/5 hover:bg-white/10 transition-all cursor-pointer" 
+                className="flex items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-white/5 hover:bg-white/10 transition-all cursor-pointer" 
                 style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.05})` }}
                 onClick={() => handleToggle(module.id as keyof typeof toggles)}
               >
@@ -171,19 +181,13 @@ const EmotionDashboard: React.FC = () => {
         </div>
 
         <div 
-          className="p-8 rounded-[2.5rem] border border-primary/20 backdrop-blur-3xl flex flex-col items-center justify-center text-center group transition-all duration-500"
+          className="p-5 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-primary/20 backdrop-blur-3xl flex flex-col items-center justify-center text-center group transition-all duration-500"
           style={{ backgroundColor: `rgba(0, 255, 204, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` }}
         >
           <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 relative">
             <motion.div
-              animate={{ 
-                scale: toggles.bio_sync ? 1 + (Math.pow(pulseLevel, 1.5) * 1.2) : 1,
-                // Focused sharp glow
-                filter: toggles.bio_sync 
-                  ? `drop-shadow(0 0 ${Math.max(0.1, pulseLevel * 25)}px rgba(0,255,204,0.8))` 
-                  : 'drop-shadow(0 0 0px rgba(0,255,204,0))'
-              }}
-              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+              className={toggles.bio_sync ? 'animate-heartbeat' : ''}
+              style={{ scale: heartScale, filter: heartFilter, animationDuration: heartbeatDuration }}
             >
               <Heart size={48} className="relative z-10 fill-primary text-primary" />
             </motion.div>
@@ -192,19 +196,12 @@ const EmotionDashboard: React.FC = () => {
               <>
                 {/* Defined Thick Aura Ring */}
                 <motion.div 
-                  animate={{ 
-                    scale: 1 + (pulseLevel * 3.5), 
-                    opacity: 0.4 - (pulseLevel * 0.4),
-                    borderWidth: 4 + (pulseLevel * 8)
-                  }}
+                  style={{ scale: ringScale, opacity: ringOpacity }}
                   className="absolute inset-0 border-primary/50 rounded-full blur-[1px]" 
                 />
                 {/* Focused Glow Field */}
                 <motion.div 
-                  animate={{ 
-                    scale: 1 + (pulseLevel * 2.5), 
-                    opacity: 0.15 - (pulseLevel * 0.15) 
-                  }}
+                  style={{ scale: glowScale, opacity: glowOpacity }}
                   className="absolute inset-0 bg-primary/20 rounded-full blur-[10px]" 
                 />
               </>

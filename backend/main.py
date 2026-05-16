@@ -1,4 +1,21 @@
 import os
+os.environ["ANONYMIZED_TELEMETRY"] = "false"
+os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
+
+# Patch ChromaDB Telemetry to prevent 'capture()' errors
+try:
+    import chromadb.telemetry
+    def no_op(*args, **kwargs): pass
+    if hasattr(chromadb.telemetry, 'Telemetry'):
+        chromadb.telemetry.Telemetry.capture = no_op
+        chromadb.telemetry.Telemetry.send_event = no_op
+    # For newer versions
+    if hasattr(chromadb.telemetry, 'product_analytics'):
+        if hasattr(chromadb.telemetry.product_analytics, 'ProductAnalytics'):
+            chromadb.telemetry.product_analytics.ProductAnalytics.capture = no_op
+except Exception:
+    pass
+
 from contextlib import asynccontextmanager
 import shutil
 import asyncio
@@ -6,8 +23,9 @@ import sqlite3
 import threading
 from pynput import keyboard
 import time
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import Dict, Optional, Any
 from fastapi.staticfiles import StaticFiles
@@ -55,6 +73,9 @@ async def lifespan(app: FastAPI):
     local_event_bus.stop()
 
 app = FastAPI(title="MIA Backend API", lifespan=lifespan)
+lifespan_start_time = time.time()
+current_refresh_version = 0
+_active_refresh_task: Optional[asyncio.Task] = None
 intimacy_mode = False  # Global state for Intimacy Mode
 pending_intimacy_offer = False
 offer_timestamp = 0
@@ -66,6 +87,7 @@ studio_execution_service = StudioExecutionService()
 studio_session_manager = StudioSessionManager(studio_execution_service, studio_file_service)
 
 # Setup CORS for React Frontend
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], # In production, restrict this to frontend URL
@@ -77,7 +99,11 @@ app.add_middleware(
 # P4-X2: Global Traffic Monitor (Restoring "Informative" Backend)
 @app.middleware("http")
 async def log_requests(request, call_next):
-    print(f"[Traffic] {request.method} {request.url.path}")
+    # Performance: Skip logging for frequent heartbeat/asset requests
+    path = request.url.path
+    if path.startswith("/api") and not any(x in path for x in ["heartbeat", "status", "emotion", "health"]):
+        print(f"[Traffic] {request.method} {path}")
+    
     response = await call_next(request)
     return response
 
@@ -105,15 +131,75 @@ threading.Thread(target=start_hotkey_listener, daemon=True).start()
 async def health_check():
     return {"status": "ok", "timestamp": time.time()}
 
+@app.get("/api/bootstrap")
+async def get_bootstrap():
+    """
+    Consolidated initialization endpoint.
+    Aggregates config, history, memory, intimacy, emotion, and skills in one roundtrip.
+    """
+    async def get_history_task():
+        return await asyncio.to_thread(history_manager.get_history, limit=20)
+    
+    async def get_skills_task():
+        return await asyncio.to_thread(skill_manager.scan_skills, directory=skill_manager.SKILLS_DIR)
+
+    async def get_memory_files_task():
+        try:
+            if not os.path.exists(IAM_MIA_DIR): return []
+            return [f for f in os.listdir(IAM_MIA_DIR) if os.path.isfile(os.path.join(IAM_MIA_DIR, f)) and f.endswith(".md")]
+        except: return []
+
+    async def get_marketplace_task():
+        try:
+            apps = await asyncio.to_thread(skill_manager.scan_skills, directory=skill_manager.MARKETPLACE_DIR)
+            for app in apps:
+                app["downloads"] = 1000 if "chatbot" in app["id"] else 42
+                app["executions"] = 5400
+                app["trust_score"] = 4.7
+            return apps
+        except: return []
+
+    # Parallel I/O tasks
+    history, skills, memory_files, marketplace = await asyncio.gather(
+        get_history_task(),
+        get_skills_task(),
+        get_memory_files_task(),
+        get_marketplace_task()
+    )
+
+    # Fast synchronous or shared-state tasks
+    config = load_config()
+    emotion = emotion_manager.get_state()
+    intimacy_status = {
+        "intimacy_active": intimacy_mode,
+        "pending_offer": pending_intimacy_offer
+    }
+    
+    # Crone status (reuse existing function logic for consistency)
+    crone_data = await get_crone_status()
+    
+    return {
+        "config": config,
+        "history": history,
+        "memory_files": memory_files,
+        "intimacy": intimacy_status,
+        "emotion": emotion,
+        "skills": skills,
+        "marketplace": marketplace,
+        "recommendations": marketplace[:5] if marketplace else [], # Naive for now
+        "crone": crone_data,
+        "timestamp": time.time()
+    }
+
 # --- SKILL LIBRARY ENDPOINTS ---
 
 @app.get("/api/skills/installed")
 async def get_installed_skills():
-    return skill_manager.scan_skills(directory=skill_manager.SKILLS_DIR)
+    return await asyncio.to_thread(skill_manager.scan_skills, directory=skill_manager.SKILLS_DIR)
 
 @app.get("/api/skills/marketplace")
 async def get_marketplace_skills():
-    apps = skill_manager.scan_skills(directory=skill_manager.MARKETPLACE_DIR)
+    apps = await asyncio.to_thread(skill_manager.scan_skills, directory=skill_manager.MARKETPLACE_DIR)
     # Add mock telemetry for Social Proof
     for app in apps:
         app["downloads"] = 1000 if "chatbot" in app["id"] else 42
@@ -123,11 +209,11 @@ async def get_marketplace_skills():
 
 @app.post("/api/skills/install/{skill_id}")
 async def install_skill(skill_id: str):
-    return skill_manager.install_skill(skill_id)
+    return await asyncio.to_thread(skill_manager.install_skill, skill_id)
 
 @app.delete("/api/skills/uninstall/{skill_id}")
 async def uninstall_skill(skill_id: str):
-    result = skill_manager.uninstall_skill(skill_id)
+    result = await asyncio.to_thread(skill_manager.uninstall_skill, skill_id)
     await crone_daemon.broadcast_event("skills_updated")
     return result
 
@@ -135,7 +221,7 @@ async def uninstall_skill(skill_id: str):
 async def upload_skill(file: UploadFile = File(...)):
     contents = await file.read()
     name = file.filename or f"skill_{int(time.time())}.py"
-    result = skill_manager.save_skill(name, contents.decode('utf-8'))
+    result = await asyncio.to_thread(skill_manager.save_skill, name, contents.decode('utf-8'))
     await crone_daemon.broadcast_event("skills_updated")
     return result
 
@@ -203,7 +289,7 @@ async def websocket_studio_graph_stream(websocket: WebSocket, execution_id: str,
 
 @app.post("/api/skills/save")
 async def save_skill(req: SkillSaveRequest):
-    result = skill_manager.save_skill(req.name, req.code)
+    result = await asyncio.to_thread(skill_manager.save_skill, req.name, req.code)
     await crone_daemon.broadcast_event("skills_updated")
     return result
 
@@ -231,7 +317,7 @@ class StudioHandshakeRequest(BaseModel):
 
 class StudioFileRequest(BaseModel):
     project_id: str
-    session_id: str
+    session_id: str = ""
     path: str
     content: Optional[str] = None
     expected_hash: Optional[str] = None
@@ -239,12 +325,12 @@ class StudioFileRequest(BaseModel):
 
 class StudioRollbackRequest(BaseModel):
     project_id: str
-    session_id: str
+    session_id: str = ""
     snapshot_id: str
 
 class StudioRenameRequest(BaseModel):
     project_id: str
-    session_id: str
+    session_id: str = ""
     old_path: str
     new_path: str
     confirmed: bool = False
@@ -252,7 +338,7 @@ class StudioRenameRequest(BaseModel):
 
 class StudioDeleteRequest(BaseModel):
     project_id: str
-    session_id: str
+    session_id: str = ""
     path: str
     confirmed: bool = False
     check_only: bool = False
@@ -267,16 +353,16 @@ async def studio_handshake(req: StudioHandshakeRequest):
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/studio/file/read")
-async def studio_read_file(project_id: str, path: str, session_id: str):
-    """P4-A & P4-X1: Isolated read with Identity Verification."""
+async def studio_read_file(project_id: str, path: str, session_id: str = ""):
+    """P4-A & P4-X1: Isolated read (Non-blocking)."""
     try:
-        studio_session_manager.verify_identity(project_id, session_id)
-        content = studio_file_service.read_proxy(project_id, path, session_id)
+        await asyncio.to_thread(studio_session_manager.verify_identity, project_id, session_id)
+        content = await asyncio.to_thread(studio_file_service.read_proxy, project_id, path, session_id)
         
         # Conflict Guard Baseline
         from backend.studio.version_service import studio_version_service
         abs_path = os.path.join(studio_file_service.draft_dir, project_id, path)
-        f_hash = studio_version_service._calculate_hash(abs_path)
+        f_hash = await asyncio.to_thread(studio_version_service._calculate_hash, abs_path)
         snap_id = studio_version_service.current_snapshot_id.get(project_id)
         
         return {"status": "success", "content": content, "hash": f_hash, "snapshot_id": snap_id}
@@ -285,10 +371,11 @@ async def studio_read_file(project_id: str, path: str, session_id: str):
 
 @app.post("/api/studio/file/write")
 async def studio_write_file(req: StudioFileRequest):
-    """P4-A & P4-X1: Isolated write with Identity Verification."""
+    """P4-A & P4-X1: Isolated write (Non-blocking)."""
     try:
-        studio_session_manager.verify_identity(req.project_id, req.session_id)
-        studio_file_service.write_proxy(
+        await asyncio.to_thread(studio_session_manager.verify_identity, req.project_id, req.session_id)
+        await asyncio.to_thread(
+            studio_file_service.write_proxy,
             req.project_id, 
             req.path, 
             req.content or "", 
@@ -301,11 +388,11 @@ async def studio_write_file(req: StudioFileRequest):
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/studio/file/list")
-async def studio_list_files(project_id: str, session_id: str, rel_path: str = ""):
-    """P4-A & P4-X1: Isolated list with Identity Verification."""
+async def studio_list_files(project_id: str, session_id: str = "", path: str = ""):
+    """P4-A & P4-X1: Isolated list (Non-blocking)."""
     try:
-        studio_session_manager.verify_identity(project_id, session_id)
-        files = studio_file_service.list_files(project_id, rel_path)
+        await asyncio.to_thread(studio_session_manager.verify_identity, project_id, session_id)
+        files = await asyncio.to_thread(studio_file_service.list_files, project_id, path)
         return {"status": "success", "files": files}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -426,7 +513,7 @@ async def studio_open_ide(req: StudioIdeRequest):
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/studio/project/metadata")
-async def studio_get_metadata(project_id: str, session_id: str):
+async def studio_get_metadata(project_id: str, session_id: str = ""):
     try:
         studio_session_manager.verify_identity(project_id, session_id)
         meta = studio_project_service.get_project_metadata(project_id)
@@ -615,21 +702,92 @@ async def report_robotic_response():
 
 # --- CONFIG MANAGEMENT ENDPOINTS ---
 
+async def _bg_config_refresh(config: MIAConfig, version: int):
+    global current_refresh_version
+    
+    # Versioned check: Jangan proses jika ada versi yang lebih baru yang sudah masuk
+    if version < current_refresh_version:
+        print(f"[Orchestrator] Skipping stale refresh version: {version} (Latest is {current_refresh_version})")
+        return
+
+    print(f"[Orchestrator] Executing versioned refresh: {version}")
+    
+    try:
+        # Rebuild Brain (Sync logic inside)
+        brain_orchestrator._refresh_brain_nodes()
+        
+        # Check cancellation point
+        await asyncio.sleep(0) 
+        
+        # Sync Mode Hub
+        mode_hub.set_mode(MIAMode(config.os_mode))
+        
+        # Broadcast (Async)
+        await crone_daemon.broadcast_config_update()
+        print(f"[Orchestrator] V{version} Refresh Complete")
+        
+    except asyncio.CancelledError:
+        print(f"[Orchestrator] V{version} Refresh Cancelled by newer version")
+        raise
+    except Exception as e:
+        print(f"[Orchestrator] V{version} Refresh Failed: {e}")
+
 @app.get("/api/config")
 async def get_config():
     return load_config()
 
 @app.post("/api/config")
 async def update_config(config: MIAConfig):
-    print(f"[Config] Received update request. Providers: {list(config.providers.keys())}")
-    save_config(config)
+    global current_refresh_version, _active_refresh_task
+    from runtime_logger import runtime_logger
+    start = time.time()
     
-    # HOT RELOAD: Instantly sync brain with new config
-    brain_orchestrator._refresh_brain_nodes()
+    current_refresh_version += 1
+    v = current_refresh_version
     
-    mode_hub.set_mode(MIAMode(config.os_mode))
-    await crone_daemon.broadcast_config_update()
-    return {"status": "success"}
+    # Cancellation-Aware: Batalkan task lama jika masih berjalan
+    if _active_refresh_task and not _active_refresh_task.done():
+        _active_refresh_task.cancel()
+        try:
+            await _active_refresh_task
+        except asyncio.CancelledError:
+            pass
+    
+    try:
+        print(f"[Config] Received update request V{v}. Persisting...")
+        save_config(config)
+        
+        # Simpan task baru ke global tracker (Async context safe)
+        _active_refresh_task = asyncio.create_task(_bg_config_refresh(config, v))
+        
+        runtime_logger.log_metric("update_config_latency", (time.time() - start) * 1000)
+        return {"status": "success", "version": v}
+    except Exception as e:
+        print(f"[Config] Critical failure during save/sync: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/system/metrics")
+async def get_system_metrics():
+    """STAGE 3: Real-time System Health Monitoring."""
+    import anyio
+    from runtime_logger import runtime_logger
+    
+    try:
+        limiter = anyio.to_thread.current_default_thread_limiter()
+        return {
+            "status": "healthy",
+            "uptime": time.time() - lifespan_start_time,
+            "threadpool": {
+                "total": limiter.total_tokens,
+                "borrowed": limiter.borrowed_tokens,
+                "available": limiter.total_tokens - limiter.borrowed_tokens
+            },
+            "history": runtime_logger.get_metrics_summary()
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # --- PROVIDER MANAGEMENT ENDPOINTS ---
 
@@ -900,14 +1058,26 @@ async def upload_background(file: UploadFile = File(...)):
     target_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "assets", "chatbg")
     os.makedirs(target_dir, exist_ok=True)
     
-    file_path = os.path.join(target_dir, file.filename)
+    import re
+    original_name = file.filename or f"background_{int(time.time())}"
+    base_name, ext = os.path.splitext(original_name)
+    safe_base = re.sub(r"[^a-zA-Z0-9._-]+", "-", base_name).strip("-") or "background"
+    safe_ext = re.sub(r"[^a-zA-Z0-9.]+", "", ext) or ".bin"
+    version = int(time.time() * 1000)
+    safe_filename = f"{safe_base}-{version}{safe_ext}"
+    file_path = os.path.join(target_dir, safe_filename)
     
-    # Save the file
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Save the file in a thread pool to avoid blocking the event loop
+    import anyio
+    
+    def save_file_sync(file_obj, path):
+        with open(path, "wb") as buffer:
+            shutil.copyfileobj(file_obj, buffer)
+            
+    await anyio.to_thread.run_sync(save_file_sync, file.file, file_path)
         
     # Return the URL path that the frontend can use
-    return {"status": "success", "url": f"/assets/chatbg/{file.filename}"}
+    return {"status": "success", "url": f"/assets/chatbg/{safe_filename}?v={version}"}
 
 @app.post("/api/intimacy/toggle")
 async def toggle_intimacy(active: bool):
@@ -1005,8 +1175,11 @@ async def trigger_crone_job(job_id: str):
 # --- CHAT HISTORY (CRUD) ENDPOINTS ---
 
 @app.get("/api/chat/history")
-async def get_chat_history():
-    return {"history": history_manager.get_history()}
+async def get_chat_history(limit: int = 50, offset: int = 0):
+    """STAGE 5: Optimized Non-Blocking History Loading."""
+    # Run sync DB call in a separate thread to keep Event Loop free
+    history = await asyncio.to_thread(history_manager.get_history, limit=limit)
+    return {"history": history}
 
 @app.delete("/api/chat/history")
 async def clear_chat_history():
@@ -1097,29 +1270,39 @@ IAM_MIA_DIR = os.path.join(os.path.dirname(__file__), "iam_mia")
 
 @app.get("/api/memory/files")
 async def list_memory_files():
-    """List all markdown files in the iam_mia directory."""
-    if not os.path.exists(IAM_MIA_DIR):
-        os.makedirs(IAM_MIA_DIR, exist_ok=True)
-    files = [f for f in os.listdir(IAM_MIA_DIR) if f.endswith('.md')]
+    """List all markdown files in the iam_mia directory (Non-blocking)."""
+    def sync_list():
+        if not os.path.exists(IAM_MIA_DIR):
+            os.makedirs(IAM_MIA_DIR, exist_ok=True)
+        return [f for f in os.listdir(IAM_MIA_DIR) if f.endswith('.md')]
+    
+    files = await asyncio.to_thread(sync_list)
     return {"files": files}
 
 @app.get("/api/memory/file")
 async def get_memory_file(name: str):
-    """Read a specific markdown file."""
-    filepath = os.path.join(IAM_MIA_DIR, name)
-    if os.path.exists(filepath):
-        with open(filepath, "r", encoding="utf-8") as f:
-            return {"content": f.read()}
-    return {"content": ""}
+    """Read a specific markdown file (Non-blocking)."""
+    def sync_read():
+        filepath = os.path.join(IAM_MIA_DIR, name)
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                return f.read()
+        return ""
+    
+    content = await asyncio.to_thread(sync_read)
+    return {"content": content}
 
 @app.post("/api/memory/file")
 async def save_memory_file(req: MemorySaveRequest):
-    """Save content to a markdown file."""
-    if not os.path.exists(IAM_MIA_DIR):
-        os.makedirs(IAM_MIA_DIR, exist_ok=True)
-    filepath = os.path.join(IAM_MIA_DIR, req.filename)
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(req.content)
+    """Save content to a markdown file (Non-blocking)."""
+    def sync_save():
+        if not os.path.exists(IAM_MIA_DIR):
+            os.makedirs(IAM_MIA_DIR, exist_ok=True)
+        filepath = os.path.join(IAM_MIA_DIR, req.filename)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(req.content)
+    
+    await asyncio.to_thread(sync_save)
     return {"status": "success"}
 
 # --- WEBSOCKET ENDPOINT (For Home Hub / Heartbeat) ---
@@ -1165,6 +1348,10 @@ async def websocket_heartbeat(websocket: WebSocket):
                 import json
                 try:
                     payload = json.loads(data)
+                    if payload.get("type") == "ping":
+                        await websocket.send_json({"type": "pong", "sent_at": payload.get("sent_at")})
+                        continue
+                        
                     user_text = payload.get("content", data)
                     client_id = payload.get("client_id")
                 except Exception:
@@ -1172,8 +1359,8 @@ async def websocket_heartbeat(websocket: WebSocket):
                     client_id = None
                 
                 try:
-                    # Persist User Message (Patch C WAL mode makes this safe)
-                    msg_id = history_manager.add_message("You", user_text)
+                    # Persist User Message (Non-blocking thread)
+                    msg_id = await asyncio.to_thread(history_manager.add_message, "You", user_text)
                     await crone_daemon.broadcast_event("history_updated")
                     
                     # --- CMD / MENTION PARSER ---
@@ -1183,7 +1370,7 @@ async def websocket_heartbeat(websocket: WebSocket):
                     if commands:
                         cmd = commands[0]
                         if cmd == "/clear":
-                            history_manager.clear_history()
+                            await asyncio.to_thread(history_manager.clear_history)
                             await memory_orchestrator.clear_memory()
                             await websocket.send_json({"type": "clear", "content": ""})
                             await crone_daemon.broadcast_event("history_updated")
@@ -1239,9 +1426,9 @@ async def websocket_heartbeat(websocket: WebSocket):
                                 # OUTBOUND ENFORCEMENT: Fail-Closed Full Substitution
                                 response_text = emotion_manager.soft_deflect_response()
 
-                        # Persist MIA Message
-                        mia_msg_id = history_manager.add_message("MIA", response_text)
-                        pass # Memory is synced via history_manager.py
+                        if response_text:
+                            mia_msg_id = await asyncio.to_thread(history_manager.add_message, "MIA", response_text)
+                            pass # Memory is synced via history_manager.py
                         
                         await websocket.send_json({"type": "status", "content": "Speaking..."})
                         current_state = emotion_manager.get_state()

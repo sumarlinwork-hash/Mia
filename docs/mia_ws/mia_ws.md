@@ -25,6 +25,8 @@ Semua pesan WebSocket diproses melalui `WebSocketContext.tsx` dan dipublikasikan
 |------------|-----------|---------------|
 | `history_updated` | Ada pesan baru (User/MIA) atau riwayat dihapus. | `invalidateQueries(['history'])` |
 | `config_update` | Pengaturan sistem berubah. | `invalidateQueries(['config'])` |
+| `skills_updated` | Daftar skill/aplikasi terinstal berubah. | `invalidateQueries(['skills'])` |
+| `intimacy_updated` | Status/pengaturan keintiman berubah. | `invalidateQueries(['intimacy'])` |
 | `status` | Update tahap eksekusi (Thinking, Speaking, dll). | Update UI Thinking Indicator |
 | `audio_chunk` | Potongan suara (TTS) untuk diputar real-time. | `playAudio(chunk)` |
 | `health` | Status kesehatan koneksi Backend & Brain. | Update LED Status (LNK/BRN) |
@@ -35,9 +37,8 @@ Semua pesan WebSocket diproses melalui `WebSocketContext.tsx` dan dipublikasikan
 ## 3. Implementasi Teknis
 
 ### Frontend: WebSocketContext.tsx
-Untuk menghindari duplikasi eksekusi, MIA menggunakan validasi pada dispatcher:
+Koneksi utama diarahkan ke endpoint `/ws/chat/heartbeat`. MIA menggunakan validasi pada dispatcher:
 ```tsx
-// Memastikan event umum tidak bentrok dengan event spesifik 'message'
 WS_EVENT_BUS.dispatchEvent(new CustomEvent('ws:message', { detail: data }));
 if (data.type && data.type !== 'message') {
   WS_EVENT_BUS.dispatchEvent(new CustomEvent(`ws:${data.type}`, { detail: data }));
@@ -54,20 +55,19 @@ useWebSocketEvent('history_updated', () => {
 });
 ```
 
-### Backend: Broadcast Signal (`main.py`)
+### Backend: Broadcast Signal (`crone_daemon.py` & `main.py`)
 Setiap perubahan data yang persisten harus diikuti oleh broadcast signal:
 ```python
-history_manager.add_message("MIA", response_text)
 await crone_daemon.broadcast_event("history_updated")
 ```
 
 ---
 
 ## 4. Penanganan Real-time (Pacing)
-Meskipun teks dikirim via REST, **Status** dan **Audio** tetap dikirim via WebSocket untuk meminimalkan latensi:
+Meskipun teks dikirim via REST (optimistic/fetch), **Status** dan **Audio** tetap dikirim via WebSocket untuk meminimalkan latensi:
 1. Backend mengirim sinyal `history_updated`.
 2. Backend secara paralel mengirimkan `audio_chunk` secara streaming.
-3. Frontend mengambil teks via REST sambil memutar audio yang masuk via WS.
+3. Frontend mengambil teks via REST (atau update optimis) sambil memutar audio yang masuk via WS.
 
 ---
 *Dokumen ini bersifat Living Document dan harus diperbarui setiap ada perubahan arsitektur komunikasi.*

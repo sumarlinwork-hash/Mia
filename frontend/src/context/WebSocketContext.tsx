@@ -47,6 +47,14 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        
+        // Handle Pong for RTT calculation
+        if (data.type === 'pong') {
+          const rtt = performance.now() - (data.sent_at || 0);
+          WS_EVENT_BUS.dispatchEvent(new CustomEvent('ws:latency', { detail: { rtt } }));
+          return;
+        }
+
         WS_EVENT_BUS.dispatchEvent(new CustomEvent('ws:message', { detail: data }));
         if (data.type && data.type !== 'message') {
           WS_EVENT_BUS.dispatchEvent(new CustomEvent(`ws:${data.type}`, { detail: data }));
@@ -56,6 +64,22 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       }
     };
   }, []);
+
+  // Periodic Ping for RTT measurement
+  useEffect(() => {
+    if (status !== 'connected') return;
+    
+    const interval = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ 
+          type: 'ping', 
+          sent_at: performance.now() 
+        }));
+      }
+    }, 10000);
+    
+    return () => clearInterval(interval);
+  }, [status]);
 
   const send = useCallback((msg: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

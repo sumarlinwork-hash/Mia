@@ -680,23 +680,32 @@ If you use a tool, I will execute it and provide the result in the next turn.
         method = data.get("method")
         args = data.get("args", {})
         
-        if method == "screenshot":
-            img_bytes = agent_tools.take_screenshot_bytes()
-            b64_data = base64.b64encode(img_bytes).decode('utf-8')
-            return "Screenshot captured and sent to your vision sensor.", {"mime": "image/png", "data": b64_data}
-        elif method == "click":
-            return agent_tools.click(args.get("x", 0), args.get("y", 0)), None
-        elif method == "type":
-            return agent_tools.type_text(args.get("text", "")), None
-        elif method == "press":
-            return agent_tools.press_key(args.get("key", "enter")), None
-        elif method == "terminal":
-            return agent_tools.run_command(args.get("command", "")), None
-        elif method == "save_skill":
-            return str(agent_tools.save_skill(args.get("name", ""), args.get("code", ""))), None
-        elif method == "execute_skill":
-            res = await agent_tools.execute_skill(args.get("name", ""), args.get("args", {}))
-            return str(res), None
+        try:
+            if method == "screenshot":
+                img_bytes = await asyncio.to_thread(agent_tools.take_screenshot_bytes)
+                b64_data = base64.b64encode(img_bytes).decode('utf-8')
+                return "Screenshot captured and sent to your vision sensor.", {"mime": "image/png", "data": b64_data}
+            elif method == "click":
+                res = await asyncio.to_thread(agent_tools.click, args.get("x", 0), args.get("y", 0))
+                return str(res), None
+            elif method == "type":
+                res = await asyncio.to_thread(agent_tools.type_text, args.get("text", ""))
+                return str(res), None
+            elif method == "press":
+                res = await asyncio.to_thread(agent_tools.press_key, args.get("key", "enter"))
+                return str(res), None
+            elif method == "terminal":
+                res = await asyncio.to_thread(agent_tools.run_command, args.get("command", ""))
+                return str(res), None
+            elif method == "save_skill":
+                res = await asyncio.to_thread(agent_tools.save_skill, args.get("name", ""), args.get("code", ""))
+                return str(res), None
+            elif method == "execute_skill":
+                res = await agent_tools.execute_skill(args.get("name", ""), args.get("args", {}))
+                return str(res), None
+        except Exception as e:
+            return f"Tool Execution Error: {str(e)}", None
+            
         return "Unknown tool method.", None
 
     async def _fallback_execute(self, visited: list[str], system_prompt: str, context: str, prompt: str, images: list, last_error: str, on_status: Optional[Callable] = None, depth: int = 0) -> str:

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useWebSocket, useWebSocketMessage, useWebSocketEvent, type WSMessage } from './hooks/useWebSocket';
 import { useMemoryFiles, useIntimacyStatus, useChatHistory, queryKeys } from './hooks/useMIAQueries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -16,7 +16,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { useConfig } from './hooks/useConfig';
-import type { MIAConfig } from './types/config';
+
 
 interface WaveformBarProps {
   level: number;
@@ -279,7 +279,7 @@ export default function Home() {
   const paletteMenuItems = [
     { icon: <Heart size={18} className={intimacyActive ? "text-pink-500 fill-pink-500" : ""} />, name: intimacyActive ? "Deactivate Soulmate" : "Activate Soulmate", desc: "Phase Utama Keintiman", action: toggleIntimacy },
     { icon: <Zap size={18} />, name: "Kelola Aplikasi", desc: "Lihat kemampuan MIA", link: "/settings" },
-    { icon: <ImageIcon size={18} />, name: "Change Background", desc: "Appearance settings", link: "/settings" },
+    { icon: <ImageIcon size={18} />, name: "Change Background", desc: "Appearance settings", link: "/settings?tab=appearance" },
     { icon: <Database size={18} />, name: "Clear Memory", desc: "Reset chat history", action: () => { setInput("/clear"); sendMessage(); setShowPalette(false); } },
     { icon: <XCircle size={18} />, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
   ];
@@ -299,7 +299,8 @@ export default function Home() {
       queryClient.setQueryData(queryKeys.history, (old: Message[] = []) => {
         // 1. Reconcile user's temporary message ID with the persistent DB ID
         const nextHistory = old.map((m: Message) => {
-          if (data.client_id && m.id === data.client_id) {
+          const clientId = data.client_id as string | number | undefined;
+          if (clientId && m.id?.toString() === clientId.toString()) {
             return { ...m, id: data.user_msg_id as number };
           }
           return m;
@@ -768,7 +769,8 @@ export default function Home() {
               msg={msg}
               isMIA={msg.role === 'MIA'}
               isSys={msg.role === 'System'}
-              config={config}
+              bubbleColorMia={config?.appearance?.bubble_color_mia || '#00ffcc'}
+              bubbleColorUser={config?.appearance?.bubble_color_user || '#fa25a1'}
               onDelete={handleDelete}
               onEdit={handleEdit}
               onLike={handleLike}
@@ -984,7 +986,8 @@ interface ChatBubbleProps {
   msg: Message;
   isMIA: boolean;
   isSys: boolean;
-  config: MIAConfig;
+  bubbleColorMia: string;
+  bubbleColorUser: string;
   onDelete: (id: number) => void;
   onEdit: (id: number, content: string) => void;
   onLike: (id: number, liked: number) => void;
@@ -996,7 +999,7 @@ interface ChatBubbleProps {
   onCancelEdit: () => void;
 }
 
-function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin, isEditing, editValue, onEditChange, onSaveEdit, onCancelEdit }: ChatBubbleProps) {
+const ChatBubble = memo(({ msg, isMIA, isSys, bubbleColorMia, bubbleColorUser, onDelete, onEdit, onLike, onPin, isEditing, editValue, onEditChange, onSaveEdit, onCancelEdit }: ChatBubbleProps) => {
   const [isCopied, setIsCopied] = useState(false);
 
   // Helper to determine text color based on background luminance
@@ -1034,7 +1037,7 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
     }
   };
 
-  const bubbleBg = isMIA ? config.appearance.bubble_color_mia : (isSys ? 'rgba(0,0,0,0.3)' : config.appearance.bubble_color_user);
+  const bubbleBg = isMIA ? bubbleColorMia : (isSys ? 'rgba(0,0,0,0.3)' : bubbleColorUser);
   const textColor = isSys ? 'text-secondary' : (getContrastYIQ(bubbleBg) === 'black' ? 'text-black' : 'text-white');
   const mutedTextColor = getContrastYIQ(bubbleBg) === 'black' ? 'text-black/50' : 'text-white/50';
 
@@ -1050,12 +1053,12 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
   return (
     <div className={`flex ${isMIA || isSys ? 'justify-start' : 'justify-end'} group relative mb-2 animate-chat-spring`}>
       <div
-        className={`max-w-[85%] p-6 rounded-[2.5rem] backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border transition-all duration-500 hover:scale-[1.01] ${isMIA ? 'border-primary/30 rounded-tl-none' : isSys ? 'bg-black/40 border-secondary/20 italic' : 'border-white/20 rounded-tr-none'
+        className={`max-w-[85%] p-6 rounded-[2.5rem] bg-black/80 backdrop-blur-md shadow-xl border transition-all duration-500 hover:scale-[1.01] ${isMIA ? 'border-primary/30 rounded-tl-none' : isSys ? 'bg-black/40 border-secondary/20 italic' : 'border-white/20 rounded-tr-none'
           } ${textColor}`}
         style={{
           backgroundColor: bubbleBg,
           background: !isSys ? `linear-gradient(145deg, ${bubbleBg}, ${bubbleBg}dd)` : undefined,
-          boxShadow: isMIA ? `0 10px 40px -10px rgba(0, 255, 204, 0.2), 0 20px 50px rgba(0,0,0,0.3)` : `0 20px 50px rgba(0,0,0,0.3)`
+          boxShadow: isMIA ? `0 4px 20px -5px rgba(0, 255, 204, 0.2)` : `0 4px 20px rgba(0,0,0,0.2)`
         }}
       >
         <div className={`flex items-center justify-between mb-4 ${mutedTextColor} font-mono text-[10px] uppercase tracking-[0.3em]`}>
@@ -1174,4 +1177,4 @@ function ChatBubble({ msg, isMIA, isSys, config, onDelete, onEdit, onLike, onPin
       </div>
     </div>
   );
-}
+});

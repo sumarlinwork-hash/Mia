@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Activity, Clock, Server, Terminal, RefreshCw } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from './hooks/useMIAQueries';
 
 interface CroneJob {
   id: string;
@@ -21,44 +23,29 @@ interface CroneStatus {
 
 export default function Crone() {
   const { config } = useConfig();
-  const [status, setStatus] = useState<CroneStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: status, isLoading: loading, refetch: fetchStatus } = useQuery<CroneStatus>({
+    queryKey: queryKeys.crone,
+    queryFn: async () => {
+      const res = await fetch('/api/crone/status');
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
   const [lastRefresh, setLastRefresh] = useState<string>('');
 
-  const fetchStatus = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/crone/status');
-      const data = await res.json();
-      setStatus(data);
-      setLastRefresh(new Date().toLocaleTimeString('id-ID'));
-    } catch (e) {
-      console.error('[Crone] Failed to fetch status:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    if (status) setLastRefresh(new Date().toLocaleTimeString('id-ID'));
+  }, [status]);
 
-  const controlJob = async (id: string, action: 'pause' | 'resume' | 'trigger') => {
+  const controlJob = useCallback(async (id: string, action: 'pause' | 'resume' | 'trigger') => {
     try {
       await fetch(`/api/crone/${action}/${id}`, { method: 'POST' });
       fetchStatus();
     } catch (e) {
       console.error(`[Crone] Failed to ${action} job:`, e);
     }
-  };
-
-  useEffect(() => {
-    // Avoid synchronous setState by deferring the first fetch
-    const timeout = setTimeout(fetchStatus, 0);
-    
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchStatus, 30_000);
-    return () => {
-      clearTimeout(timeout);
-      clearInterval(interval);
-    };
-  }, []);
+  }, [fetchStatus]);
 
   const getStatusDot = (s: string) => {
     if (s === 'Active') return 'bg-primary shadow-[0_0_8px_var(--color-primary)]';

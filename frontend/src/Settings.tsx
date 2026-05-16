@@ -5,7 +5,6 @@ import {
   CheckCircle2, XCircle, Info, RefreshCcw, Star
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import ThemeTab from './components/settings/ThemeTab';
 import { useConfig } from './hooks/useConfig';
 import { useInstalledSkills, queryKeys } from './hooks/useMIAQueries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -19,6 +18,23 @@ import ResilienceDashboard from './ResilienceDashboard';
 const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Groq"];
 const PURPOSES = ["Inti Logika & Pikiran", "Persepsi Visual & Imajinasi", "Kreativitas & Kreasi Media", "Analisis Data & Pengetahuan", "Khusus Intimacy & Uncensored"];
 const COSTS = ["Gratis berlimit", "Berbayar", "Lokal"];
+const BACKGROUND_TYPES = ['video', 'image', 'color', 'themes'] as const;
+type BackgroundType = MIAConfig['appearance']['background_type'];
+
+const BACKGROUND_THEMES = [
+  { id: 'aurora', label: 'Aurora', background: 'radial-gradient(circle at 20% 20%, rgba(0, 255, 204, 0.35), transparent 34%), radial-gradient(circle at 80% 10%, rgba(250, 37, 161, 0.25), transparent 32%), linear-gradient(135deg, #030712 0%, #111827 48%, #050505 100%)' },
+  { id: 'graphite', label: 'Graphite', background: 'linear-gradient(135deg, #050505 0%, #171717 52%, #262626 100%)' },
+  { id: 'midnight', label: 'Midnight', background: 'linear-gradient(135deg, #020617 0%, #172554 42%, #111827 100%)' },
+  { id: 'sakura', label: 'Sakura', background: 'radial-gradient(circle at 80% 15%, rgba(251, 113, 133, 0.32), transparent 36%), linear-gradient(135deg, #1f1117 0%, #3b2430 48%, #09090b 100%)' },
+];
+
+const inferBackgroundType = (value: string): BackgroundType => {
+  const path = value.split('?')[0].toLowerCase();
+  if (path.startsWith('#')) return 'color';
+  if (/\.(mp4|webm|ogg|mov|m4v)$/.test(path)) return 'video';
+  if (/\.(jpg|jpeg|png|gif|webp|avif|bmp|svg)$/.test(path)) return 'image';
+  return 'image';
+};
 
 const PRESETS: Record<string, Partial<ProviderConfig & { endpoint: string }>> = {
   "OpenAI": { protocol: "OpenAI Compatible", base_url: "https://api.openai.com", endpoint: "/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
@@ -65,8 +81,9 @@ export default function Settings() {
     }
   }, [location]);
   const [isSaving, setIsSaving] = useState(false);
-  const [editName, setEditName] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [editName, setEditName] = useState<string | null>(null);
   const { data: skills = [] } = useInstalledSkills();
   const queryClient = useQueryClient();
 
@@ -138,12 +155,93 @@ export default function Settings() {
     return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   };
 
+  const applyAppearance = (appearance: MIAConfig['appearance']) => {
+    if (!config) return;
+    updateConfigLocal({ ...config, appearance });
+  };
+
+  const handleBackgroundTypeChange = (backgroundType: BackgroundType) => {
+    if (!config) return;
+    const nextUrl =
+      backgroundType === 'color' ? (config.appearance.background_url.startsWith('#') ? config.appearance.background_url : '#0a0a0a') :
+      backgroundType === 'themes' ? (BACKGROUND_THEMES.some(theme => theme.id === config.appearance.background_url) ? config.appearance.background_url : BACKGROUND_THEMES[0].id) :
+      config.appearance.background_url;
+
+    applyAppearance({
+      ...config.appearance,
+      background_type: backgroundType,
+      background_url: nextUrl,
+    });
+  };
+
+  const handleBackgroundUrlChange = (value: string) => {
+    if (!config) return;
+    const backgroundType = value.trim() ? inferBackgroundType(value.trim()) : config.appearance.background_type;
+    applyAppearance({
+      ...config.appearance,
+      background_url: value,
+      background_type: backgroundType,
+    });
+  };
+
+  const handleLocalBackgroundUpload = () => {
+    if (!config) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = config.appearance.background_type === 'video' ? 'video/*' : 'image/*';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file || !config) return;
+
+      const previousConfig = config;
+      const detectedType: BackgroundType = file.type.startsWith('video/') ? 'video' : 'image';
+      const localPreviewUrl = URL.createObjectURL(file);
+      updateConfigLocal({
+        ...config,
+        appearance: {
+          ...config.appearance,
+          background_url: localPreviewUrl,
+          background_type: detectedType,
+        }
+      });
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'chatbg');
+      setIsUploading(true);
+
+      try {
+        const res = await fetch('/api/upload-bg', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok || !data.url) throw new Error(data.detail || 'Upload failed');
+
+        updateConfigLocal({
+          ...previousConfig,
+          appearance: {
+            ...previousConfig.appearance,
+            background_url: data.url,
+            background_type: detectedType,
+          }
+        });
+        addToast("Background baru tampil. Tekan Simpan untuk permanen.", "success");
+      } catch {
+        setGlobalConfig(previousConfig);
+        addToast("Upload gagal, background dikembalikan", "error");
+      } finally {
+        URL.revokeObjectURL(localPreviewUrl);
+        setIsUploading(false);
+      }
+    };
+    input.click();
+  };
+
   useEffect(() => {
     let isMounted = true;
 
     if (config && !originalConfig && isMounted) {
       setTimeout(() => {
-        if (isMounted) setOriginalConfig(config);
+        // Deep clone to prevent reference sharing
+        if (isMounted) setOriginalConfig(JSON.parse(JSON.stringify(config)));
       }, 0);
     }
 
@@ -156,14 +254,6 @@ export default function Settings() {
     setHasChanges(JSON.stringify(newConf) !== JSON.stringify(originalConfig));
   };
 
-  const handleReset = () => {
-    if (originalConfig) {
-      updateConfigLocal(originalConfig);
-      setHasChanges(false);
-      addToast("Pengaturan dikembalikan ke awal", "info");
-    }
-  };
-
   const handleSave = async (updatedConfig = config) => {
     if (!updatedConfig) return;
     setIsSaving(true);
@@ -171,21 +261,22 @@ export default function Settings() {
       const res = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedConfig),
+        body: JSON.stringify(updatedConfig)
       });
-      
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
+        const errorData = await res.json().catch(() => ({ detail: "Unknown server error" }));
         throw new Error(errorData.detail || "Server rejected config update");
       }
-
-      setGlobalConfig({ ...updatedConfig });
-      setOriginalConfig({ ...updatedConfig });
+      
+      setOriginalConfig(JSON.parse(JSON.stringify(updatedConfig)));
       setHasChanges(false);
-      addToast("Konfigurasi disimpan!", "success");
+      addToast("Konfigurasi berhasil disimpan secara permanen", "success");
     } catch (err) {
-      const error = err as Error;
-      addToast(`Gagal menyimpan: ${error.message}`, "error");
+      addToast("Gagal menyimpan: " + (err instanceof Error ? err.message : "Internal Error"), "error");
+      // Rollback to original config to keep UI consistent with backend state
+      if (originalConfig) {
+        setGlobalConfig(originalConfig);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -392,7 +483,7 @@ export default function Settings() {
             </Link>
             <h1 className="text-3xl font-bold text-white tracking-tight">System Settings</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             {view === 'list' ? (
               <button
                 onClick={() => setView('add')}
@@ -459,98 +550,130 @@ export default function Settings() {
 
 
             {view === 'list' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {Object.entries(config.providers).map(([name, p]: [string, ProviderConfig]) => (
-                  <div key={name} className={`relative p-6 rounded-3xl border backdrop-blur-3xl transition-all group ${p.is_active ? 'border-white/10 bg-black/40' : 'border-white/5 bg-black/20 opacity-60'}`}>
-                    <div className="flex justify-between items-start mb-6">
-                      <div className="p-3 rounded-2xl bg-primary/10 text-primary">
-                        <Zap size={24} className={p.is_active ? "animate-pulse" : ""} />
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="group relative">
-                          <Info size={14} className="text-white/20 cursor-help" />
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-black/90 border border-white/10 rounded-lg text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                            Protocol: {p.protocol} | Purpose: {p.purpose}
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  {Object.entries(config.providers).map(([name, p]: [string, ProviderConfig]) => (
+                    <div key={name} className={`relative p-6 rounded-3xl border backdrop-blur-3xl transition-all group ${p.is_active ? 'border-white/10 bg-black/40' : 'border-white/5 bg-black/20 opacity-60'}`}>
+                      <div className="flex justify-between items-start mb-6">
+                        <div className="p-3 rounded-2xl bg-primary/10 text-primary">
+                          <Zap size={24} className={p.is_active ? "animate-pulse" : ""} />
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="group relative">
+                            <Info size={14} className="text-white/20 cursor-help" />
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-black/90 border border-white/10 rounded-lg text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                              Protocol: {p.protocol} | Purpose: {p.purpose}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => startEdit(name, p)} className="p-2 text-white/40 hover:text-white"><Pencil size={18} /></button>
+                            <button onClick={() => deleteProvider(name)} className="p-2 text-white/40 hover:text-error"><Trash2 size={18} /></button>
                           </div>
                         </div>
-                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => startEdit(name, p)} className="p-2 text-white/40 hover:text-white"><Pencil size={18} /></button>
-                          <button onClick={() => deleteProvider(name)} className="p-2 text-white/40 hover:text-error"><Trash2 size={18} /></button>
+                      </div>
+
+                      <div className="mb-6">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-xl font-bold text-white">{name}</h3>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 uppercase tracking-tighter">{p.cost_label}</span>
+                          {p.is_default && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary text-black uppercase tracking-tighter">DEFAULT</span>}
                         </div>
+                        <p className="text-xs text-white/40 font-mono">Model: {p.model_id}</p>
+                      </div>
 
-                      </div>
-                    </div>
-
-                    <div className="mb-6">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-xl font-bold text-white">{name}</h3>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 uppercase tracking-tighter">{p.cost_label}</span>
-                        {p.is_default && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary text-black uppercase tracking-tighter">DEFAULT</span>}
-                      </div>
-                      <p className="text-xs text-white/40 font-mono">Model: {p.model_id}</p>
-                    </div>
-
-                    <div className="space-y-2 mb-8 font-mono text-[11px] text-white/60">
-                      <div className="flex justify-between">
-                        <span>Purpose:</span>
-                        <span className="text-white/80">{p.purpose}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Latency(avg):</span>
-                        <span className="text-primary">{p.latency} ms</span>
-                      </div>
-                      {p.active_path && (
+                      <div className="space-y-2 mb-8 font-mono text-[11px] text-white/60">
                         <div className="flex justify-between">
-                          <span>Route Strategy:</span>
-                          <span className="text-amber-400 font-bold">{p.active_path}</span>
+                          <span>Purpose:</span>
+                          <span className="text-white/80">{p.purpose}</span>
                         </div>
-                      )}
-                      {p.health_status && p.health_status !== "Healthy" && (
                         <div className="flex justify-between">
-                          <span>Route Health:</span>
-                          <span className={
-                            p.health_status === "Fallback Active" ? "text-amber-400 font-bold" :
-                            p.health_status === "Degraded" ? "text-orange-500 font-bold" :
-                            "text-error font-bold"
-                          }>{p.health_status}</span>
+                          <span>Latency(avg):</span>
+                          <span className="text-primary">{p.latency} ms</span>
                         </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span>Health:</span>
-                        <span className={p.health_fail > 0 ? 'text-error' : 'text-green-400'}>
-                          OK {p.health_ok} / FAIL {p.health_fail}
-                        </span>
+                        {p.active_path && (
+                          <div className="flex justify-between">
+                            <span>Route Strategy:</span>
+                            <span className="text-amber-400 font-bold">{p.active_path}</span>
+                          </div>
+                        )}
+                        {p.health_status && p.health_status !== "Healthy" && (
+                          <div className="flex justify-between">
+                            <span>Route Health:</span>
+                            <span className={
+                              p.health_status === "Fallback Active" ? "text-amber-400 font-bold" :
+                              p.health_status === "Degraded" ? "text-orange-500 font-bold" :
+                              "text-error font-bold"
+                            }>{p.health_status}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span>Health:</span>
+                          <span className={p.health_fail > 0 ? 'text-error' : 'text-green-400'}>
+                            OK {p.health_ok} / FAIL {p.health_fail}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${p.is_active ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-white/20'}`} />
+                          <span className="text-xs font-bold text-white/90">Status: {p.is_active ? 'ON' : 'OFF'}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => testProvider(name)}
+                            disabled={activeTest === name}
+                            className="flex items-center gap-2 px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-[11px] font-bold text-white transition-all disabled:opacity-50"
+                          >
+                            <RefreshCcw size={12} className={activeTest === name ? "animate-spin" : ""} />
+                            {activeTest === name
+                              ? `Testing (${testCountdown}s)...`
+                              : 'Test'}
+                          </button>
+
+                          <div
+                            onClick={() => toggleProvider(name)}
+                            className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${p.is_active ? 'bg-primary' : 'bg-white/10'}`}
+                          >
+                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${p.is_active ? 'left-6' : 'left-1'}`} />
+                          </div>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${p.is_active ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-white/20'}`} />
-                        <span className="text-xs font-bold text-white/90">Status: {p.is_active ? 'ON' : 'OFF'}</span>
+                  ))}
+                </div>
+                
+                {/* Contextual Action Bar for Intelligence */}
+                {hasChanges && (
+                  <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-lg p-4 rounded-3xl bg-black/80 backdrop-blur-3xl border border-primary/30 flex items-center justify-between animate-in slide-in-from-bottom-10 duration-700 shadow-[0_32px_64px_rgba(0,0,0,0.8)] z-[200]">
+                    <div className="flex items-center gap-4 ml-2">
+                      <div className="p-2 rounded-full bg-primary/20 text-primary">
+                        <Zap size={20} className="animate-pulse" />
                       </div>
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => testProvider(name)}
-                          disabled={activeTest === name}
-                          className="flex items-center gap-2 px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-[11px] font-bold text-white transition-all disabled:opacity-50"
-                        >
-                          <RefreshCcw size={12} className={activeTest === name ? "animate-spin" : ""} />
-                          {activeTest === name
-                            ? `Testing (${testCountdown}s)...`
-                            : 'Test'}
-                        </button>
-
-                        <div
-                          onClick={() => toggleProvider(name)}
-                          className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${p.is_active ? 'bg-primary' : 'bg-white/10'}`}
-                        >
-                          <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${p.is_active ? 'left-6' : 'left-1'}`} />
-                        </div>
+                      <div>
+                        <div className="text-[11px] font-bold text-white uppercase tracking-widest">Brain Sync Required</div>
+                        <div className="text-[10px] text-white/40">Provider configuration updated</div>
                       </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => originalConfig && setGlobalConfig(originalConfig)}
+                        className="px-6 py-2.5 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all bg-white/5"
+                      >
+                        Discard
+                      </button>
+                      <button
+                      onClick={() => handleSave()}
+                      disabled={isSaving || isUploading}
+                      className="flex items-center gap-2 px-8 py-2.5 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/30 disabled:opacity-50"
+                      >
+                        {isSaving ? <RefreshCcw size={16} className="animate-spin" /> : <Save size={16} />}
+                        Sync Brain
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             ) : (
               <div
                 className="max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in zoom-in-95 duration-300 shadow-2xl shadow-black/50"
@@ -749,13 +872,23 @@ export default function Settings() {
 
         {activeTab === 'appearance' && (
           <div
-            className="max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300"
+            className="relative max-w-4xl backdrop-blur-3xl border border-white/10 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 pb-28 sm:pb-32 animate-in slide-in-from-right-4 duration-300"
             style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
           >
-            <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-secondary/20 text-secondary"><Zap size={20} /></div>
-              Visual & Interface Settings
-            </h2>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-secondary/20 text-secondary"><Zap size={20} /></div>
+                Visual & Interface Settings
+              </h2>
+              <button
+                onClick={() => handleSave()}
+                disabled={!hasChanges || isSaving || isUploading}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-primary text-black rounded-xl text-xs font-bold hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:hover:scale-100"
+              >
+                {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />}
+                {hasChanges ? 'Simpan Perubahan' : 'Sudah Tersimpan'}
+              </button>
+            </div>
 
             <div className="grid grid-cols-1 gap-8">
               <div>
@@ -770,7 +903,7 @@ export default function Settings() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">MIA Bubble Color & Opacity</label>
                   <div
@@ -831,76 +964,63 @@ export default function Settings() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Background Type</label>
-                <div className="flex gap-4">
-                  {['video', 'image', 'color', 'themes'].map(type => (
+                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-4">Background Type</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {BACKGROUND_TYPES.map(type => (
                     <button
                       key={type}
-                      onClick={() => {
-                        let newUrl = config.appearance.background_url;
-                        if (type === 'color' && newUrl.startsWith('/')) {
-                          newUrl = '#0a0a0a';
-                        }
-                        updateConfigLocal({ ...config, appearance: { ...config.appearance, background_type: type as 'video' | 'image' | 'color' | 'themes', background_url: newUrl } });
-                      }}
-                      className={`px-6 py-2 rounded-xl font-bold transition-all ${config.appearance.background_type === type ? 'bg-primary text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+                      onClick={() => handleBackgroundTypeChange(type)}
+                      className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${config.appearance.background_type === type ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}
                     >
-                      {type.toUpperCase()}
+                      {type}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {config.appearance.background_type === 'themes' ? (
-                <div className="mt-4">
-                  <ThemeTab config={config} updateConfigLocal={updateConfigLocal} />
-                </div>
-              ) : config.appearance.background_type !== 'color' ? (
+              {config.appearance.background_type === 'themes' && (
                 <div>
-                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
+                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Theme Cepat</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {BACKGROUND_THEMES.map(theme => (
+                      <button
+                        key={theme.id}
+                        onClick={() => applyAppearance({ ...config.appearance, background_type: 'themes', background_url: theme.id })}
+                        className={`h-24 rounded-xl border text-left p-3 overflow-hidden transition-all ${config.appearance.background_url === theme.id ? 'border-primary ring-2 ring-primary/30' : 'border-white/10 hover:border-white/30'}`}
+                        style={{ background: theme.background }}
+                      >
+                        <span className="text-xs font-bold text-white drop-shadow">{theme.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {config.appearance.background_type !== 'color' && config.appearance.background_type !== 'themes' ? (
+                <div>
+                  <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
                     Background URL / Local Path
                   </label>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <input
                       type="text"
                       value={config.appearance.background_url}
-                      onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, background_url: e.target.value } })}
-                      onBlur={() => handleSave()}
+                      onChange={e => handleBackgroundUrlChange(e.target.value)}
                       className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary font-mono text-xs"
-                      placeholder={config.appearance.background_type === 'video' ? "https://example.com/loop.mp4" : "https://example.com/bg.jpg"}
+                      placeholder="/assets/chatbg/file.mp4 or https://..."
                     />
                     <button
-                      onClick={() => document.getElementById('bg-upload')?.click()}
-                      className="px-6 py-3 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-all flex items-center gap-2"
+                      onClick={handleLocalBackgroundUpload}
+                      disabled={isUploading}
+                      className={`w-full sm:w-auto justify-center px-6 py-3 bg-white/10 text-white rounded-xl font-bold text-xs hover:bg-white/20 transition-all flex items-center gap-2 ${isUploading ? 'opacity-50 cursor-wait' : ''}`}
                     >
-                      <Plus size={18} /> Upload Lokal
+                      {isUploading ? <RefreshCcw className="animate-spin" size={16} /> : <Plus size={16} />}
+                      {isUploading ? 'Uploading...' : 'Upload Lokal'}
                     </button>
-                    <input
-                      type="file" id="bg-upload" className="hidden"
-                      accept={config.appearance.background_type === 'video' ? "video/*" : "image/*"}
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const formData = new FormData();
-                        formData.append('file', file);
-                        const res = await fetch('/api/upload-bg', { method: 'POST', body: formData });
-                        const data = await res.json();
-                        if (data.status === 'success') {
-                          updateConfigLocal({
-                            ...config,
-                            appearance: {
-                              ...config.appearance,
-                              background_url: data.url,
-                              background_type: config.appearance.background_type === 'video' ? 'video' : 'image'
-                            }
-                          });
-                        }
-                      }}
-                    />
                   </div>
-                  <p className="mt-2 text-[10px] text-white/20 italic">Tip: Gunakan file lokal atau URL publik untuk performa terbaik.</p>
+                  <p className="mt-2 text-[10px] text-white/30">Paste URL image/video atau upload file lokal. Preview berubah langsung tanpa F5.</p>
                 </div>
-              ) : (
+              ) : config.appearance.background_type === 'color' ? (
                 <div>
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Background Solid Color</label>
                   <input
@@ -910,14 +1030,45 @@ export default function Settings() {
                     className="w-full h-12 rounded-xl bg-transparent border border-white/10 cursor-pointer"
                   />
                 </div>
-              )}
+              ) : null}
             </div>
+            
+            {/* Contextual Action Bar for Appearance */}
+            {hasChanges && (
+              <div className="fixed sm:absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-6 p-4 rounded-2xl bg-black/80 backdrop-blur-2xl border border-primary/30 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between animate-in slide-in-from-bottom-4 duration-500 shadow-2xl z-[10]">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(0,255,204,0.6)]" />
+                  <span className="text-xs font-bold text-white/80">Perubahan visual terdeteksi</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (originalConfig) {
+                        setGlobalConfig(originalConfig);
+                        setHasChanges(false);
+                      }
+                    }}
+                    className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all"
+                  >
+                    Batalkan
+                  </button>
+                  <button
+                    onClick={() => handleSave()}
+                    disabled={isSaving || isUploading}
+                    className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-6 py-2 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />}
+                    Simpan Sekarang
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'personality' && (
           <div
-            className="max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300"
+            className="relative max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300"
             style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
           >
             <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
@@ -976,55 +1127,38 @@ export default function Settings() {
               <div className="pt-8 mt-8 border-t border-white/5">
                 <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-6">Voice & Speech Engine</h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                  {['edge-tts', 'piper', 'elevenlabs', 'openai'].map(engine => (
-                    <button
-                      key={engine}
-                      onClick={() => updateConfigLocal({ ...config, tts_engine: engine })}
-                      className={`px-6 py-4 rounded-2xl border transition-all text-left group ${config.tts_engine === engine
-                        ? 'bg-primary/20 border-primary text-primary'
-                        : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
-                        }`}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">STT Engine</label>
+                    <select
+                      value={config.stt_engine}
+                      onChange={e => updateConfigLocal({ ...config, stt_engine: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                     >
-                      <div className="font-bold capitalize">{engine.replace('-', ' ')}</div>
-                      <div className="text-[10px] opacity-60">
-                        {engine === 'edge-tts' ? 'Gratis & Online' : engine === 'piper' ? '100% Lokal & Cepat' : engine === 'elevenlabs' ? 'Cloning Ultra-Real' : 'Premium & Natural'}
-                      </div>
-                    </button>
-                  ))}
+                      <option value="speech_recognition">Python Native (Google)</option>
+                      <option value="whisper">OpenAI Whisper (Local)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">TTS Engine</label>
+                    <select
+                      value={config.tts_engine}
+                      onChange={e => updateConfigLocal({ ...config, tts_engine: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
+                    >
+                      <option value="edge-tts">Edge-TTS (Premium Voices)</option>
+                      <option value="elevenlabs">ElevenLabs (High Fidelity)</option>
+                      <option value="gtts">Google TTS (Standard)</option>
+                    </select>
+                  </div>
                 </div>
 
                 {config.tts_engine === 'elevenlabs' && (
-                  <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-white/30 uppercase mb-2">ElevenLabs API Key</label>
-                        <input
-                          type="password" value={config.elevenlabs_api_key}
-                          onChange={e => updateConfigLocal({ ...config, elevenlabs_api_key: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                          placeholder="xi-api-key..."
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-white/30 uppercase mb-2">Voice ID</label>
-                        <input
-                          type="text" value={config.elevenlabs_voice_id}
-                          onChange={e => updateConfigLocal({ ...config, elevenlabs_voice_id: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                          placeholder="e.g. 21m00Tcm4TlvDq8ikWAM"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {config.tts_engine === 'openai' && (
-                  <div className="animate-in slide-in-from-top-2 duration-300">
-                    <label className="block text-[10px] font-bold text-white/30 uppercase mb-2">OpenAI API Key</label>
+                  <div className="mt-4 animate-in slide-in-from-top-2 duration-300">
+                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">ElevenLabs API Key</label>
                     <input
-                      type="password" value={config.openai_api_key}
-                      onChange={e => updateConfigLocal({ ...config, openai_api_key: e.target.value })}
+                      type="password" value={config.elevenlabs_api_key}
+                      onChange={e => updateConfigLocal({ ...config, elevenlabs_api_key: e.target.value })}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
                       placeholder="sk-..."
                     />
@@ -1032,6 +1166,31 @@ export default function Settings() {
                 )}
               </div>
             </div>
+            {/* Contextual Action Bar for Personality */}
+            {hasChanges && (
+              <div className="absolute bottom-6 left-6 right-6 p-4 rounded-2xl bg-black/60 backdrop-blur-2xl border border-primary/30 flex items-center justify-between animate-in slide-in-from-bottom-4 duration-500 shadow-2xl z-[10]">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(0,255,204,0.6)]" />
+                  <span className="text-xs font-bold text-white/80">Karakter MIA telah berubah</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => originalConfig && setGlobalConfig(originalConfig)}
+                    className="px-4 py-2 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all"
+                  >
+                    Batalkan
+                  </button>
+                  <button
+                    onClick={() => handleSave()}
+                    disabled={isSaving || isUploading}
+                    className="flex items-center gap-2 px-6 py-2 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />}
+                    Simpan Karakter
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1102,28 +1261,7 @@ export default function Settings() {
 
       </div>
 
-      {/* Global Action Bar (Visible when changes detected) */}
-      {hasChanges && (
-        <div
-          className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-4 px-8 py-4 border border-primary/30 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 duration-500 z-50"
-          style={{ backgroundColor: `rgba(0, 0, 0, ${config?.appearance?.ui_opacity ?? 0.8})` }}
-        >
-          <div className="text-white/70 text-sm font-bold mr-4">Ada perubahan yang belum disimpan!</div>
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-2 px-6 py-2.5 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-all"
-          >
-            <RefreshCcw size={18} /> Reset ke Awal
-          </button>
-          <button
-            onClick={() => handleSave()}
-            disabled={isSaving}
-            className="flex items-center gap-2 px-8 py-2.5 bg-primary text-black rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
-          >
-            {isSaving ? <RefreshCcw className="animate-spin" size={18} /> : <Save size={18} />} Simpan Semua Perubahan
-          </button>
-        </div>
-      )}
+
 
       {/* Toast Notification */}
       <div className="fixed bottom-8 right-8 flex flex-col gap-2 z-[100]">
