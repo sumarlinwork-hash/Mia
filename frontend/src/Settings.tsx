@@ -50,7 +50,7 @@ const PRESETS: Record<string, Partial<ProviderConfig & { endpoint: string }>> = 
   "Cohere": { protocol: "OpenAI Compatible", base_url: "https://api.cohere.ai", endpoint: "/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
   "Fireworks AI": { protocol: "OpenAI Compatible", base_url: "https://api.fireworks.ai", endpoint: "/inference/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
   "xAI (Grok)": { protocol: "OpenAI Compatible", base_url: "https://api.x.ai", endpoint: "/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
-  "Ollama (Local)": { protocol: "OpenAI Compatible", base_url: "http://localhost:11434", endpoint: "/v1/chat/completions", cost_label: COSTS[2], purpose: PURPOSES[0] },
+  "Local LLM": { protocol: "OpenAI Compatible", base_url: "http://localhost:11434", endpoint: "/v1/chat/completions", cost_label: COSTS[2], purpose: PURPOSES[0] },
   "Alibaba (Qwen)": { protocol: "OpenAI Compatible", base_url: "https://dashscope.aliyuncs.com", endpoint: "/compatible-mode/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
   "SiliconFlow": { protocol: "OpenAI Compatible", base_url: "https://api.siliconflow.cn", endpoint: "/v1/chat/completions", cost_label: COSTS[0], purpose: PURPOSES[0] },
   "SeaLLMs (Sea AI)": { protocol: "OpenAI Compatible", base_url: "https://api.siliconflow.cn", endpoint: "/v1/chat/completions", cost_label: COSTS[0], purpose: PURPOSES[0] },
@@ -298,8 +298,6 @@ export default function Settings() {
     }
   };
 
-
-
   const handleAddOrEditProvider = async () => {
     if (!config) return;
     const updatedConfig = { ...config };
@@ -360,20 +358,15 @@ export default function Settings() {
       if (data.status === 'success') {
         addToast(`${name} terhubung: ${data.latency}ms`, 'success');
       } else {
-        // Tampilkan pesan error asli dari backend agar diagnosa akurat
         addToast(`${name} gagal: ${data.message || 'Error tidak dikenal'}`, 'error');
-
-        // Update latensi lokal agar UI tetap responsif menunjukkan kegagalan (9999)
         const failProviders = { ...config.providers };
         failProviders[name].latency = 9999;
         setGlobalConfig({ ...config, providers: failProviders });
       }
     } catch (err) {
       const error = err as Error;
-      console.error(error);
       addToast(`Masalah Jaringan: ${error.message}`, 'error');
     } finally {
-      // UNIVERSAL REFRESH: Apapun yang terjadi, tarik data terbaru dari disk sebelum reset state
       await refreshConfig();
       clearInterval(timer);
       setActiveTest(null);
@@ -382,7 +375,8 @@ export default function Settings() {
   };
 
   const testNewProvider = async () => {
-    if (!newProvider.api_key) {
+    const isLocal = newProvider.base_url.includes("localhost") || newProvider.base_url.includes("127.0.0.1");
+    if (!newProvider.api_key && !isLocal) {
       addToast("API Key wajib diisi untuk tes", "error");
       return;
     }
@@ -429,6 +423,7 @@ export default function Settings() {
     setIsAutoUrl(p.base_url?.includes('{model_id}') || false);
     setView('edit');
   };
+
   const uninstallSkill = async (id: string) => {
     if (!confirm(`Hapus keahlian "${id}"?`)) return;
     try {
@@ -453,16 +448,15 @@ export default function Settings() {
       }
     } catch { addToast("Uji coba gagal", "error"); }
   };
+
   const openEditSkill = async (skill: Skill) => {
     try {
-      // We use the existing memory API but point to skills folder
       const res = await fetch(`/api/memory/file?name=../skills/${skill.id}.py`);
       const data = await res.json();
       if (data.content) {
         setSkillCode(data.content);
         setEditingSkill(skill);
       } else {
-        // Maybe it's a plugin folder
         setSkillCode("# Plugin source editing not yet supported for directory-based skills.");
         setEditingSkill(skill);
       }
@@ -517,7 +511,6 @@ export default function Settings() {
               </button>
             )}
           </div>
-
         </header>
 
         <div className="flex gap-8 mb-8 border-b border-white/10">
@@ -534,7 +527,6 @@ export default function Settings() {
 
         {activeTab === 'intelligence' && (
           <>
-            {/* OS MODE SELECTOR (Contract 6.0 Integration) */}
             <div className="mb-10 p-8 rounded-[32px] bg-primary/5 border border-primary/20 backdrop-blur-3xl">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 rounded-lg bg-primary/20 text-primary"><Zap size={20} /></div>
@@ -564,7 +556,6 @@ export default function Settings() {
                 ))}
               </div>
             </div>
-
 
             {view === 'list' ? (
               <>
@@ -607,22 +598,6 @@ export default function Settings() {
                           <span>Latency(avg):</span>
                           <span className="text-primary">{p.latency} ms</span>
                         </div>
-                        {p.active_path && (
-                          <div className="flex justify-between">
-                            <span>Route Strategy:</span>
-                            <span className="text-amber-400 font-bold">{p.active_path}</span>
-                          </div>
-                        )}
-                        {p.health_status && p.health_status !== "Healthy" && (
-                          <div className="flex justify-between">
-                            <span>Route Health:</span>
-                            <span className={
-                              p.health_status === "Fallback Active" ? "text-amber-400 font-bold" :
-                              p.health_status === "Degraded" ? "text-orange-500 font-bold" :
-                              "text-error font-bold"
-                            }>{p.health_status}</span>
-                          </div>
-                        )}
                         <div className="flex justify-between">
                           <span>Health:</span>
                           <span className={p.health_fail > 0 ? 'text-error' : 'text-green-400'}>
@@ -643,11 +618,8 @@ export default function Settings() {
                             className="flex items-center gap-2 px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-[11px] font-bold text-white transition-all disabled:opacity-50"
                           >
                             <RefreshCcw size={12} className={activeTest === name ? "animate-spin" : ""} />
-                            {activeTest === name
-                              ? `Testing (${testCountdown}s)...`
-                              : 'Test'}
+                            {activeTest === name ? `Testing (${testCountdown}s)...` : 'Test'}
                           </button>
-
                           <div
                             onClick={() => toggleProvider(name)}
                             className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${p.is_active ? 'bg-primary' : 'bg-white/10'}`}
@@ -660,30 +632,18 @@ export default function Settings() {
                   ))}
                 </div>
                 
-                {/* Contextual Action Bar for Intelligence */}
                 {hasChanges && (
-                  <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-lg p-4 rounded-3xl bg-black/80 backdrop-blur-3xl border border-primary/30 flex items-center justify-between animate-in slide-in-from-bottom-10 duration-700 shadow-[0_32px_64px_rgba(0,0,0,0.8)] z-[200]">
+                  <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-lg p-4 rounded-3xl bg-black/80 backdrop-blur-3xl border border-primary/30 flex items-center justify-between animate-in slide-in-from-bottom-10 duration-700 shadow-2xl z-[200]">
                     <div className="flex items-center gap-4 ml-2">
-                      <div className="p-2 rounded-full bg-primary/20 text-primary">
-                        <Zap size={20} className="animate-pulse" />
-                      </div>
+                      <div className="p-2 rounded-full bg-primary/20 text-primary"><Zap size={20} className="animate-pulse" /></div>
                       <div>
                         <div className="text-[11px] font-bold text-white uppercase tracking-widest">Brain Sync Required</div>
                         <div className="text-[10px] text-white/40">Provider configuration updated</div>
                       </div>
                     </div>
                     <div className="flex gap-3">
-                      <button
-                        onClick={() => originalConfig && setGlobalConfig(originalConfig)}
-                        className="px-6 py-2.5 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all bg-white/5"
-                      >
-                        Discard
-                      </button>
-                      <button
-                      onClick={() => handleSave()}
-                      disabled={isSaving || isUploading}
-                      className="flex items-center gap-2 px-8 py-2.5 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/30 disabled:opacity-50"
-                      >
+                      <button onClick={() => originalConfig && setGlobalConfig(originalConfig)} className="px-6 py-2.5 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all bg-white/5">Discard</button>
+                      <button onClick={() => handleSave()} disabled={isSaving || isUploading} className="flex items-center gap-2 px-8 py-2.5 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/30 disabled:opacity-50">
                         {isSaving ? <RefreshCcw size={16} className="animate-spin" /> : <Save size={16} />}
                         Sync Brain
                       </button>
@@ -692,10 +652,7 @@ export default function Settings() {
                 )}
               </>
             ) : (
-              <div
-                className="max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in zoom-in-95 duration-300 shadow-2xl shadow-black/50"
-                style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
-              >
+              <div className="max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in zoom-in-95 duration-300 shadow-2xl shadow-black/50" style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}>
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-primary/20 text-primary"><Star size={20} /></div>
@@ -710,76 +667,32 @@ export default function Settings() {
                       Pilih Intelegensi Inti (Preset)
                       {newProvider.display_name && <CheckCircle2 size={12} className="text-green-500" />}
                     </label>
-
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                      {Object.entries(PRESETS).map(([key, preset]: [string, Partial<ProviderConfig & { endpoint: string }>]) => {
-                      const isSelected = newProvider.display_name === key;
-                      const handleSelectPreset = () => {
-                        const isCustom = key === 'Custom';
-                        const base = preset.base_url || '';
-                        const endpoint = preset.endpoint || '';
-                        setIsAutoUrl(!isCustom);
-                        setNewProvider({ 
-                          ...newProvider, 
-                          display_name: key, 
-                          ...preset,
-                          base_url: isCustom ? '' : (base + endpoint)
-                        });
-                      };
-                      return (
-                        <div
-                          key={key}
-                          onClick={handleSelectPreset}
-                          className={`
-                          cursor-pointer p-4 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center text-center gap-2
-                          ${isSelected
-                              ? 'bg-primary/20 border-primary shadow-[0_0_15px_rgba(0,255,204,0.3)] scale-105 z-10'
-                              : 'border-white/5 hover:border-white/20'}
-                        `}
-                          style={!isSelected ? { backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` } : {}}
-                        >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-lg 
-                          ${isSelected ? 'bg-primary text-black' : 'bg-black/50 text-white/60'}`}
-                          >
-                            {key.charAt(0)}
+                      {Object.entries(PRESETS).map(([key, preset]) => {
+                        const isSelected = newProvider.display_name === key;
+                        const handleSelectPreset = () => {
+                          const isCustom = key === 'Custom';
+                          setIsAutoUrl(!isCustom);
+                          setNewProvider({ ...newProvider, display_name: key, ...preset, base_url: isCustom ? '' : (preset.base_url + (preset.endpoint || '')) });
+                        };
+                        return (
+                          <div key={key} onClick={handleSelectPreset} className={`cursor-pointer p-4 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center text-center gap-2 ${isSelected ? 'bg-primary/20 border-primary shadow-[0_0_15px_rgba(0,255,204,0.3)] scale-105 z-10' : 'border-white/5 hover:border-white/20'}`} style={!isSelected ? { backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` } : {}}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-lg ${isSelected ? 'bg-primary text-black' : 'bg-black/50 text-white/60'}`}>{key.charAt(0)}</div>
+                            <div className={`text-xs font-bold ${isSelected ? 'text-primary' : 'text-white/80'}`}>{key}</div>
                           </div>
-                          <div className={`text-xs font-bold ${isSelected ? 'text-primary' : 'text-white/80'}`}>
-                            {key}
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="relative">
-                      <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
-                        Nama Display (Bebas)
-                        {newProvider.display_name.length < 3 ? <XCircle size={12} className="text-error" /> : <CheckCircle2 size={12} className="text-green-500" />}
-                      </label>
-                      <input
-                        type="text" value={newProvider.display_name}
-                        onChange={e => setNewProvider({ ...newProvider, display_name: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                        placeholder="MIA Main Brain"
-                        autoComplete="off"
-                      />
+                      <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Nama Display (Bebas) {newProvider.display_name.length < 3 ? <XCircle size={12} className="text-error" /> : <CheckCircle2 size={12} className="text-green-500" />}</label>
+                      <input type="text" value={newProvider.display_name} onChange={e => setNewProvider({ ...newProvider, display_name: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary" placeholder="MIA Main Brain" />
                     </div>
                     <div className="relative">
-                      <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
-                        ID Model
-                        {!newProvider.model_id ? <XCircle size={12} className="text-error" /> : <CheckCircle2 size={12} className="text-green-500" />}
-                      </label>
-                      <input
-                        type="text" value={newProvider.model_id}
-                        onChange={e => {
-                          setNewProvider({ ...newProvider, model_id: e.target.value });
-                        }}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                        placeholder="gpt-4o"
-                        autoComplete="off"
-                      />
+                      <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">ID Model {!newProvider.model_id ? <XCircle size={12} className="text-error" /> : <CheckCircle2 size={12} className="text-green-500" />}</label>
+                      <input type="text" value={newProvider.model_id} onChange={e => setNewProvider({ ...newProvider, model_id: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary" placeholder="gpt-4o" />
                     </div>
                   </div>
 
@@ -787,100 +700,46 @@ export default function Settings() {
                     <div className="relative">
                       <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
                         API Key
-                        {newProvider.api_key.length < 8 ? <XCircle size={12} className="text-error" /> : <CheckCircle2 size={12} className="text-green-500" />}
+                        {(() => {
+                          const isLocal = newProvider.base_url.includes("localhost") || newProvider.base_url.includes("127.0.0.1");
+                          const isValid = newProvider.api_key.length >= 8 || isLocal;
+                          return isValid ? <CheckCircle2 size={12} className="text-green-500" /> : <XCircle size={12} className="text-error" />;
+                        })()}
                       </label>
-                      <input
-                        type="password" value={newProvider.api_key}
-                        onChange={e => setNewProvider({ ...newProvider, api_key: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                        placeholder="sk-proj-..."
-                        autoComplete="off"
-                      />
+                      <input type="password" value={newProvider.api_key} onChange={e => setNewProvider({ ...newProvider, api_key: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary" placeholder="sk-proj-..." />
                     </div>
                     <div>
-                      <label className="flex items-center gap-2 text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
-                        Target URL (Full Path)
-                        {isAutoUrl && (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] bg-primary/20 text-primary font-bold tracking-normal normal-case">Smart-Configured</span>
-                        )}
-                      </label>
-                      <input
-                        id="provider-endpoint"
-                        name="provider-endpoint"
-                        type="text"
-                        value={isAutoUrl ? previewUrl : newProvider.base_url}
-                        readOnly={isAutoUrl}
-                        placeholder={isAutoUrl ? 'Masukkan Model ID di atas untuk melihat URL' : 'Masukkan URL lengkap API endpoint'}
-                        onChange={e => {
-                          if (!isAutoUrl) {
-                            setNewProvider({ ...newProvider, base_url: e.target.value });
-                          }
-                        }}
-                        className={`w-full bg-white/5 border rounded-xl px-4 py-3 outline-none font-mono text-sm transition-all ${
-                          isAutoUrl
-                            ? 'border-primary/20 text-primary/80 cursor-default'
-                            : 'border-white/10 text-white focus:border-primary'
-                        }`}
-                        autoComplete="off"
-                      />
-                      {isAutoUrl && !newProvider.model_id && (
-                        <p className="text-[10px] text-amber-400/60 mt-1.5 flex items-center gap-1">
-                          <Info size={10} /> Ketik Model ID untuk melihat URL final
-                        </p>
-                      )}
+                      <label className="flex items-center gap-2 text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Target URL (Full Path) {isAutoUrl && <span className="px-2 py-0.5 rounded-full text-[9px] bg-primary/20 text-primary font-bold tracking-normal normal-case">Smart-Configured</span>}</label>
+                      <input type="text" value={isAutoUrl ? previewUrl : newProvider.base_url} readOnly={isAutoUrl} placeholder={isAutoUrl ? 'Masukkan Model ID di atas untuk melihat URL' : 'Masukkan URL lengkap API endpoint'} onChange={e => !isAutoUrl && setNewProvider({ ...newProvider, base_url: e.target.value })} className={`w-full bg-white/5 border rounded-xl px-4 py-3 outline-none font-mono text-sm transition-all ${isAutoUrl ? 'border-primary/20 text-primary/80 cursor-default' : 'border-white/10 text-white focus:border-primary'}`} />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Kelompok Saraf (Purpose)</label>
-                      <select
-                        value={newProvider.purpose}
-                        onChange={e => setNewProvider({ ...newProvider, purpose: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                      >
+                      <select value={newProvider.purpose} onChange={e => setNewProvider({ ...newProvider, purpose: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary">
                         {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Label Biaya</label>
-                      <select
-                        value={newProvider.cost_label}
-                        onChange={e => setNewProvider({ ...newProvider, cost_label: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                      >
+                      <select value={newProvider.cost_label} onChange={e => setNewProvider({ ...newProvider, cost_label: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary">
                         {COSTS.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                    <button
-                      onClick={() => { setView('list'); setIsAutoUrl(false); }}
-                      className="py-4 bg-white/5 border border-white/10 text-white/60 rounded-2xl font-bold text-lg hover:bg-white/10 transition-all active:scale-95"
-                    >
-                      Batal
-                    </button>
-
-                    <button
-                      onClick={testNewProvider}
-                      disabled={activeTest === "NEW_FORM"}
-                      className="py-4 bg-white/10 border border-white/10 text-white rounded-2xl font-bold text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2"
-                    >
+                    <button onClick={() => { setView('list'); setIsAutoUrl(false); }} className="py-4 bg-white/5 border border-white/10 text-white/60 rounded-2xl font-bold text-lg hover:bg-white/10 transition-all active:scale-95">Batal</button>
+                    <button onClick={testNewProvider} disabled={activeTest === "NEW_FORM"} className="py-4 bg-white/10 border border-white/10 text-white rounded-2xl font-bold text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2">
                       {activeTest === "NEW_FORM" ? <RefreshCcw size={20} className="animate-spin" /> : <Zap size={20} />}
                       {activeTest === "NEW_FORM" ? `Testing (${testCountdown}s)` : 'Test Connection'}
                     </button>
-
-                    <button
-                      onClick={handleAddOrEditProvider}
-                      disabled={isSaving}
-                      className="py-4 bg-primary text-black rounded-2xl font-bold text-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-primary/20 disabled:opacity-50"
-                    >
+                    <button onClick={handleAddOrEditProvider} disabled={isSaving} className="py-4 bg-primary text-black rounded-2xl font-bold text-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-primary/20 disabled:opacity-50">
                       {isSaving ? <RefreshCcw className="animate-spin" /> : <Save size={20} />}
                       Simpan & Aktifkan
                     </button>
                   </div>
-
                 </div>
               </div>
             )}
@@ -888,20 +747,13 @@ export default function Settings() {
         )}
 
         {activeTab === 'appearance' && (
-          <div
-            className="relative max-w-4xl backdrop-blur-3xl border border-white/10 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 pb-28 sm:pb-32 animate-in slide-in-from-right-4 duration-300"
-            style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
-          >
+          <div className="relative max-w-4xl backdrop-blur-3xl border border-white/10 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 pb-28 sm:pb-32 animate-in slide-in-from-right-4 duration-300" style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
               <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-secondary/20 text-secondary"><Zap size={20} /></div>
                 Visual & Interface Settings
               </h2>
-              <button
-                onClick={() => handleSave()}
-                disabled={!hasChanges || isSaving || isUploading}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-primary text-black rounded-xl text-xs font-bold hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:hover:scale-100"
-              >
+              <button onClick={() => handleSave()} disabled={!hasChanges || isSaving || isUploading} className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-primary text-black rounded-xl text-xs font-bold hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:hover:scale-100">
                 {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />}
                 {hasChanges ? 'Simpan Perubahan' : 'Sudah Tersimpan'}
               </button>
@@ -910,37 +762,17 @@ export default function Settings() {
             <div className="grid grid-cols-1 gap-8">
               <div>
                 <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-4">UI Transparency: {Math.round(config.appearance.ui_opacity * 100)}%</label>
-                <input
-                  id="ui-transparency"
-                  name="ui-transparency"
-                  type="range" min="0.1" max="1" step="0.05"
-                  value={config.appearance.ui_opacity}
-                  onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, ui_opacity: parseFloat(e.target.value) } })}
-                  className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
-                />
+                <input type="range" min="0.1" max="1" step="0.05" value={config.appearance.ui_opacity} onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, ui_opacity: parseFloat(e.target.value) } })} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">MIA Bubble Color & Opacity</label>
-                  <div
-                    className="flex flex-col gap-3 p-4 rounded-2xl border border-white/5"
-                    style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` }}
-                  >
+                  <div className="flex flex-col gap-3 p-4 rounded-2xl border border-white/5" style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` }}>
                     <div className="flex gap-4 items-center">
-                      <input
-                        type="color"
-                        value={rgbaToHex(config.appearance.bubble_color_mia)}
-                        onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_mia)) } })}
-                        className="w-12 h-12 rounded-lg bg-transparent border-none cursor-pointer"
-                      />
+                      <input type="color" value={rgbaToHex(config.appearance.bubble_color_mia)} onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_mia)) } })} className="w-12 h-12 rounded-lg bg-transparent border-none cursor-pointer" />
                       <div className="flex-1">
-                        <input
-                          type="range" min="0" max="1" step="0.05"
-                          value={getOpacity(config.appearance.bubble_color_mia)}
-                          onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(rgbaToHex(config.appearance.bubble_color_mia), parseFloat(e.target.value)) } })}
-                          className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
-                        />
+                        <input type="range" min="0" max="1" step="0.05" value={getOpacity(config.appearance.bubble_color_mia)} onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_mia: combineToRgba(rgbaToHex(config.appearance.bubble_color_mia), parseFloat(e.target.value)) } })} className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" />
                         <div className="flex justify-between text-[10px] mt-1 text-white/20 font-mono">
                           <span>Alpha: {Math.round(getOpacity(config.appearance.bubble_color_mia) * 100)}%</span>
                           <span>HEX: {rgbaToHex(config.appearance.bubble_color_mia)}</span>
@@ -949,27 +781,13 @@ export default function Settings() {
                     </div>
                   </div>
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">User Bubble Color & Opacity</label>
-                  <div
-                    className="flex flex-col gap-3 p-4 rounded-2xl border border-white/5"
-                    style={{ backgroundColor: `rgba(255, 255, 255, ${(config?.appearance?.ui_opacity ?? 0.5) * 0.1})` }}
-                  >
+                  <div className="flex flex-col gap-3 p-4 rounded-2xl border border-white/5" style={{ backgroundColor: `rgba(255, 255, 255, ${(config?.appearance?.ui_opacity ?? 0.5) * 0.1})` }}>
                     <div className="flex gap-4 items-center">
-                      <input
-                        type="color"
-                        value={rgbaToHex(config.appearance.bubble_color_user)}
-                        onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_user)) } })}
-                        className="w-12 h-12 rounded-lg bg-transparent border-none cursor-pointer"
-                      />
+                      <input type="color" value={rgbaToHex(config.appearance.bubble_color_user)} onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(e.target.value, getOpacity(config.appearance.bubble_color_user)) } })} className="w-12 h-12 rounded-lg bg-transparent border-none cursor-pointer" />
                       <div className="flex-1">
-                        <input
-                          type="range" min="0" max="1" step="0.05"
-                          value={getOpacity(config.appearance.bubble_color_user)}
-                          onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(rgbaToHex(config.appearance.bubble_color_user), parseFloat(e.target.value)) } })}
-                          className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
-                        />
+                        <input type="range" min="0" max="1" step="0.05" value={getOpacity(config.appearance.bubble_color_user)} onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, bubble_color_user: combineToRgba(rgbaToHex(config.appearance.bubble_color_user), parseFloat(e.target.value)) } })} className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" />
                         <div className="flex justify-between text-[10px] mt-1 text-white/20 font-mono">
                           <span>Alpha: {Math.round(getOpacity(config.appearance.bubble_color_user) * 100)}%</span>
                           <span>HEX: {rgbaToHex(config.appearance.bubble_color_user)}</span>
@@ -984,13 +802,7 @@ export default function Settings() {
                 <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-4">Background Type</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {BACKGROUND_TYPES.map(type => (
-                    <button
-                      key={type}
-                      onClick={() => handleBackgroundTypeChange(type)}
-                      className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${config.appearance.background_type === type ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}
-                    >
-                      {type}
-                    </button>
+                    <button key={type} onClick={() => handleBackgroundTypeChange(type)} className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${config.appearance.background_type === type ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}>{type}</button>
                   ))}
                 </div>
               </div>
@@ -1000,14 +812,7 @@ export default function Settings() {
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Theme Cepat</label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {BACKGROUND_THEMES.map(theme => (
-                      <button
-                        key={theme.id}
-                        onClick={() => applyAppearance({ ...config.appearance, background_type: 'themes', background_url: theme.id })}
-                        className={`h-24 rounded-xl border text-left p-3 overflow-hidden transition-all ${config.appearance.background_url === theme.id ? 'border-primary ring-2 ring-primary/30' : 'border-white/10 hover:border-white/30'}`}
-                        style={{ background: theme.background }}
-                      >
-                        <span className="text-xs font-bold text-white drop-shadow">{theme.label}</span>
-                      </button>
+                      <button key={theme.id} onClick={() => applyAppearance({ ...config.appearance, background_type: 'themes', background_url: theme.id })} className={`h-24 rounded-xl border text-left p-3 overflow-hidden transition-all ${config.appearance.background_url === theme.id ? 'border-primary ring-2 ring-primary/30' : 'border-white/10 hover:border-white/30'}`} style={{ background: theme.background }}><span className="text-xs font-bold text-white drop-shadow">{theme.label}</span></button>
                     ))}
                   </div>
                 </div>
@@ -1015,68 +820,27 @@ export default function Settings() {
 
               {config.appearance.background_type !== 'color' && config.appearance.background_type !== 'themes' ? (
                 <div>
-                  <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
-                    Background URL / Local Path
-                  </label>
+                  <label className="flex items-center justify-between text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Background URL / Local Path</label>
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={config.appearance.background_url}
-                      onChange={e => handleBackgroundUrlChange(e.target.value)}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary font-mono text-xs"
-                      placeholder="/assets/chatbg/file.mp4 or https://..."
-                    />
-                    <button
-                      onClick={handleLocalBackgroundUpload}
-                      disabled={isUploading}
-                      className={`w-full sm:w-auto justify-center px-6 py-3 bg-white/10 text-white rounded-xl font-bold text-xs hover:bg-white/20 transition-all flex items-center gap-2 ${isUploading ? 'opacity-50 cursor-wait' : ''}`}
-                    >
-                      {isUploading ? <RefreshCcw className="animate-spin" size={16} /> : <Plus size={16} />}
-                      {isUploading ? 'Uploading...' : 'Upload Lokal'}
-                    </button>
+                    <input type="text" value={config.appearance.background_url} onChange={e => handleBackgroundUrlChange(e.target.value)} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary font-mono text-xs" placeholder="/assets/chatbg/file.mp4 or https://..." />
+                    <button onClick={handleLocalBackgroundUpload} disabled={isUploading} className={`w-full sm:w-auto justify-center px-6 py-3 bg-white/10 text-white rounded-xl font-bold text-xs hover:bg-white/20 transition-all flex items-center gap-2 ${isUploading ? 'opacity-50 cursor-wait' : ''}`}>{isUploading ? <RefreshCcw className="animate-spin" size={16} /> : <Plus size={16} />}{isUploading ? 'Uploading...' : 'Upload Lokal'}</button>
                   </div>
                   <p className="mt-2 text-[10px] text-white/30">Paste URL image/video atau upload file lokal. Preview berubah langsung tanpa F5.</p>
                 </div>
               ) : config.appearance.background_type === 'color' ? (
                 <div>
                   <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Background Solid Color</label>
-                  <input
-                    type="color"
-                    value={config.appearance.background_url.startsWith('#') ? config.appearance.background_url : '#0a0a0a'}
-                    onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, background_url: e.target.value } })}
-                    className="w-full h-12 rounded-xl bg-transparent border border-white/10 cursor-pointer"
-                  />
+                  <input type="color" value={config.appearance.background_url.startsWith('#') ? config.appearance.background_url : '#0a0a0a'} onChange={e => updateConfigLocal({ ...config, appearance: { ...config.appearance, background_url: e.target.value } })} className="w-full h-12 rounded-xl bg-transparent border border-white/10 cursor-pointer" />
                 </div>
               ) : null}
             </div>
             
-            {/* Contextual Action Bar for Appearance */}
             {hasChanges && (
               <div className="fixed sm:absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-6 p-4 rounded-2xl bg-black/80 backdrop-blur-2xl border border-primary/30 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between animate-in slide-in-from-bottom-4 duration-500 shadow-2xl z-[10]">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(0,255,204,0.6)]" />
-                  <span className="text-xs font-bold text-white/80">Perubahan visual terdeteksi</span>
-                </div>
+                <div className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(0,255,204,0.6)]" /><span className="text-xs font-bold text-white/80">Perubahan visual terdeteksi</span></div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      if (originalConfig) {
-                        setGlobalConfig(originalConfig);
-                        setHasChanges(false);
-                      }
-                    }}
-                    className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all"
-                  >
-                    Batalkan
-                  </button>
-                  <button
-                    onClick={() => handleSave()}
-                    disabled={isSaving || isUploading}
-                    className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-6 py-2 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-                  >
-                    {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />}
-                    Simpan Sekarang
-                  </button>
+                  <button onClick={() => originalConfig && (setGlobalConfig(originalConfig), setHasChanges(false))} className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all">Batalkan</button>
+                  <button onClick={() => handleSave()} disabled={isSaving || isUploading} className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-6 py-2 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all disabled:opacity-50">{isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />}Simpan Sekarang</button>
                 </div>
               </div>
             )}
@@ -1084,127 +848,33 @@ export default function Settings() {
         )}
 
         {activeTab === 'personality' && (
-          <div
-            className="relative max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300"
-            style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
-          >
-            <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/20 text-primary"><RefreshCcw size={20} /></div>
-              Personality & Behavior Core
-            </h2>
-
+          <div className="relative max-w-3xl backdrop-blur-3xl border border-white/10 rounded-[32px] p-8 animate-in slide-in-from-right-4 duration-300" style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}>
+            <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-3"><div className="p-2 rounded-lg bg-primary/20 text-primary"><RefreshCcw size={20} /></div>Personality & Behavior Core</h2>
             <div className="grid grid-cols-1 gap-6">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">AI Name</label>
-                  <input
-                    type="text" value={config.bot_name}
-                    onChange={e => updateConfigLocal({ ...config, bot_name: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">AI Age</label>
-                  <input
-                    type="number" value={config.bot_age}
-                    onChange={e => updateConfigLocal({ ...config, bot_age: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                  />
-                </div>
+                <div><label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">AI Name</label><input type="text" value={config.bot_name} onChange={e => updateConfigLocal({ ...config, bot_name: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary" /></div>
+                <div><label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">AI Age</label><input type="number" value={config.bot_age} onChange={e => updateConfigLocal({ ...config, bot_age: parseInt(e.target.value) || 0 })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary" /></div>
               </div>
-
-              <div
-                className="flex items-center justify-between p-6 rounded-2xl border border-white/10"
-                style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` }}
-              >
-                <div>
-                  <h3 className="font-bold text-white mb-1">Professional Mode</h3>
-                  <p className="text-[10px] text-white/40">Gunakan terminologi produktivitas dan estetika netral (Bukan mode Waifu).</p>
-                </div>
-                <div
-                  onClick={() => updateConfigLocal({ ...config, is_professional_mode: !config.is_professional_mode })}
-                  className={`w-12 h-6 rounded-full relative cursor-pointer transition-all ${config.is_professional_mode ? 'bg-primary' : 'bg-white/10'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${config.is_professional_mode ? 'left-7' : 'left-1'}`} />
-                </div>
+              <div className="flex items-center justify-between p-6 rounded-2xl border border-white/10" style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` }}>
+                <div><h3 className="font-bold text-white mb-1">Professional Mode</h3><p className="text-[10px] text-white/40">Gunakan terminologi produktivitas dan estetika netral.</p></div>
+                <div onClick={() => updateConfigLocal({ ...config, is_professional_mode: !config.is_professional_mode })} className={`w-12 h-6 rounded-full relative cursor-pointer transition-all ${config.is_professional_mode ? 'bg-primary' : 'bg-white/10'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${config.is_professional_mode ? 'left-7' : 'left-1'}`} /></div>
               </div>
-
-              <div>
-                <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Base System Persona</label>
-                <textarea
-                  value={config.bot_persona}
-                  onChange={e => updateConfigLocal({ ...config, bot_persona: e.target.value })}
-                  rows={6}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary font-sans leading-relaxed"
-                  placeholder="Definisikan karakter MIA di sini..."
-                />
-              </div>
-
-              {/* Voice & Speech Engine */}
+              <div><label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Base System Persona</label><textarea value={config.bot_persona} onChange={e => updateConfigLocal({ ...config, bot_persona: e.target.value })} rows={6} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary font-sans leading-relaxed" placeholder="Definisikan karakter MIA di sini..." /></div>
               <div className="pt-8 mt-8 border-t border-white/5">
                 <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest mb-6">Voice & Speech Engine</h3>
-
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">STT Engine</label>
-                    <select
-                      value={config.stt_engine}
-                      onChange={e => updateConfigLocal({ ...config, stt_engine: e.target.value })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                    >
-                      <option value="speech_recognition">Python Native (Google)</option>
-                      <option value="whisper">OpenAI Whisper (Local)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">TTS Engine</label>
-                    <select
-                      value={config.tts_engine}
-                      onChange={e => updateConfigLocal({ ...config, tts_engine: e.target.value })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                    >
-                      <option value="edge-tts">Edge-TTS (Premium Voices)</option>
-                      <option value="elevenlabs">ElevenLabs (High Fidelity)</option>
-                      <option value="gtts">Google TTS (Standard)</option>
-                    </select>
-                  </div>
+                  <div><label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">STT Engine</label><select value={config.stt_engine} onChange={e => updateConfigLocal({ ...config, stt_engine: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"><option value="speech_recognition">Python Native (Google)</option><option value="whisper">OpenAI Whisper (Local)</option></select></div>
+                  <div><label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">TTS Engine</label><select value={config.tts_engine} onChange={e => updateConfigLocal({ ...config, tts_engine: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"><option value="edge-tts">Edge-TTS</option><option value="elevenlabs">ElevenLabs</option><option value="gtts">Google TTS</option></select></div>
                 </div>
-
-                {config.tts_engine === 'elevenlabs' && (
-                  <div className="mt-4 animate-in slide-in-from-top-2 duration-300">
-                    <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">ElevenLabs API Key</label>
-                    <input
-                      type="password" value={config.elevenlabs_api_key}
-                      onChange={e => updateConfigLocal({ ...config, elevenlabs_api_key: e.target.value })}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary"
-                      placeholder="sk-..."
-                    />
-                  </div>
-                )}
+                {config.tts_engine === 'elevenlabs' && (<div className="mt-4 animate-in slide-in-from-top-2 duration-300"><label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">ElevenLabs API Key</label><input type="password" value={config.elevenlabs_api_key} onChange={e => updateConfigLocal({ ...config, elevenlabs_api_key: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary" placeholder="sk-..." /></div>)}
               </div>
             </div>
-            {/* Contextual Action Bar for Personality */}
             {hasChanges && (
               <div className="absolute bottom-6 left-6 right-6 p-4 rounded-2xl bg-black/60 backdrop-blur-2xl border border-primary/30 flex items-center justify-between animate-in slide-in-from-bottom-4 duration-500 shadow-2xl z-[10]">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(0,255,204,0.6)]" />
-                  <span className="text-xs font-bold text-white/80">Karakter MIA telah berubah</span>
-                </div>
+                <div className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(0,255,204,0.6)]" /><span className="text-xs font-bold text-white/80">Karakter MIA telah berubah</span></div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => originalConfig && setGlobalConfig(originalConfig)}
-                    className="px-4 py-2 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all"
-                  >
-                    Batalkan
-                  </button>
-                  <button
-                    onClick={() => handleSave()}
-                    disabled={isSaving || isUploading}
-                    className="flex items-center gap-2 px-6 py-2 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-                  >
-                    {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />}
-                    Simpan Karakter
-                  </button>
+                  <button onClick={() => originalConfig && setGlobalConfig(originalConfig)} className="px-4 py-2 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all">Batalkan</button>
+                  <button onClick={() => handleSave()} disabled={isSaving || isUploading} className="flex items-center gap-2 px-6 py-2 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all disabled:opacity-50">{isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />}Simpan Karakter</button>
                 </div>
               </div>
             )}
@@ -1213,138 +883,78 @@ export default function Settings() {
 
         {activeTab === 'skills' && (
           <div className="max-w-6xl mx-auto animate-in slide-in-from-right-4 duration-500">
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/20 text-primary"><Zap size={24} /></div>
-                Skills & Autonomous Abilities
-              </h2>
-              <div className="text-xs font-mono text-white/30 uppercase tracking-[0.2em]">MIA Self-Expansion Module</div>
-            </div>
-
+            <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-bold text-white flex items-center gap-3"><div className="p-2 rounded-lg bg-primary/20 text-primary"><Zap size={24} /></div>Skills & Autonomous Abilities</h2><div className="text-xs font-mono text-white/30 uppercase tracking-[0.2em]">MIA Self-Expansion Module</div></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Skill Builder Card */}
-              <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-primary/20 to-secondary/10 border border-primary/30 shadow-2xl flex flex-col items-center justify-center text-center group cursor-pointer hover:scale-[1.02] transition-all">
-                <div className="w-16 h-16 rounded-full bg-primary text-black flex items-center justify-center mb-4 shadow-lg shadow-primary/30 group-hover:rotate-12 transition-transform">
-                  <Plus size={32} />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">Pesan Keahlian Baru</h3>
-                <p className="text-xs text-white/50 leading-relaxed">
-                  Cukup bicarakan kebutuhan Anda di chat utama, dan MIA akan menulis kodenya sendiri untuk Anda.
-                </p>
-              </div>
-
-              {/* Dynamic Skill Cards */}
+              <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-primary/20 to-secondary/10 border border-primary/30 shadow-2xl flex flex-col items-center justify-center text-center group cursor-pointer hover:scale-[1.02] transition-all"><div className="w-16 h-16 rounded-full bg-primary text-black flex items-center justify-center mb-4 shadow-lg shadow-primary/30 group-hover:rotate-12 transition-transform"><Plus size={32} /></div><h3 className="text-lg font-bold text-white mb-2">Pesan Keahlian Baru</h3><p className="text-xs text-white/50 leading-relaxed">Cukup bicarakan kebutuhan Anda di chat utama, dan MIA akan menulis kodenya sendiri untuk Anda.</p></div>
               {skills.map((skill: Skill) => (
                 <div key={skill.id} className="p-6 rounded-[2.5rem] bg-black/40 backdrop-blur-3xl border border-white/10 hover:border-primary/40 transition-all group">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 rounded-2xl bg-white/5 text-white/70 group-hover:text-primary transition-colors">
-                      <Zap size={20} />
-                    </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                      <button onClick={() => openEditSkill(skill)} className="p-2 text-white/40 hover:text-white" title="Edit Logic"><Pencil size={16} /></button>
-                      <button onClick={() => uninstallSkill(skill.id)} className="p-2 text-white/40 hover:text-error" title="Uninstall Skill"><Trash2 size={16} /></button>
-                    </div>
-                  </div>
-                  <h3 className="text-lg font-bold text-white mb-1">{skill.name}</h3>
-                  <p className="text-xs text-white/40 line-clamp-2 mb-6 h-8">{skill.description}</p>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                    <span className="text-[10px] font-mono text-white/20 uppercase">
-                      {skill.created_at ? new Date(skill.created_at).toLocaleDateString() : 'Active'}
-                    </span>
-                    <button
-                      onClick={() => testSkill(skill.id)}
-                      className="px-4 py-1.5 rounded-full bg-white/5 text-white/70 text-[10px] font-bold hover:bg-primary hover:text-black transition-all"
-                    >
-                      Test Ability
-                    </button>
-                  </div>
+                  <div className="flex justify-between items-start mb-4"><div className="p-3 rounded-2xl bg-white/5 text-white/70 group-hover:text-primary transition-colors"><Zap size={20} /></div><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => openEditSkill(skill)} className="p-2 text-white/40 hover:text-white"><Pencil size={16} /></button><button onClick={() => uninstallSkill(skill.id)} className="p-2 text-white/40 hover:text-error"><Trash2 size={16} /></button></div></div>
+                  <h3 className="text-lg font-bold text-white mb-1">{skill.name}</h3><p className="text-xs text-white/40 line-clamp-2 mb-6 h-8">{skill.description}</p>
+                  <div className="flex items-center justify-between pt-4 border-t border-white/5"><span className="text-[10px] font-mono text-white/20 uppercase">{skill.created_at ? new Date(skill.created_at).toLocaleDateString() : 'Active'}</span><button onClick={() => testSkill(skill.id)} className="px-4 py-1.5 rounded-full bg-white/5 text-white/70 text-[10px] font-bold hover:bg-primary hover:text-black transition-all">Test Ability</button></div>
                 </div>
               ))}
             </div>
-
-            {skills.length === 0 && (
-              <div className="mt-12 p-12 rounded-[3rem] border border-dashed border-white/10 text-center">
-                <div className="text-white/20 font-mono text-sm">Belum ada keahlian tambahan yang dipelajari.</div>
-                <div className="text-[10px] text-white/10 mt-2 uppercase tracking-widest">MIA sedang menunggu perintah pertama Anda</div>
-              </div>
-            )}
           </div>
         )}
 
-        {activeTab === 'resilience' && (
-          <ResilienceDashboard />
-        )}
+        {activeTab === 'resilience' && (<ResilienceDashboard />)}
 
-      </div>
-
-
-
-      {/* Toast Notification */}
-      <div className="fixed bottom-8 right-8 flex flex-col gap-2 z-[100]">
-        {toasts.map(t => (
-          <div key={t.id} className={`flex items-center gap-3 px-6 py-3 rounded-2xl border backdrop-blur-xl animate-in slide-in-from-right-4 duration-300 shadow-2xl ${t.type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-400' :
-            t.type === 'info' ? 'bg-primary/10 border-primary/50 text-primary' :
-              'bg-error/10 border-error/50 text-error'
-            }`}>
-            {t.type === 'success' ? <CheckCircle2 size={20} /> : t.type === 'info' ? <Info size={20} /> : <XCircle size={20} />}
-            <span className="font-bold text-sm">{t.msg}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* SKILL EDITOR MODAL */}
-      {editingSkill && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div
-            className="w-full max-w-4xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-            style={{ backgroundColor: `rgba(26, 26, 26, ${1 - (config?.appearance?.ui_opacity ?? 0.5)})` }}
-          >
-            <div
-              className="p-6 border-b border-white/10 flex justify-between items-center"
-              style={{ backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.05})` }}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/20 text-primary"><Pencil size={20} /></div>
-                <div>
-                  <h3 className="text-xl font-bold text-white">Edit Logic: {editingSkill.name}</h3>
-                  <p className="text-[10px] text-white/30 uppercase tracking-widest font-mono">Fine-Tuning Core Skill Runbook</p>
+        {/* Skill Editor Modal */}
+        {editingSkill && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="w-full max-w-4xl bg-[#1a1a1a] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/20 text-primary"><Pencil size={20} /></div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Edit Ability: {editingSkill.name}</h2>
+                    <p className="text-xs text-white/40">Modifikasi logika Python secara langsung untuk memperluas kapabilitas MIA.</p>
+                  </div>
                 </div>
+                <button onClick={() => setEditingSkill(null)} className="p-2 text-white/40 hover:text-white transition-colors">
+                  <XCircle size={24} />
+                </button>
               </div>
-              <button onClick={() => setEditingSkill(null)} className="p-2 text-white/40 hover:text-white"><XCircle size={24} /></button>
-            </div>
-
-            <div className="flex-1 p-6 overflow-hidden flex flex-col gap-4">
-              <div className="flex-1 bg-black/40 rounded-2xl border border-white/5 overflow-hidden">
+              
+              <div className="flex-1 p-6 overflow-hidden flex flex-col">
                 <textarea
                   value={skillCode}
                   onChange={(e) => setSkillCode(e.target.value)}
-                  className="w-full h-full p-6 bg-transparent text-primary font-mono text-sm outline-none resize-none custom-scrollbar"
+                  className="flex-1 w-full bg-black/40 border border-white/5 rounded-2xl p-6 text-primary font-mono text-sm outline-none focus:border-primary/30 transition-all resize-none custom-scrollbar"
                   spellCheck={false}
                 />
               </div>
 
-              <div className="flex justify-between items-center pt-2">
-                <p className="text-[10px] text-white/20 italic">Warning: Kesalahan pada kode Python dapat menyebabkan skill gagal dieksekusi.</p>
+              <div className="p-6 border-t border-white/5 bg-white/5 flex items-center justify-between">
+                <div className="text-[10px] text-white/20 font-mono">
+                  CAUTION: Mengubah kode secara tidak tepat dapat menyebabkan malfungsi pada modul skill.
+                </div>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setEditingSkill(null)}
-                    className="px-6 py-2 rounded-xl text-white/60 font-bold hover:text-white transition-all"
+                    className="px-6 py-2.5 rounded-xl text-white/60 text-xs font-bold hover:text-white transition-all"
                   >
                     Batal
                   </button>
                   <button
                     onClick={saveSkillEdit}
-                    className="px-8 py-2 bg-primary text-black rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                    className="flex items-center gap-2 px-8 py-2.5 bg-primary text-black rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/30"
                   >
+                    <Save size={16} />
                     Simpan Logic
                   </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      <div className="fixed bottom-8 right-8 flex flex-col gap-2 z-[100]">
+        {toasts.map(t => (
+          <div key={t.id} className={`flex items-center gap-3 px-6 py-3 rounded-2xl border backdrop-blur-xl animate-in slide-in-from-right-4 duration-300 shadow-2xl ${t.type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-400' : t.type === 'info' ? 'bg-primary/10 border-primary/50 text-primary' : 'bg-error/10 border-error/50 text-error'}`}><div className={`w-2 h-2 rounded-full ${t.type === 'success' ? 'bg-green-400' : t.type === 'info' ? 'bg-primary' : 'bg-error'}`} /><span className="text-sm font-bold">{t.msg}</span></div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -23,7 +23,7 @@ import sqlite3
 import threading
 from pynput import keyboard
 import time
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Query, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Query, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -867,7 +867,6 @@ async def test_provider(name: str, mutate_stats: bool = Query(False)):
             purpose = p.purpose
 
             # --- GRAND RESOLVER STEP ---
-            # MIA now resolves            # Resolved Step: Cleans API Key and enforces v1beta
             resolved = provider_resolver.resolve(name, model_id, target_url, api_key)
             final_url = resolved["url"]
             final_api_key = resolved["api_key"]
@@ -952,8 +951,6 @@ async def test_provider(name: str, mutate_stats: bool = Query(False)):
 
 # --- APPEARANCE ENDPOINTS ---(For Settings GUI) ---
 
-
-
 class TestConnectionRequest(BaseModel):
     provider_name: str
     api_key: str
@@ -970,7 +967,10 @@ async def test_connection(req: TestConnectionRequest):
     """
     import time, httpx
     print(f"[Test-Connection] Request for: {req.provider_name} ({req.model_id})")
-    if not req.api_key:
+    
+    # Protocol specific validation
+    is_local = "localhost" in req.base_url or "127.0.0.1" in req.base_url
+    if not req.api_key and not is_local:
         return {"status": "error", "message": "API Key tidak boleh kosong."}
 
     protocol = req.protocol.lower()
@@ -1440,7 +1440,6 @@ async def websocket_heartbeat(websocket: WebSocket):
 
                         if response_text:
                             mia_msg_id = await asyncio.to_thread(history_manager.add_message, "MIA", response_text)
-                            pass # Memory is synced via history_manager.py
                         
                         await websocket.send_json({"type": "status", "content": "Speaking..."})
                         current_state = emotion_manager.get_state()
@@ -1451,9 +1450,9 @@ async def websocket_heartbeat(websocket: WebSocket):
                         await websocket.send_json({
                             "type": "message", 
                             "id": mia_msg_id,
-                            "user_msg_id": msg_id, # Database ID of user's message
-                            "client_id": client_id, # Temporary ID for frontend matching
-                            "content": response_text, # Send actual text response immediately
+                            "user_msg_id": msg_id, 
+                            "client_id": client_id, 
+                            "content": response_text, 
                             "audio": None 
                         })
 
