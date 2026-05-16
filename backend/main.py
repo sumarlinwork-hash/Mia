@@ -67,6 +67,9 @@ async def lifespan(app: FastAPI):
     # Sync Mode Hub with saved config
     initial_config = load_config()
     mode_hub.set_mode(MIAMode(initial_config.os_mode))
+
+    # Pre-load Local LLM if active (Zero-latency first response)
+    asyncio.create_task(brain_orchestrator.preload_local_models())
     
     yield
     # Shutdown logic
@@ -818,6 +821,7 @@ async def add_provider(name: str, config_data: ProviderConfig):
     config = load_config()
     config.providers[name] = config_data
     save_config(config)
+    brain_orchestrator._refresh_brain_nodes() # INSTANT REFRESH
     await crone_daemon.broadcast_config_update()
     return {"status": "success"}
 
@@ -827,6 +831,8 @@ async def delete_provider(name: str):
     if name in config.providers:
         del config.providers[name]
         save_config(config)
+        brain_orchestrator._refresh_brain_nodes() # INSTANT REFRESH
+        await crone_daemon.broadcast_config_update()
         return {"status": "success"}
     return {"status": "error", "message": "Provider not found"}
 
@@ -909,6 +915,21 @@ async def test_provider(name: str, mutate_stats: bool = Query(False)):
                         json={"inputs": "ping"}
                     )
                     resp.raise_for_status()
+                elif protocol == "native_binary":
+                    # Native Binary (.gguf)
+                    if not os.path.exists(final_url):
+                        raise Exception(f"File model tidak ditemukan di jalur: {final_url}")
+                    
+                    # Minimal handshake: Load and prompt
+                    try:
+                        resp_text = await brain_orchestrator._call_native_binary(final_url, "Tulis OK.", "ping")
+                        if not resp_text:
+                            raise Exception("Model tidak memberikan respons.")
+                        # Simulate success for the latency check below
+                        class MockResp: status_code = 200
+                        resp = MockResp()
+                    except Exception as e:
+                        raise Exception(f"Gagal inisialisasi model: {str(e)}")
                 else:
                     # Jalur Smart OpenAI (HuggingFace Router, Groq, DeepSeek, dll)
                     headers = {"Content-Type": "application/json"}
@@ -1017,6 +1038,23 @@ async def test_connection(req: TestConnectionRequest):
                     if final_api_key:
                         headers["Authorization"] = f"Bearer {final_api_key}"
                     resp = await client.post(final_url, headers=headers, json={"inputs": "ping"})
+                elif protocol == "native_binary":
+                    # Native Binary (.gguf)
+                    if not os.path.exists(final_url):
+                        return {"status": "error", "message": f"File model tidak ditemukan di jalur: {final_url}"}
+                    
+                    # Minimal handshake: Load and prompt (very light)
+                    # Note: We reuse brain_orchestrator logic to ensure consistency
+                    try:
+                        resp_text = await brain_orchestrator._call_native_binary(final_url, "Tulis OK.", "ping")
+                        if resp_text:
+                            # Mock a 200 response for the success block below
+                            class MockResp: status_code = 200
+                            resp = MockResp()
+                        else:
+                            raise Exception("Model tidak memberikan respons.")
+                    except Exception as e:
+                        return {"status": "error", "message": f"Gagal inisialisasi model: {str(e)}"}
                 else:
                     # OpenAI Compatible (Groq, DeepSeek, etc.)
                     headers = {"Content-Type": "application/json"}
@@ -1098,12 +1136,23 @@ async def toggle_intimacy(active: bool):
     import time
     
     if active:
-        # VALIDATE: Only allow ON if pending offer exists and hasn't expired (3 mins)
+        # If already active, just return success (Idempotent)
+        if intimacy_mode:
+            return {"status": "success", "intimacy_active": True, "pending_offer": False}
+
+        # VALIDATE GATE: Check if MIA is emotionally ready
+        from core.emotion_manager import emotion_manager
+        is_ready = emotion_manager.intimacy_gate()
+
+        # VALIDATE: Allow ON if MIA offered it OR if Bos manually clicks and gate is OPEN
         now = time.time()
-        if pending_intimacy_offer and (now - offer_timestamp < 180):
+        is_valid_offer = pending_intimacy_offer and (now - offer_timestamp < 180)
+        
+        if is_valid_offer or is_ready:
             intimacy_mode = True
             pending_intimacy_offer = False
-            await crone_daemon.broadcast_event("intimacy_updated")
+            # Fire and forget broadcast to avoid blocking the response
+            asyncio.create_task(crone_daemon.broadcast_event("intimacy_updated"))
             return {"status": "success", "intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
         else:
             # Revert pending if expired, reject activation
@@ -1113,7 +1162,7 @@ async def toggle_intimacy(active: bool):
         # Turning off is always allowed
         intimacy_mode = False
         pending_intimacy_offer = False
-        await crone_daemon.broadcast_event("intimacy_updated")
+        asyncio.create_task(crone_daemon.broadcast_event("intimacy_updated"))
         return {"status": "success", "intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
 
 @app.get("/api/intimacy/status")
@@ -1197,6 +1246,13 @@ async def get_chat_history(limit: int = 50, offset: int = 0):
 async def clear_chat_history():
     history_manager.clear_history()
     await memory_orchestrator.clear_memory()
+    return {"status": "success"}
+
+@app.post("/api/chat/history/rewind")
+async def rewind_history(message_id: int = Query(...)):
+    """Mundur ke posisi pesan tertentu dan hapus semua setelahnya."""
+    history_manager.rewind_to(message_id)
+    brain_orchestrator.clear_cache()
     return {"status": "success"}
 
 class ChatUpdateRequest(BaseModel):

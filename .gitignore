@@ -99,3 +99,5 @@ backend/history/*.db-shm
 backend/history/*.db-wal
 backend/history/*.db-journal
 backend/history.db
+backend/iam_mia/chroma_db/chroma.sqlite3
+backend/provider_stats.db

@@ -158,4 +158,12 @@ class HistoryManager:
             conn.commit()
         self._sync_to_markdown()
 
+    @retry_db_lock()
+    def rewind_to(self, message_id):
+        """Hapus semua pesan yang memiliki ID lebih besar dari message_id."""
+        with self.get_connection() as conn:
+            conn.execute("DELETE FROM messages WHERE id > ?", (message_id,))
+            conn.commit()
+        self._sync_to_markdown()
+
 history_manager = HistoryManager()

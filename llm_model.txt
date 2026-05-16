@@ -1,0 +1,7 @@
+Dolphin-2.9-Llama-3-8B
+Llama-3-8B-Instruct-Abliterated (Paling Bebas)
+Dolphin-2.9.4-Qwen2-7B
+
+micro
+Dolphin-2.6-Phi-2
+Qwen2-1.5B-Instruct-Abliterated

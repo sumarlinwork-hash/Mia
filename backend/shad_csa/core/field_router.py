@@ -21,7 +21,8 @@ class FieldRouter:
         # Sigmoid-based Dynamic Policies
         return {
             "load_factor": 1.0 - intensity, # High intensity means low load factor
-            "timeout_ms": int(5000 + (1 - intensity) * 10000), # 5s to 15s timeout
+            # P4-X: Increased timeout range (60s to 600s) for Local LLM support on slow hardware
+            "timeout_ms": int(60000 + (1 - intensity) * 540000), 
             "parallel_execution": intensity > 0.4,
             "retry_count": int(intensity * 3),
             "use_local_heart": intensity < 0.2,

@@ -29,32 +29,44 @@ async def run_full_diagnostic() -> list:
             from core.provider_resolver import provider_resolver
             resolved = provider_resolver.resolve(name, p.model_id, p.base_url, p.api_key)
             test_url = resolved["url"]
+            protocol = resolved["protocol"]
             
-            try:
-                start = time.time()
-                resp = await client.get(test_url)
-                latency = int((time.time() - start) * 1000)
-                
-                if resp.status_code == 401:
+            if protocol == "native_binary":
+                import os
+                if os.path.exists(test_url):
+                    diagnostic["status"] = "OK"
+                    diagnostic["reason"] = "Model lokal ditemukan dan siap."
+                    diagnostic["action"] = "Tidak ada aksi diperlukan."
+                else:
                     diagnostic["status"] = "FAIL"
-                    diagnostic["reason"] = "Autentikasi gagal (401)."
-                    diagnostic["action"] = "API Key tidak valid atau telah kedaluwarsa."
-                elif resp.status_code == 429:
+                    diagnostic["reason"] = f"File model tidak ditemukan di: {test_url}"
+                    diagnostic["action"] = "Periksa kembali jalur file lokal Anda di Settings."
+            else:
+                try:
+                    start = time.time()
+                    resp = await client.get(test_url)
+                    latency = int((time.time() - start) * 1000)
+                    
+                    if resp.status_code == 401:
+                        diagnostic["status"] = "FAIL"
+                        diagnostic["reason"] = "Autentikasi gagal (401)."
+                        diagnostic["action"] = "API Key tidak valid atau telah kedaluwarsa."
+                    elif resp.status_code == 429:
+                        diagnostic["status"] = "FAIL"
+                        diagnostic["reason"] = "Rate limit terlampaui (429)."
+                        diagnostic["action"] = "Anda terlalu sering mengirim pesan. Tunggu beberapa saat."
+                    elif resp.status_code >= 500:
+                        diagnostic["status"] = "FAIL"
+                        diagnostic["reason"] = f"Server provider bermasalah ({resp.status_code})."
+                        diagnostic["action"] = "Ini masalah di sisi provider. Coba gunakan provider cadangan."
+                except httpx.ConnectTimeout:
                     diagnostic["status"] = "FAIL"
-                    diagnostic["reason"] = "Rate limit terlampaui (429)."
-                    diagnostic["action"] = "Anda terlalu sering mengirim pesan. Tunggu beberapa saat."
-                elif resp.status_code >= 500:
+                    diagnostic["reason"] = "Koneksi timeout."
+                    diagnostic["action"] = "Periksa koneksi internet Anda atau URL base API."
+                except Exception as e:
                     diagnostic["status"] = "FAIL"
-                    diagnostic["reason"] = f"Server provider bermasalah ({resp.status_code})."
-                    diagnostic["action"] = "Ini masalah di sisi provider. Coba gunakan provider cadangan."
-            except httpx.ConnectTimeout:
-                diagnostic["status"] = "FAIL"
-                diagnostic["reason"] = "Koneksi timeout."
-                diagnostic["action"] = "Periksa koneksi internet Anda atau URL base API."
-            except Exception as e:
-                diagnostic["status"] = "FAIL"
-                diagnostic["reason"] = f"Error jaringan: {str(e)}"
-                diagnostic["action"] = "Pastikan firewall tidak memblokir koneksi."
+                    diagnostic["reason"] = f"Error jaringan: {str(e)}"
+                    diagnostic["action"] = "Pastikan firewall tidak memblokir koneksi."
             
             results.append(diagnostic)
 
@@ -73,7 +85,7 @@ async def run_full_diagnostic() -> list:
         { 
             "name": "TIMEOUT BOUNDARY", 
             "status": "ACTIVE", 
-            "desc": "Execution timeout is set to 25s max." 
+            "desc": "Execution timeout is set to 600s max (Optimized for Local LLM)." 
         },
         { 
             "name": "EBARF BUDGET", 

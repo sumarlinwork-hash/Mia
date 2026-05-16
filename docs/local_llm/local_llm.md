@@ -12,25 +12,25 @@ MIA aims to achieve total cognitive autonomy. By integrating GPT4All, MIA can fu
 
 ---
 
-## 2. Technical Strategy: Local LLM Integration (Ollama, GPT4All, LM Studio)
+## 2. Technical Strategy: Dual-Path Integration
 
-MIA provides a "Local LLM" umbrella provider designed to integrate with any OpenAI-compatible local engine (Ollama, GPT4All, LM Studio, etc.).
+MIA supports two ways to integrate local LLMs, ensuring flexibility for different hardware and user preferences.
 
-### Connectivity Details:
-- **Protocol**: OpenAI Compatible (Local)
-- **Base URL**: `http://localhost:11434/v1` (Ollama) or `http://localhost:4891/v1` (GPT4All)
-- **Model Target**: User-defined (e.g., `llama3`, `deepseek-r1`, `mistral`).
-- **API Key**: Optional for local endpoints (`localhost` or `127.0.0.1`).
+### Path A: API Bridge Mode (OpenAI Protocol)
+This is the current "Local LLM" umbrella provider. It connects to an external local API server.
+- **Engines**: Ollama, GPT4All (API Server enabled), LM Studio.
+- **Protocol**: `openai_compatible`
+- **Base URL**: `http://localhost:11434/v1` or `http://localhost:4891/v1`
+- **Pros**: Offloads memory to a separate process; easy to swap engines.
+- **Cons**: Requires managing a separate application.
 
-### Provider Mapping in MIA (Manual Registration):
-| Field | Value |
-|-------|-------|
-| `display_name` | "Local LLM" |
-| `protocol` | `openai_compatible` |
-| `base_url` | `http://localhost:11434/v1` |
-| `model_id` | `llama3` |
-| `purpose` | "Inti Logika & Pikiran (Private)" |
-| `cost_label` | "Gratis (Offline)" |
+### Path B: Native Runtime Mode (Direct Binary)
+MIA loads the model file directly using native Python bindings.
+- **Engines**: GPT4All Python Library, llama-cpp-python.
+- **Protocol**: `native_binary`
+- **Model Target**: Absolute path to `.gguf` file (e.g., `C:\AI\models\llama-3.gguf`).
+- **Pros**: Zero dependencies on external apps; potentially lower latency.
+- **Cons**: Consumes MIA's backend memory; limited to compatible formats (.gguf).
 
 ---
 

@@ -33,6 +33,8 @@ class BrainOrchestrator:
         # HuggingFace Smart Failover States (RAM Memory Runtime)
         self.hf_runtime_states = {} # {"HuggingFace (Auto)": {"active_path": "", "health_status": "Healthy"}}
         self.hf_circuit_breakers = {} # {"HuggingFace (Auto)": {"failures": 0, "open_until": 0.0}}
+        # Native Binary Model Cache (Direct Load)
+        self.native_models = {} # {path: GPT4AllInstance}
         # Brain starts with a refresh to be ready
         self._refresh_brain_nodes()
 
@@ -96,6 +98,12 @@ class BrainOrchestrator:
             return model_id
         return f"{model_id}:preferred"
 
+    def clear_cache(self):
+        """Reset internal states for a fresh start after rewind."""
+        self.response_history = []
+        self.active_graphs = {}
+        self.graph_timestamps = {}
+
     def _build_hf_native_payload(self, model_id: str, system_prompt: str, user_message: str) -> dict:
         prompt = f"<|system|>\n{system_prompt}\n<|user|>\n{user_message}\n<|assistant|>\n"
         return {
@@ -130,6 +138,82 @@ class BrainOrchestrator:
         resp.raise_for_status()
         data = resp.json()
         return data["choices"][0]["message"]["content"]
+
+    async def _call_native_binary(self, model_path: str, system_prompt: str, user_message: str) -> str:
+        """
+        Direct model inference using GPT4All Python bindings.
+        Loads model on-demand and caches it in memory.
+        """
+        from gpt4all import GPT4All
+        import os
+        import time
+
+        model = await self._get_native_model(model_path)
+        
+        # 3. Inference (Sync in Thread to avoid blocking event loop)
+        def run_inference():
+            start_t = time.time()
+            print(f"[Brain] [Inference] Processing request... (Max 512 tokens)")
+            with model.chat_session(system_prompt):
+                # Using a slightly lower max_tokens for speed on old CPUs
+                res = model.generate(user_message, max_tokens=512, temp=0.7)
+                elapsed = time.time() - start_t
+                print(f"[Brain] [Inference] SUCCESS! Response generated in {elapsed:.2f}s.")
+                return res
+
+        print(f"[Brain] Running Native Inference...")
+        response = await asyncio.to_thread(run_inference)
+        return response
+
+    async def _get_native_model(self, model_path: str):
+        """Helper to get or load a native model."""
+        from gpt4all import GPT4All
+        import os
+
+        # 1. Resolve absolute path
+        if not os.path.isabs(model_path):
+            model_path = os.path.abspath(model_path)
+        
+        # 2. Get or Load Model
+        if model_path not in self.native_models:
+            print(f"[Brain] Loading Native Model from: {model_path} ...")
+            model_dir = os.path.dirname(model_path)
+            model_file = os.path.basename(model_path)
+            
+            try:
+                # Optimized for Ivy Bridge: CPU only, smaller ctx, multi-threaded
+                import multiprocessing
+                threads = multiprocessing.cpu_count()
+                
+                model = GPT4All(
+                    model_file, 
+                    model_path=model_dir, 
+                    allow_download=False, 
+                    n_ctx=2048, # Reduced from 4096 for RAM safety
+                    device='cpu',
+                    n_threads=threads
+                )
+                self.native_models[model_path] = model
+                print(f"[Brain] [SUCCESS] Model loaded with {threads} threads.")
+            except Exception as e:
+                raise Exception(f"Gagal memuat model lokal: {str(e)}")
+
+        return self.native_models[model_path]
+
+    async def preload_local_models(self):
+        """Pre-load any active local models to reduce first-response latency."""
+        config = load_config()
+        for name, p in config.providers.items():
+            if p.is_active and p.protocol == "Native Binary (.gguf)":
+                # For native mode, the path is in the base_url or api_key field usually
+                model_path = p.base_url
+                if model_path and os.path.exists(model_path):
+                    print(f"[Brain] Auto-starting Local LLM: {name} ({os.path.basename(model_path)})")
+                    try:
+                        await self._get_native_model(model_path)
+                        print(f"[Brain] [SUCCESS] Local LLM '{name}' is READY and cached in memory.")
+                    except Exception as e:
+                        print(f"[Brain] [ERROR] Failed to auto-start Local LLM '{name}': {e}")
 
     def get_runtime_state(self, provider_name: str) -> dict:
         return self.hf_runtime_states.get(provider_name, {
@@ -363,14 +447,16 @@ If you use a tool, I will execute it and provide the result in the next turn.
         self.test_mode = test_mode
         self.mutate_stats = mutate_stats if test_mode else True
         self.pipeline_start_time = time.time()
-        self.pipeline_deadline = self.pipeline_start_time + 25.0
+        # Increased timeout to 600s (10 mins) for Local LLM support on slow hardware
+        TIMEOUT_LIMIT = 600.0
+        self.pipeline_deadline = self.pipeline_start_time + TIMEOUT_LIMIT
         try:
             return await asyncio.wait_for(
                 self._execute_pipeline(prompt, context, is_intimate, on_status),
-                timeout=25.0
+                timeout=TIMEOUT_LIMIT
             )
         except asyncio.TimeoutError:
-            print("[Critical] Global Pipeline Timeout (25s) reached.")
+            print(f"[Critical] Global Pipeline Timeout ({TIMEOUT_LIMIT}s) reached.")
             if on_status:
                 await on_status({
                     "type": "status", 
@@ -785,6 +871,8 @@ If you use a tool, I will execute it and provide the result in the next turn.
                     return await self._call_gemini(p, target_url, actual_api_key, system_prompt, user_message, images)
                 elif protocol == "hf_native":
                     return await self._call_huggingface_native(p, target_url, actual_api_key, system_prompt, user_message)
+                elif protocol == "native_binary":
+                    return await self._call_native_binary(target_url, system_prompt, user_message)
                 else:
                     return await self._call_openai_compatible(p, target_url, actual_api_key, system_prompt, user_message, images)
             except Exception as e:

@@ -1,4 +1,5 @@
 import httpx
+import os
 import json
 import asyncio
 import re
@@ -26,6 +27,25 @@ class ProviderResolver:
         raw_url = base_url.strip() if base_url else ""
         model_id = model_id.strip()
         protocol = "openai" # Default
+
+        # 0. NATIVE BINARY DETECTION (If URL is actually a local file path)
+        # P4-X: Enhanced detection for Windows paths and encoded backslashes
+        is_potential_path = raw_url and (
+            raw_url.endswith(".gguf") or 
+            "\\" in raw_url or 
+            "%5C" in raw_url.upper() or 
+            (raw_url.startswith("/") and not raw_url.startswith("//")) or
+            (len(raw_url) > 2 and raw_url[1] == ":") # C:\ format
+        )
+        
+        if raw_url and not raw_url.startswith("http") and is_potential_path:
+            print(f"[Resolver] Detected local file path. Switching to native_binary protocol.")
+            return {
+                "url": raw_url,
+                "protocol": "native_binary",
+                "model_id": model_id,
+                "api_key": api_key
+            }
 
         # 1. SMART ASSEMBLY (Placeholder Replacement)
         url = raw_url.replace("{model_id}", model_id) if raw_url else ""
@@ -87,6 +107,9 @@ class ProviderResolver:
         """
         Performs a light network probe to distinguish between ISP block vs API error.
         """
+        if not url or not url.startswith("http"):
+            return True # Assume OK if local or malformed (skip probe)
+            
         try:
             domain = url.split("//")[-1].split("/")[0]
             async with httpx.AsyncClient(timeout=3.0) as client:

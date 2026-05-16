@@ -15,7 +15,7 @@ import type { App as Skill } from './utils/viewModel';
 import ResilienceDashboard from './ResilienceDashboard';
 
 
-const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Groq"];
+const PROTOCOLS = ["OpenAI Compatible", "Gemini API", "Groq", "Native Binary (.gguf)"];
 const PURPOSES = ["Inti Logika & Pikiran", "Persepsi Visual & Imajinasi", "Kreativitas & Kreasi Media", "Analisis Data & Pengetahuan", "Khusus Intimacy & Uncensored"];
 const COSTS = ["Gratis berlimit", "Berbayar", "Lokal"];
 const BACKGROUND_TYPES = ['video', 'image', 'color', 'themes'] as const;
@@ -57,6 +57,7 @@ const PRESETS: Record<string, Partial<ProviderConfig & { endpoint: string }>> = 
   "ByteDance / TikTok": { protocol: "OpenAI Compatible", base_url: "https://api.openrouter.ai", endpoint: "/api/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
   "Xiaomi (MiLM)": { protocol: "OpenAI Compatible", base_url: "https://api.siliconflow.cn", endpoint: "/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
   "Moonshot AI (Kimi)": { protocol: "OpenAI Compatible", base_url: "https://api.moonshot.cn", endpoint: "/v1/chat/completions", cost_label: COSTS[1], purpose: PURPOSES[0] },
+  "GPT4All (Direct)": { protocol: "Native Binary (.gguf)", base_url: "C:\\AI\\models\\llama3.gguf", endpoint: "", cost_label: COSTS[2], purpose: PURPOSES[0] },
   "Custom": { protocol: "OpenAI Compatible", base_url: "", endpoint: "", cost_label: COSTS[0], purpose: PURPOSES[0] },
 };
 
@@ -702,15 +703,26 @@ export default function Settings() {
                         API Key
                         {(() => {
                           const isLocal = newProvider.base_url.includes("localhost") || newProvider.base_url.includes("127.0.0.1");
-                          const isValid = newProvider.api_key.length >= 8 || isLocal;
+                          const isNative = newProvider.protocol === "Native Binary (.gguf)";
+                          const isValid = newProvider.api_key.length >= 8 || isLocal || isNative;
                           return isValid ? <CheckCircle2 size={12} className="text-green-500" /> : <XCircle size={12} className="text-error" />;
                         })()}
                       </label>
                       <input type="password" value={newProvider.api_key} onChange={e => setNewProvider({ ...newProvider, api_key: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-primary" placeholder="sk-proj-..." />
                     </div>
                     <div>
-                      <label className="flex items-center gap-2 text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Target URL (Full Path) {isAutoUrl && <span className="px-2 py-0.5 rounded-full text-[9px] bg-primary/20 text-primary font-bold tracking-normal normal-case">Smart-Configured</span>}</label>
-                      <input type="text" value={isAutoUrl ? previewUrl : newProvider.base_url} readOnly={isAutoUrl} placeholder={isAutoUrl ? 'Masukkan Model ID di atas untuk melihat URL' : 'Masukkan URL lengkap API endpoint'} onChange={e => !isAutoUrl && setNewProvider({ ...newProvider, base_url: e.target.value })} className={`w-full bg-white/5 border rounded-xl px-4 py-3 outline-none font-mono text-sm transition-all ${isAutoUrl ? 'border-primary/20 text-primary/80 cursor-default' : 'border-white/10 text-white focus:border-primary'}`} />
+                      <label className="flex items-center gap-2 text-xs font-bold text-white/40 uppercase tracking-widest mb-2">
+                        {newProvider.protocol === "Native Binary (.gguf)" ? "Local Model Path (Absolute)" : "Target URL (Full Path)"}
+                        {isAutoUrl && <span className="px-2 py-0.5 rounded-full text-[9px] bg-primary/20 text-primary font-bold tracking-normal normal-case">Smart-Configured</span>}
+                      </label>
+                      <input 
+                        type="text" 
+                        value={isAutoUrl ? previewUrl : newProvider.base_url} 
+                        readOnly={isAutoUrl && newProvider.protocol !== "Native Binary (.gguf)"} 
+                        placeholder={newProvider.protocol === "Native Binary (.gguf)" ? "C:\\Users\\...\\model.gguf" : (isAutoUrl ? 'Masukkan Model ID di atas untuk melihat URL' : 'Masukkan URL lengkap API endpoint')} 
+                        onChange={e => setNewProvider({ ...newProvider, base_url: e.target.value })} 
+                        className={`w-full bg-white/5 border rounded-xl px-4 py-3 outline-none font-mono text-sm transition-all ${(isAutoUrl && newProvider.protocol !== "Native Binary (.gguf)") ? 'border-primary/20 text-primary/80 cursor-default' : 'border-white/10 text-white focus:border-primary'}`} 
+                      />
                     </div>
                   </div>
 

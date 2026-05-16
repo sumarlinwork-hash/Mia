@@ -7,7 +7,7 @@ import {
   Image as ImageIcon, FileText, MonitorUp, Volume2, VolumeX,
   Search, Code, Zap, Database, CheckSquare, Sparkles, XCircle,
   ThumbsUp, ThumbsDown, Pin, Pencil, Trash2, Download, PlayCircle,
-  Copy, Check, AlertCircle, Info as InfoIcon, Heart, Droplets
+  Copy, Check, AlertCircle, Info as InfoIcon, Heart, Droplets, RotateCcw
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -93,6 +93,7 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState<string>("Idle");
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
   const [intimacyError, setIntimacyError] = useState<string | null>(null);
+  const [isTogglingIntimacy, setIsTogglingIntimacy] = useState(false);
 
   // --- 2. REFS ---
   const { send, status: wsStatus } = useWebSocket();
@@ -256,24 +257,41 @@ export default function Home() {
   }, [input, addToast, playSFX, resumeAudioContext, send, wsStatus, queryClient]);
 
   const toggleIntimacy = useCallback(async () => {
+    if (isTogglingIntimacy) return;
+    
+    const target = !intimacyActive;
+    const previousState = intimacyActive;
+
     try {
+      setIsTogglingIntimacy(true);
       // Prime audio on interaction
       resumeAudioContext();
 
-      const target = !intimacyActive;
+      // OPTIMISTIC UPDATE: Change UI state immediately
+      queryClient.setQueryData(queryKeys.intimacy, target);
+
       const res = await fetch(`/api/intimacy/toggle?active=${target}`, { method: 'POST' });
       const data = await res.json();
 
       if (data.status === 'error') {
+        // ROLLBACK on error
+        queryClient.setQueryData(queryKeys.intimacy, previousState);
         setIntimacyError(data.message || "Sentuhan hatiku belum sampai ke sana saat ini... Tunggu aku merasa siap dan memintamu untuk menghubungkan jiwa kita ya, Bos? 🌸");
         return;
       }
 
+      // Final Sync (redundant but safe)
       queryClient.setQueryData(queryKeys.intimacy, data.intimacy_active);
       addToast(data.intimacy_active ? "Fase Keintiman Diaktifkan... Aku milikmu sepenuhnya 💖" : "Kembali ke Mode Kerja... Aku siap melayanimu, Bos 💼", data.intimacy_active ? "success" : "info");
       setShowPalette(false);
-    } catch { addToast("Failed to toggle intimacy mode", "error"); }
-  }, [intimacyActive, addToast, resumeAudioContext, queryClient]);
+    } catch {
+      // ROLLBACK on network error
+      queryClient.setQueryData(queryKeys.intimacy, previousState);
+      addToast("Failed to toggle intimacy mode", "error");
+    } finally {
+      setIsTogglingIntimacy(false);
+    }
+  }, [intimacyActive, isTogglingIntimacy, addToast, resumeAudioContext, queryClient]);
 
   // --- 6. PLAIN VALUES ---
   const paletteMenuItems = [
@@ -288,7 +306,7 @@ export default function Home() {
   // Global WebSocket message handler
   useWebSocketMessage(useCallback((data: WSMessage) => {
     if (data.type === 'ping') return;
- 
+
     if (data.type === "message" || data.type === "system") {
       setIsThinking(false);
       setStatusStage("DONE");
@@ -313,21 +331,21 @@ export default function Home() {
         } else {
           const isError = data.content?.startsWith("[SYSTEM ERROR]");
           const role = (data.type === "system" || isError) ? "System" : "MIA";
-          return [...nextHistory, { 
-            id: data.id as number, 
-            role: role, 
-            content: data.content || "", 
-            timestamp: new Date().toISOString() 
+          return [...nextHistory, {
+            id: data.id as number,
+            role: role,
+            content: data.content || "",
+            timestamp: new Date().toISOString()
           }];
         }
       });
 
       // Background validation (silent background fetch)
       queryClient.invalidateQueries({ queryKey: queryKeys.history });
- 
+
       const isError = data.content?.startsWith("[SYSTEM ERROR]");
       const role = (data.type === "system" || isError) ? "System" : "MIA";
- 
+
       if (data.audio && !isTTSMutedRef.current && role === "MIA") {
         playAudioRef.current?.(data.audio);
       }
@@ -361,7 +379,7 @@ export default function Home() {
     } else if (wsStatus === 'disconnected') {
       setStatus("Disconnected");
       setStatusStage("ERROR");
-      setStatusMessage("Connection Lost");
+      setStatusMessage("Maaf ya, sepertinya koneksi kita terputus sebentar...");
     }
   }, [wsStatus]);
 
@@ -399,13 +417,13 @@ export default function Home() {
     if (isThinking && lastRequestTime > 0) {
       const timer = setInterval(() => {
         const elapsed = (Date.now() - lastRequestTime) / 1000;
-        if (elapsed > 30 && statusStage !== "DONE") {
+        if (elapsed > (Object.values(config?.providers || {}).some(p => p.is_active && (p.protocol === "Native Binary (.gguf)" || (p.base_url && (p.base_url.includes("localhost") || p.base_url.includes("127.0.0.1"))))) ? 600 : 30) && statusStage !== "DONE") {
           setIsThinking(false);
           setStatusStage("ERROR");
-          setStatusMessage("Connection Lost. Attempting reconnect...");
+          setStatusMessage("Koneksinya sedang tidak stabil, aku coba hubungkan kembali ya...");
           // We NO LONGER inject chat bubbles here to respect Backend SSOT.
           setLastRequestTime(0);
-        } else if (elapsed > 12 && statusStage !== "DONE" && lastRequestTime > 0) {
+        } else if (elapsed > (Object.values(config?.providers || {}).some(p => p.is_active && (p.protocol === "Native Binary (.gguf)" || (p.base_url && (p.base_url.includes("localhost") || p.base_url.includes("127.0.0.1"))))) ? 120 : 12) && statusStage !== "DONE" && lastRequestTime > 0) {
           // Just update the status box silently, no chat bubble injection
           setStatusMessage("App-nya bikin emosi deh..");
           setLastRequestTime(0); // Trigger once at 12s, wait for 30s for full reset
@@ -413,7 +431,7 @@ export default function Home() {
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [isThinking, lastRequestTime, statusStage]);
+  }, [isThinking, lastRequestTime, statusStage, config]);
 
 
   useEffect(() => {
@@ -617,8 +635,22 @@ export default function Home() {
 
 
   const handleDelete = async (id: number) => {
+    if (!window.confirm("Hapus pesan ini?")) return;
     await fetch(`/api/chat/message/${id}`, { method: 'DELETE' });
     queryClient.invalidateQueries({ queryKey: queryKeys.history });
+  };
+
+  const handleRewind = async (id: number) => {
+    if (!window.confirm("Mundur ke posisi ini dan hapus semua percakapan di bawahnya?")) return;
+    try {
+      const res = await fetch(`/api/chat/history/rewind?message_id=${id}`, { method: 'POST' });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.history });
+        addToast("Waktu telah diputar kembali...", "success");
+      }
+    } catch {
+      addToast("Gagal memutar waktu", "error");
+    }
   };
 
   const handleEdit = (id: number, content: string) => {
@@ -780,6 +812,7 @@ export default function Home() {
               onEditChange={setEditValue}
               onSaveEdit={saveEdit}
               onCancelEdit={() => setEditingId(null)}
+              onRewind={handleRewind}
             />
           ))}
         <div ref={chatEndRef} />
@@ -959,7 +992,7 @@ export default function Home() {
           <div className="relative w-full max-w-md bg-black/80 backdrop-blur-3xl border border-pink-500/30 rounded-[2.5rem] p-8 text-center shadow-[0_25px_70px_rgba(236,72,153,0.15)] overflow-hidden">
             <div className="absolute -top-24 -left-24 w-48 h-48 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
             <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
-            
+
             <div className="flex flex-col items-center">
               <div className="p-4 rounded-full bg-pink-500/10 border border-pink-500/20 mb-6 animate-pulse">
                 <Heart size={40} className="text-pink-400 fill-pink-400/20 animate-heartbeat" />
@@ -968,7 +1001,7 @@ export default function Home() {
               <p className="text-base text-pink-100/90 leading-relaxed mb-8 font-sans">
                 {intimacyError}
               </p>
-              <button 
+              <button
                 onClick={() => setIntimacyError(null)}
                 className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-400 hover:to-pink-500 active:scale-98 text-white font-bold font-sans tracking-wide transition-all shadow-[0_10px_25px_rgba(236,72,153,0.3)] hover:shadow-[0_15px_30px_rgba(236,72,153,0.5)]"
               >
@@ -997,9 +1030,10 @@ interface ChatBubbleProps {
   onEditChange: (val: string) => void;
   onSaveEdit: () => void;
   onCancelEdit: () => void;
+  onRewind: (id: number) => void;
 }
 
-const ChatBubble = memo(({ msg, isMIA, isSys, bubbleColorMia, bubbleColorUser, onDelete, onEdit, onLike, onPin, isEditing, editValue, onEditChange, onSaveEdit, onCancelEdit }: ChatBubbleProps) => {
+const ChatBubble = memo(({ msg, isMIA, isSys, bubbleColorMia, bubbleColorUser, onDelete, onEdit, onLike, onPin, isEditing, editValue, onEditChange, onSaveEdit, onCancelEdit, onRewind }: ChatBubbleProps) => {
   const [isCopied, setIsCopied] = useState(false);
 
   // Helper to determine text color based on background luminance
@@ -1164,6 +1198,7 @@ const ChatBubble = memo(({ msg, isMIA, isSys, bubbleColorMia, bubbleColorUser, o
                 </>
               ) : (
                 <>
+                  <button onClick={() => msg.id && onRewind(msg.id)} className="text-white/40 hover:text-secondary transition-colors" title="Rewind: Hapuskan semua setelah ini"><RotateCcw size={14} /></button>
                   <button onClick={() => msg.id && onEdit(msg.id, msg.content)} className="text-white/40 hover:text-primary transition-colors"><Pencil size={14} /></button>
                   <button onClick={() => msg.id && onDelete(msg.id)} className="text-white/40 hover:text-error transition-colors"><Trash2 size={14} /></button>
                 </>
