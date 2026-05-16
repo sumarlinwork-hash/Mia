@@ -5,8 +5,8 @@ __pycache__/
 .venv/
 env/
 venv/
-ENV/
 *.log
+logs/
 
 # Node/React
 node_modules/
@@ -93,4 +93,9 @@ node_modules/
 .installed.cfg
 *.egg
 
-backend/history/chat_history.db
+# MIA Database & History
+backend/history/*.db
+backend/history/*.db-shm
+backend/history/*.db-wal
+backend/history/*.db-journal
+backend/history.db
