@@ -35,3 +35,8 @@
 {"timestamp": "2026-05-15T06:03:12.461177", "type": "get_config_latency", "duration_ms": 0.0, "details": {}}
 {"timestamp": "2026-05-15T19:53:40.593646", "type": "update_config_latency", "duration_ms": 0.0, "details": {}}
 {"timestamp": "2026-05-15T20:18:59.272432", "type": "update_config_latency", "duration_ms": 1.0, "details": {}}
+{"timestamp": "2026-05-16T10:03:18.856528", "type": "update_config_latency", "duration_ms": 2.0, "details": {}}
+{"timestamp": "2026-05-16T10:06:50.230310", "type": "update_config_latency", "duration_ms": 21.44, "details": {}}
+{"timestamp": "2026-05-16T10:28:06.231558", "type": "update_config_latency", "duration_ms": 13.83, "details": {}}
+{"timestamp": "2026-05-16T10:28:14.814847", "type": "update_config_latency", "duration_ms": 14.5, "details": {}}
+{"timestamp": "2026-05-16T10:28:43.496195", "type": "update_config_latency", "duration_ms": 13.67, "details": {}}

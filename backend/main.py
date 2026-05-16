@@ -696,13 +696,12 @@ async def handle_touch():
 async def report_robotic_response():
     """Penalty for robotic response - small interaction update."""
     from core.emotion_manager import emotion_manager
-    # We use a general interaction update but could potentially add a negative multiplier later
     emotion_manager.on_user_interaction()
     return {"status": "success"}
 
 # --- CONFIG MANAGEMENT ENDPOINTS ---
 
-async def _bg_config_refresh(config: MIAConfig, version: int):
+async def _bg_config_refresh(config: MIAConfig, version: int, skip_brain: bool = False):
     global current_refresh_version
     
     # Versioned check: Jangan proses jika ada versi yang lebih baru yang sudah masuk
@@ -710,11 +709,12 @@ async def _bg_config_refresh(config: MIAConfig, version: int):
         print(f"[Orchestrator] Skipping stale refresh version: {version} (Latest is {current_refresh_version})")
         return
 
-    print(f"[Orchestrator] Executing versioned refresh: {version}")
+    print(f"[Orchestrator] Executing versioned refresh: {version} (SkipBrain={skip_brain})")
     
     try:
-        # Rebuild Brain (Sync logic inside)
-        brain_orchestrator._refresh_brain_nodes()
+        if not skip_brain:
+            # Rebuild Brain (Sync logic inside) - ONLY if critical config changed
+            brain_orchestrator._refresh_brain_nodes()
         
         # Check cancellation point
         await asyncio.sleep(0) 
@@ -732,6 +732,7 @@ async def _bg_config_refresh(config: MIAConfig, version: int):
     except Exception as e:
         print(f"[Orchestrator] V{version} Refresh Failed: {e}")
 
+
 @app.get("/api/config")
 async def get_config():
     return load_config()
@@ -745,6 +746,16 @@ async def update_config(config: MIAConfig):
     current_refresh_version += 1
     v = current_refresh_version
     
+    # Smart Sync: Determine if we need a full brain refresh
+    try:
+        old_config = load_config(force_reload=True)
+        # Compare core fields (excluding appearance)
+        old_core = old_config.model_dump(exclude={"appearance"})
+        new_core = config.model_dump(exclude={"appearance"})
+        appearance_only = (old_core == new_core)
+    except Exception:
+        appearance_only = False
+
     # Cancellation-Aware: Batalkan task lama jika masih berjalan
     if _active_refresh_task and not _active_refresh_task.done():
         _active_refresh_task.cancel()
@@ -754,14 +765,15 @@ async def update_config(config: MIAConfig):
             pass
     
     try:
-        print(f"[Config] Received update request V{v}. Persisting...")
+        print(f"[Config] Received update request V{v}. (AppearanceOnly={appearance_only})")
         save_config(config)
         
         # Simpan task baru ke global tracker (Async context safe)
-        _active_refresh_task = asyncio.create_task(_bg_config_refresh(config, v))
+        _active_refresh_task = asyncio.create_task(_bg_config_refresh(config, v, skip_brain=appearance_only))
         
         runtime_logger.log_metric("update_config_latency", (time.time() - start) * 1000)
         return {"status": "success", "version": v}
+
     except Exception as e:
         print(f"[Config] Critical failure during save/sync: {e}")
         import traceback

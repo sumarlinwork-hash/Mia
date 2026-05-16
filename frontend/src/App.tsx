@@ -51,18 +51,36 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
   const finalBgUrl = resolveBackgroundUrl(bgUrl);
   const themeBackground = THEME_BACKGROUNDS[bgUrl] || bgUrl;
 
+  // PRIORITY 1: Force Play & Sync on Source Change
+  useEffect(() => {
+    if (videoRef.current && isVideo) {
+      console.log("[Background] Source change detected, enforcing playback...");
+      videoRef.current.load();
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.warn("[Background] Autoplay prevented, waiting for user interaction:", error);
+        });
+      }
+    }
+  }, [finalBgUrl, isVideo]);
+
   // PRIORITY 4: Visibility Lifecycle Control
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
         videoRef.current?.pause();
       } else if (isVideo) {
-        videoRef.current?.play().catch(() => {});
+        // Explicitly reload on return if frozen or stalled
+        if (videoRef.current && (videoRef.current.paused || videoRef.current.readyState < 2)) {
+          videoRef.current.play().catch(() => {});
+        }
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [isVideo]);
+
 
   if (!bgUrl && !isVideo && !isImage) return null;
 
@@ -72,6 +90,7 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
       <video 
         ref={videoRef}
         autoPlay loop muted playsInline 
+        preload="auto"
         className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000" 
         src={isVideo ? finalBgUrl : undefined} 
         style={{ 

@@ -157,7 +157,10 @@ export default function Settings() {
 
   const applyAppearance = (appearance: MIAConfig['appearance']) => {
     if (!config) return;
-    updateConfigLocal({ ...config, appearance });
+    const newConf = { ...config, appearance };
+    updateConfigLocal(newConf);
+    // AUTO-SAVE: Instant persistence for visual changes
+    handleSave(newConf, true);
   };
 
   const handleBackgroundTypeChange = (backgroundType: BackgroundType) => {
@@ -215,18 +218,23 @@ export default function Settings() {
         const data = await res.json();
         if (!res.ok || !data.url) throw new Error(data.detail || 'Upload failed');
 
-        updateConfigLocal({
+        const finalConfig = {
           ...previousConfig,
           appearance: {
             ...previousConfig.appearance,
             background_url: data.url,
             background_type: detectedType,
           }
-        });
-        addToast("Background baru tampil. Tekan Simpan untuk permanen.", "success");
-      } catch {
+        };
+
+        updateConfigLocal(finalConfig);
+        // AUTO-SAVE: Persist the new upload immediately
+        await handleSave(finalConfig, true);
+        
+        addToast("Background berhasil diperbarui secara instan", "success");
+      } catch (err) {
         setGlobalConfig(previousConfig);
-        addToast("Upload gagal, background dikembalikan", "error");
+        addToast("Upload gagal: " + (err instanceof Error ? err.message : "Error"), "error");
       } finally {
         URL.revokeObjectURL(localPreviewUrl);
         setIsUploading(false);
@@ -254,9 +262,10 @@ export default function Settings() {
     setHasChanges(JSON.stringify(newConf) !== JSON.stringify(originalConfig));
   };
 
-  const handleSave = async (updatedConfig = config) => {
+  const handleSave = async (updatedConfig = config, isSilent = false) => {
     if (!updatedConfig) return;
-    setIsSaving(true);
+    if (!isSilent) setIsSaving(true);
+    
     try {
       const res = await fetch('/api/config', {
         method: 'POST',
@@ -268,19 +277,27 @@ export default function Settings() {
         throw new Error(errorData.detail || "Server rejected config update");
       }
       
-      setOriginalConfig(JSON.parse(JSON.stringify(updatedConfig)));
+      const savedConfig = JSON.parse(JSON.stringify(updatedConfig));
+      setOriginalConfig(savedConfig);
       setHasChanges(false);
-      addToast("Konfigurasi berhasil disimpan secara permanen", "success");
+      
+      if (!isSilent) {
+        addToast("Konfigurasi berhasil disimpan secara permanen", "success");
+      }
     } catch (err) {
-      addToast("Gagal menyimpan: " + (err instanceof Error ? err.message : "Internal Error"), "error");
-      // Rollback to original config to keep UI consistent with backend state
-      if (originalConfig) {
-        setGlobalConfig(originalConfig);
+      if (!isSilent) {
+        addToast("Gagal menyimpan: " + (err instanceof Error ? err.message : "Internal Error"), "error");
+        if (originalConfig) {
+          setGlobalConfig(originalConfig);
+        }
+      } else {
+        console.error("[Silent Save] Failed:", err);
       }
     } finally {
-      setIsSaving(false);
+      if (!isSilent) setIsSaving(false);
     }
   };
+
 
 
   const handleAddOrEditProvider = async () => {
