@@ -93,11 +93,10 @@ node_modules/
 .installed.cfg
 *.egg
 
-# MIA Database & History
-backend/history/*.db
-backend/history/*.db-shm
-backend/history/*.db-wal
-backend/history/*.db-journal
-backend/history.db
-backend/iam_mia/chroma_db/chroma.sqlite3
-backend/provider_stats.db
+# MIA Database & History (Global Wildcards - SANGAT AMAN)
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3

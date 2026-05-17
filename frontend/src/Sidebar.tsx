@@ -19,12 +19,12 @@ export default function Sidebar({ onToggleZen, isZenMode, collapsed, setCollapse
   const isPro = config?.is_professional_mode;
 
   const navItems = [
-    { name: isPro ? "Home" : "I love you", icon: <Home size={22} />, path: "/" },
+    { name: isPro ? "Home" : "Chat with me", icon: <Home size={22} />, path: "/" },
     { name: isPro ? "Crone Tasks" : "My grind", icon: <Activity size={22} />, path: "/crone" },
     { name: isPro ? "Memory Store" : "I'm Mia", icon: <Brain size={22} />, path: "/iam-mia" },
     { name: isPro ? "Resonance Hub" : "My heart", icon: <Heart size={22} />, path: "/emotion" },
     { name: isPro ? "Mia Store" : "My Store", icon: <Zap size={22} />, path: "/skills" },
-    { name: isPro ? "MIA Studio" : "My Garden", icon: <Flower size={22} />, path: "/studio" },
+    { name: isPro ? "Mia Studio" : "My Garden", icon: <Flower size={22} />, path: "/studio" },
     { name: "Settings", icon: <Settings2 size={22} />, path: "/settings" },
   ];
 

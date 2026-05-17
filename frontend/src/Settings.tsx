@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // MIA Architect Studio - Intelligence Core Logic
 import {
   ArrowLeft, Save, Plus, Trash2, Pencil, Zap,
-  CheckCircle2, XCircle, Info, RefreshCcw, Star
+  CheckCircle2, XCircle, Info, RefreshCcw, Star, AlertCircle
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useConfig } from './hooks/useConfig';
@@ -74,7 +74,12 @@ export default function Settings() {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('intelligence');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -466,16 +471,21 @@ export default function Settings() {
     setView('edit');
   };
 
-  const uninstallSkill = async (id: string) => {
-    if (!confirm(`Hapus keahlian "${id}"?`)) return;
-    try {
-      const res = await fetch(`/api/skills/uninstall/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.status === 'success') {
-        queryClient.invalidateQueries({ queryKey: queryKeys.skills });
-        addToast("Skill dihapus", "success");
+  const uninstallSkill = (id: string) => {
+    setConfirmDialog({
+      title: "Hapus Keahlian",
+      message: `Apakah Anda yakin ingin menghapus keahlian "${id}"? Kemampuan ini tidak akan tersedia sampai Anda mengunduhnya kembali.`,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/skills/uninstall/${id}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.status === 'success') {
+            queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+            addToast("Skill dihapus", "success");
+          }
+        } catch { addToast("Gagal menghapus skill", "error"); }
       }
-    } catch { addToast("Gagal menghapus skill", "error"); }
+    });
   };
 
   const testSkill = async (id: string) => {
@@ -1018,6 +1028,43 @@ export default function Settings() {
             </div>
           </div>
         )}
+      {/* Custom Glassmorphism Confirmation Modal */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[350] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setConfirmDialog(null)}></div>
+          <div className="relative w-full max-w-md bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 text-center shadow-[0_25px_70px_rgba(0,0,0,0.8)] overflow-hidden">
+            <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-error/5 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div className="flex flex-col items-center">
+              <div className="p-4 rounded-full bg-error/10 border border-error/20 mb-6 animate-pulse">
+                <AlertCircle size={40} className="text-error animate-bounce" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3 tracking-tight font-sans">{confirmDialog.title}</h3>
+              <p className="text-sm text-white/60 leading-relaxed mb-8 font-sans">
+                {confirmDialog.message}
+              </p>
+              <div className="flex gap-4 w-full">
+                <button
+                  onClick={() => setConfirmDialog(null)}
+                  className="flex-1 py-4 px-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold font-sans tracking-wide transition-all"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => {
+                    confirmDialog.onConfirm();
+                    setConfirmDialog(null);
+                  }}
+                  className="flex-1 py-4 px-6 rounded-2xl bg-error hover:bg-error/80 text-white font-bold font-sans tracking-wide transition-all shadow-[0_10px_25px_rgba(239,68,68,0.2)]"
+                >
+                  Yakin
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
 
       <div className="fixed bottom-8 right-8 flex flex-col gap-2 z-[100]">

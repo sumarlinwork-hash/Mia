@@ -37,7 +37,7 @@ async def run_full_diagnostic() -> list:
             
             # Rule 2: Reachability Test
             from core.provider_resolver import provider_resolver
-            resolved = provider_resolver.resolve(name, p.model_id, p.base_url, p.api_key)
+            resolved = provider_resolver.resolve(name, p.model_id, p.base_url, p.api_key, silent=True)
             test_url = resolved["url"]
             protocol = resolved["protocol"]
             

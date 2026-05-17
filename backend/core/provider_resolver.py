@@ -12,7 +12,7 @@ class ProviderResolver:
     """
     
     @staticmethod
-    def resolve(p_name: str, model_id: str, base_url: str, api_key: str = "") -> Dict[str, Any]:
+    def resolve(p_name: str, model_id: str, base_url: str, api_key: str = "", silent: bool = False) -> Dict[str, Any]:
         """
         Determines the final Target URL and Protocol.
         MIA SMART ASSEMBLY: Automatically replaces {model_id} in the URL template.
@@ -22,7 +22,8 @@ class ProviderResolver:
         for pref in prefixes_to_clean:
             if api_key.startswith(pref):
                 api_key = api_key.replace(pref, "").strip()
-                print(f"[Resolver] Cleaned API Key for {p_name} (Removed prefix)")
+                if not silent:
+                    print(f"[Resolver] Cleaned API Key for {p_name} (Removed prefix)")
 
         raw_url = base_url.strip() if base_url else ""
         model_id = model_id.strip()
@@ -94,7 +95,8 @@ class ProviderResolver:
         if not url:
             url = "https://api.openai.com/v1/chat/completions"
 
-        print(f"[Resolver] Smart-Assembly: {p_name} -> {url} ({protocol})")
+        if not silent:
+            print(f"[Resolver] Smart-Assembly: {p_name} -> {url} ({protocol})")
         return {
             "url": url,
             "protocol": protocol,

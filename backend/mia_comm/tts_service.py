@@ -48,13 +48,13 @@ class TTSService:
     async def _edge_tts(self, text: str, is_intimate: bool = False) -> str:
         temp_filename = os.path.join(tempfile.gettempdir(), f"mia_edge_{uuid.uuid4().hex}.mp3")
         
-        # Reset to Natural Defaults
-        pitch = "+0Hz" 
-        rate = "+0%"
+        # Tune Gadis Timbre for Cute, Youthful Voice (No Tante-Tante / No FFmpeg distortion)
+        pitch = "+12Hz" 
+        rate = "+10%"
         
         if is_intimate:
-            pitch = "+5Hz"   # Slightly softer
-            rate = "+5%"    # Slightly faster but natural
+            pitch = "+15Hz"   # High-pitched sweet whisper
+            rate = "+8%"     # Slightly gentler pace
             
         communicate = edge_tts.Communicate(text, self.voice_id_edge, pitch=pitch, rate=rate)
         await communicate.save(temp_filename)
@@ -116,8 +116,8 @@ class TTSService:
         temp_wav = os.path.join(tempfile.gettempdir(), f"mia_piper_{uuid.uuid4().hex}.wav")
         
         # Piper CLI command
-        # Speed 1.0 for natural, deeper tone; 0.95 for slower intimate delivery
-        speed = "1.0" if not is_intimate else "0.95"
+        # Speed 1.0 for natural, deeper tone; 0.85 for slower intimate delivery
+        speed = "1.0" if not is_intimate else "0.85"
         
         # Note: Search for piper.exe in project root's .venv
         venv_path = os.path.join(project_root, ".venv", "Scripts", "piper.exe")
@@ -137,7 +137,25 @@ class TTSService:
         if process.returncode != 0:
             raise Exception(f"Piper execution failed: {stderr}")
 
-        # Note: FFmpeg pitch-shift block removed — Piper now outputs natural pitch
+        # High-Quality Pitch Shift using FFmpeg with zero phase artifacts
+        # Normal: Pitch +20% (asetrate=26460), Tempo normalized to 1.05x (atempo=0.875)
+        # Intimate: Pitch +20% (asetrate=26460), Tempo normalized to 0.75x (atempo=0.74) for slow, calm whisper
+        pitched_wav = os.path.join(tempfile.gettempdir(), f"mia_piper_pitched_{uuid.uuid4().hex}.wav")
+        tempo_filter = "atempo=0.74" if is_intimate else "atempo=0.875"
+        
+        ffmpeg_cmd = [
+            "ffmpeg", "-y", "-i", temp_wav,
+            "-af", f"asetrate=26460,{tempo_filter}",
+            pitched_wav
+        ]
+        
+        try:
+            subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
+            if os.path.exists(pitched_wav):
+                os.remove(temp_wav)
+                temp_wav = pitched_wav
+        except Exception as fe:
+            print(f"[TTS] Ultra-light FFmpeg Pitch Shift failed (using original): {fe}")
             
         return self._file_to_base64(temp_wav)
 

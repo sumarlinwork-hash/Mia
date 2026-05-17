@@ -61,7 +61,7 @@ export default function Crone() {
           <h1 className="text-3xl font-bold text-white tracking-widest">CRONE MONITOR</h1>
         </div>
         <button
-          onClick={fetchStatus}
+          onClick={() => fetchStatus()}
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all border border-white/10 text-sm"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />

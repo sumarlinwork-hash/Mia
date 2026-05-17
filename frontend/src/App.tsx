@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, memo } from 'react';
 import { ThemeProvider } from './context/ThemeProvider';
 import Sidebar from './Sidebar';
@@ -8,6 +8,7 @@ import IamMia from './IamMia';
 import Crone from './Crone';
 import EmotionDashboard from './EmotionDashboard';
 import SkillMarketplace from './SkillMarketplace';
+import Onboarding from './Onboarding';
 import { lazy, Suspense } from 'react';
 import { FileStoreProvider } from './mia_studio/context/FileStoreContext';
 
@@ -135,8 +136,17 @@ function AppShell() {
   const [isNarrowViewport, setIsNarrowViewport] = useState(false);
   const [startupPhase, setStartupPhase] = useState(0); // 0 to 3
   const location = useLocation();
+  const navigate = useNavigate();
   const isStudioRoute = location.pathname.startsWith('/studio');
+  const isOnboardingRoute = location.pathname === '/onboarding';
+  const isOnboarded = sessionStorage.getItem('mia_onboarded_session') === 'true';
   const effectiveSidebarCollapsed = sidebarCollapsed || isNarrowViewport;
+
+  useEffect(() => {
+    if (!isOnboarded && !isOnboardingRoute) {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [isOnboarded, isOnboardingRoute, navigate]);
 
   // STAGE 4: Staged Startup Sequence & Hardware Detection
   useEffect(() => {
@@ -177,7 +187,7 @@ function AppShell() {
           )}
 
           {/* Phase 2: Sidebar Navigation */}
-          {startupPhase >= 2 && !isStudioRoute && (
+          {startupPhase >= 2 && !isStudioRoute && !isOnboardingRoute && (
             <div 
               className={`transition-all duration-700 ease-in-out relative z-[100] ${isZenMode ? 'opacity-0 -translate-x-20 pointer-events-none' : 'opacity-100 translate-x-0'}`}
             >
@@ -196,10 +206,11 @@ function AppShell() {
               className={`relative z-10 flex-1 h-screen overflow-y-auto overflow-x-hidden custom-scrollbar transition-all duration-700 ease-in-out ${
                 isZenMode ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
               }`}
-              style={{ paddingLeft: isStudioRoute ? 0 : (effectiveSidebarCollapsed ? '5rem' : '16rem') }}
+              style={{ paddingLeft: (isStudioRoute || isOnboardingRoute) ? 0 : (effectiveSidebarCollapsed ? '5rem' : '16rem') }}
             >
               <Routes>
                 <Route path="/" element={<Home />} />
+                <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/crone" element={<Crone />} />
                 <Route path="/iam-mia" element={<IamMia />} />
                 <Route path="/settings" element={<Settings />} />
