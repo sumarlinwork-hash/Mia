@@ -12,6 +12,16 @@ async def run_full_diagnostic() -> list:
     
     async with httpx.AsyncClient(timeout=5.0) as client:
         for name, p in config.providers.items():
+            if not p.is_active:
+                diagnostic = {
+                    "provider": name,
+                    "status": "INACTIVE",
+                    "reason": "Provider dinonaktifkan oleh pengguna.",
+                    "action": "Aktifkan di Settings jika ingin menggunakan provider ini."
+                }
+                results.append(diagnostic)
+                continue
+                
             diagnostic = {
                 "provider": name,
                 "status": "OK",

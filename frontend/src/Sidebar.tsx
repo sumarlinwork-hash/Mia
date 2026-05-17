@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Settings2, Brain, Activity, ChevronLeft, ChevronRight, Heart, Zap, Shield, Flower } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
+import { useEmotion } from './hooks/useEmotion';
 
 interface SidebarProps {
   onToggleZen: () => void;
@@ -12,7 +12,7 @@ interface SidebarProps {
 
 export default function Sidebar({ onToggleZen, isZenMode, collapsed, setCollapsed }: SidebarProps) {
   const { config } = useConfig();
-  const [emotion, setEmotion] = useState({ arousal: 0, echo: 0, warmth: 0 });
+  const { emotion } = useEmotion();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -27,18 +27,6 @@ export default function Sidebar({ onToggleZen, isZenMode, collapsed, setCollapse
     { name: isPro ? "MIA Studio" : "My Garden", icon: <Flower size={22} />, path: "/studio" },
     { name: "Settings", icon: <Settings2 size={22} />, path: "/settings" },
   ];
-
-  useEffect(() => {
-    const fetchEmotion = () => {
-      fetch('/api/emotion')
-        .then(res => res.json())
-        .then(data => setEmotion(data))
-        .catch(() => { });
-    };
-    fetchEmotion();
-    const interval = setInterval(fetchEmotion, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <div

@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useConfig } from '../hooks/useConfig';
+import { useEmotion } from '../hooks/useEmotion';
 
 const ResonantOrchestrator: React.FC = () => {
   const { config } = useConfig();
+  const { emotion, refreshEmotion } = useEmotion();
   const location = useLocation();
   const [ripples, setRipples] = useState<{ id: number, x: number, y: number }[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -35,16 +37,8 @@ const ResonantOrchestrator: React.FC = () => {
 
   // 1. Emotion/BPM Sync
   useEffect(() => {
-    const fetchBpm = () => {
-      fetch('/api/emotion')
-        .then(res => res.json())
-        .then(data => setBpm(60 + (data.arousal * 0.6)))
-        .catch(() => { });
-    };
-    fetchBpm();
-    const interval = setInterval(fetchBpm, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    setBpm(60 + (emotion.arousal * 0.6));
+  }, [emotion.arousal]);
 
   // 2. Authentic Heartbeat Audio Engine
   useEffect(() => {
@@ -186,6 +180,7 @@ const ResonantOrchestrator: React.FC = () => {
 
       try {
         await fetch('/api/intimacy/touch', { method: 'POST' });
+        refreshEmotion(); // Instant visual state refresh on click
       } catch {
         // Silent fail for touch sync
       }
@@ -193,7 +188,7 @@ const ResonantOrchestrator: React.FC = () => {
 
     window.addEventListener('mousedown', handleGlobalClick);
     return () => window.removeEventListener('mousedown', handleGlobalClick);
-  }, [config?.resonant_skin_enabled, bpm]);
+  }, [config?.resonant_skin_enabled, bpm, refreshEmotion]);
 
   return (
     <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">

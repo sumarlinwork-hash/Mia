@@ -8,7 +8,7 @@ import { useConfig } from './hooks/useConfig';
 
 interface DiagnosticResult {
   provider: string;
-  status: 'OK' | 'FAIL' | 'WARN';
+  status: 'OK' | 'FAIL' | 'WARN' | 'INACTIVE';
   latency?: number;
   reason?: string;
   action?: string;
@@ -41,10 +41,11 @@ const ResilienceDashboard: React.FC = () => {
         setInvariants(invariantResults);
         setLastScan(new Date().toLocaleTimeString());
         
-        // Calculate health score (weighted)
-        const total = providerResults.length;
-        const failed = providerResults.filter((r: DiagnosticResult) => r.status === 'FAIL').length;
-        const baseScore = total > 0 ? ((total - failed) / total) * 100 : 100;
+        // Calculate health score (weighted) based only on active providers
+        const activeProviders = providerResults.filter((r: DiagnosticResult) => r.status !== 'INACTIVE');
+        const totalActive = activeProviders.length;
+        const failed = activeProviders.filter((r: DiagnosticResult) => r.status === 'FAIL').length;
+        const baseScore = totalActive > 0 ? ((totalActive - failed) / totalActive) * 100 : 100;
         
         // Invariants penalty if any are INACTIVE
         const inactiveInvariants = invariantResults.filter((i: SystemInvariant) => i.status !== 'ACTIVE').length;
@@ -181,7 +182,9 @@ const ResilienceDashboard: React.FC = () => {
                   key={idx} 
                   className={`relative overflow-hidden p-6 rounded-[2rem] border transition-all hover:scale-[1.02] ${
                     res.status === 'OK' 
-                    ? 'border-white/5 hover:border-primary/20' 
+                    ? 'border-white/5 hover:border-primary/20 bg-black/40' 
+                    : res.status === 'INACTIVE'
+                    ? 'border-white/5 bg-white/[0.02] opacity-40 hover:opacity-70'
                     : 'bg-error/10 border-error/20 hover:border-error/40 shadow-[0_0_30px_rgba(255,68,68,0.1)]'
                   }`}
                   style={res.status === 'OK' ? { backgroundColor: `rgba(0, 0, 0, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.6})` } : {}}
@@ -189,16 +192,26 @@ const ResilienceDashboard: React.FC = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-black tracking-tight text-white uppercase">{res.provider}</h3>
-                      <span className="text-[10px] font-mono text-white/40">{res.latency ? `${res.latency}ms latency` : 'latency unavailable'}</span>
+                      <span className="text-[10px] font-mono text-white/40">
+                        {res.status === 'INACTIVE' 
+                          ? 'Inactive' 
+                          : res.latency 
+                          ? `${res.latency}ms latency` 
+                          : 'latency unavailable'}
+                      </span>
                     </div>
                     {res.status === 'OK' ? (
                       <CheckCircle2 className="text-primary" size={24} />
+                    ) : res.status === 'INACTIVE' ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono bg-white/10 border border-white/10 text-white/50 tracking-wider">
+                        OFFLINE
+                      </span>
                     ) : (
                       <AlertTriangle className="text-error animate-pulse" size={24} />
                     )}
                   </div>
                   
-                    {res.status === 'FAIL' ? (
+                  {res.status === 'FAIL' ? (
                     <div className="space-y-3">
                       <div className="bg-black/40 p-3 rounded-xl border border-error/10">
                         <span className="block text-[8px] font-black uppercase tracking-widest text-error/60 mb-1">Detected Issue</span>
@@ -209,6 +222,11 @@ const ResilienceDashboard: React.FC = () => {
                         <p className="text-xs text-white/80 font-mono leading-relaxed">{res.action}</p>
                       </div>
                     </div>
+                  ) : res.status === 'INACTIVE' ? (
+                    <div className="space-y-1">
+                      <p className="text-xs text-white/50 font-mono leading-relaxed">{res.reason}</p>
+                      <p className="text-[10px] text-white/30 font-mono leading-relaxed">{res.action}</p>
+                    </div>
                   ) : (
                     <div className="flex items-center gap-2 text-primary/60 text-xs font-mono">
                       <Zap size={14} />
@@ -217,7 +235,7 @@ const ResilienceDashboard: React.FC = () => {
                   )}
 
                   {/* Decorative Background Element */}
-                  <div className={`absolute -bottom-4 -right-4 opacity-5 ${res.status === 'OK' ? 'text-primary' : 'text-error'}`}>
+                  <div className={`absolute -bottom-4 -right-4 opacity-5 ${res.status === 'OK' ? 'text-primary' : res.status === 'INACTIVE' ? 'text-white' : 'text-error'}`}>
                     <Network size={80} />
                   </div>
                 </div>

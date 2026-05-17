@@ -300,6 +300,9 @@ def on_user_return():
 * No threading needed
 * No ML heavy inference
 * JSON persistence only
+* Frontend: Global `EmotionContext` and `useEmotion` shared state.
+* Polling Interval: Exactly once every 10 seconds (10000ms) for background decay sync.
+* Interaction Trigger: Bypasses the 10-second timer and triggers `refreshEmotion()` instantly (0ms delay) on touch/message click.
 
 ==================================================
 FINAL EXPERIENCE TARGET
@@ -382,18 +385,18 @@ END MASTER PLAN
 
 ## 🧱 1. STRUCTURE & DATA
 
-* [ ] Gunakan **namespace `state["active"]` dan `state["legacy"]`**
-* [ ] Tidak ada lagi akses `state["warmth"]` (harus lewat `["active"]`)
-* [ ] Legacy data **tidak dibaca oleh sistem baru**
-* [ ] JSON persistence berjalan (save/load state)
+* [x] Gunakan **namespace `state["active"]` dan `state["legacy"]`**
+* [x] Tidak ada lagi akses `state["warmth"]` (harus lewat `["active"]`)
+* [x] Legacy data **tidak dibaca oleh sistem baru**
+* [x] JSON persistence berjalan (save/load state)
 
 ---
 
 ## ⚙️ 2. CORE LOOP
 
-* [ ] Loop berjalan tiap **5–10 detik**
-* [ ] Fungsi `update()` terpanggil konsisten
-* [ ] Tidak ada thread berat / polling berlebihan
+* [x] Loop berjalan tiap **5–10 detik**
+* [x] Fungsi `update()` terpanggil konsisten
+* [x] Tidak ada thread berat / polling berlebihan (Dioptimalkan menggunakan shared EmotionContext & 10s global polling)
 
 ---
 
@@ -454,8 +457,8 @@ END MASTER PLAN
 
 ## 👆 8. RESONANT SKIN
 
-* [ ] Input klik/touch terhubung ke `on_user_interaction()`
-* [ ] Nilai increase sesuai spec (tidak over-scale)
+* [x] Input klik/touch terhubung ke `on_user_interaction()` (Serta memicu instan visual refresh di frontend)
+* [x] Nilai increase sesuai spec (tidak over-scale)
 
 ---
 

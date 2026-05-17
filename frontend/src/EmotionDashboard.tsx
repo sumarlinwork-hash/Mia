@@ -2,42 +2,17 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Heart, Zap, Thermometer, RefreshCw } from 'lucide-react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useConfig } from './hooks/useConfig';
-
-interface EmotionState {
-  warmth: number;
-  arousal: number;
-  echo: number;
-  mood: string;
-  last_update: number;
-}
+import { useEmotion } from './hooks/useEmotion';
 
 const EmotionDashboard: React.FC = () => {
   const { config } = useConfig();
-  const [emotion, setEmotion] = useState<EmotionState>({
-    warmth: 0,
-    arousal: 0,
-    echo: 0,
-    mood: 'Soft Distance',
-    last_update: 0
-  });
+  const { emotion } = useEmotion();
 
   const [toggles, setToggles] = useState({
     care_pulse: config?.care_pulse_enabled ?? true,
     resonant_skin: config?.resonant_skin_enabled ?? true,
     bio_sync: config?.bio_sync_enabled ?? true,
   });
-
-  useEffect(() => {
-    const fetchEmotion = () => {
-      fetch('/api/emotion')
-        .then(res => res.json())
-        .then(data => setEmotion(data))
-        .catch(() => console.log('Emotion API error'));
-    };
-    fetchEmotion();
-    const interval = setInterval(fetchEmotion, 3000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleToggle = async (key: keyof typeof toggles) => {
     const newVal = !toggles[key];

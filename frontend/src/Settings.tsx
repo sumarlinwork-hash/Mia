@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // MIA Architect Studio - Intelligence Core Logic
 import {
   ArrowLeft, Save, Plus, Trash2, Pencil, Zap,
@@ -73,6 +73,15 @@ export default function Settings() {
   const [view, setView] = useState<'list' | 'add' | 'edit'>('list');
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('intelligence');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
+
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -258,13 +267,17 @@ export default function Settings() {
   }, [config, originalConfig]);
 
 
-  const updateConfigLocal = async (newConf: MIAConfig) => {
-    setGlobalConfig(newConf);
-    setHasChanges(JSON.stringify(newConf) !== JSON.stringify(originalConfig));
-  };
-
-  const handleSave = async (updatedConfig = config, isSilent = false) => {
+  const handleSave = useCallback(async (updatedConfig = config, isSilent = false) => {
     if (!updatedConfig) return;
+    
+    // Save current original config for possible rollback
+    const rollbackConfig = originalConfig ? JSON.parse(JSON.stringify(originalConfig)) : null;
+    
+    // 1. Optimistic Update: instantly clear changes and set state
+    const savedConfig = JSON.parse(JSON.stringify(updatedConfig));
+    setOriginalConfig(savedConfig);
+    setHasChanges(false);
+    setSaveStatus('saving');
     if (!isSilent) setIsSaving(true);
     
     try {
@@ -278,25 +291,50 @@ export default function Settings() {
         throw new Error(errorData.detail || "Server rejected config update");
       }
       
-      const savedConfig = JSON.parse(JSON.stringify(updatedConfig));
-      setOriginalConfig(savedConfig);
-      setHasChanges(false);
-      
+      setSaveStatus('saved');
       if (!isSilent) {
         addToast("Konfigurasi berhasil disimpan secara permanen", "success");
       }
+      
+      // Successfully persisted, refresh the global React context config
+      await refreshConfig();
     } catch (err) {
+      setSaveStatus('error');
+      // Rollback to original config if the persistence failed
+      setOriginalConfig(rollbackConfig);
+      if (rollbackConfig) {
+        setGlobalConfig(rollbackConfig);
+      }
+      setHasChanges(true);
+      
       if (!isSilent) {
-        addToast("Gagal menyimpan: " + (err instanceof Error ? err.message : "Internal Error"), "error");
-        if (originalConfig) {
-          setGlobalConfig(originalConfig);
-        }
+        addToast("Gagal menyimpan ke server: " + (err instanceof Error ? err.message : "Internal Error"), "error");
       } else {
         console.error("[Silent Save] Failed:", err);
       }
+      throw err;
     } finally {
       if (!isSilent) setIsSaving(false);
     }
+  }, [config, originalConfig, setGlobalConfig, refreshConfig, addToast]);
+
+  const debouncedSave = useCallback((updatedConfig: MIAConfig) => {
+    setSaveStatus('saving');
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await handleSave(updatedConfig, true);
+        setSaveStatus('saved');
+      } catch {
+        setSaveStatus('error');
+      }
+    }, 800);
+  }, [handleSave]);
+
+  const updateConfigLocal = async (newConf: MIAConfig) => {
+    setGlobalConfig(newConf);
+    setHasChanges(JSON.stringify(newConf) !== JSON.stringify(originalConfig));
+    debouncedSave(newConf);
   };
 
   const handleAddOrEditProvider = async () => {
@@ -314,8 +352,11 @@ export default function Settings() {
       health_ok: updatedConfig.providers[newProvider.display_name]?.health_ok || 0,
       health_fail: updatedConfig.providers[newProvider.display_name]?.health_fail || 0
     };
-    await handleSave(updatedConfig);
-    await refreshConfig();
+    
+    // Save optimistically in the background
+    handleSave(updatedConfig);
+    
+    // Instantly transit UI back to list
     setView('list');
     setEditName(null);
     setNewProvider({
@@ -332,14 +373,14 @@ export default function Settings() {
     if (!config) return;
     const updatedConfig = { ...config };
     delete updatedConfig.providers[name];
-    await handleSave(updatedConfig);
+    handleSave(updatedConfig);
   };
 
   const toggleProvider = async (name: string) => {
     if (!config) return;
     const updatedConfig = { ...config };
     updatedConfig.providers[name].is_active = !updatedConfig.providers[name].is_active;
-    await handleSave(updatedConfig);
+    handleSave(updatedConfig);
   };
 
   const testProvider = async (name: string) => {
@@ -493,7 +534,24 @@ export default function Settings() {
             <Link to="/" className="p-2 rounded-full hover:bg-white/10 text-white/70 transition-all">
               <ArrowLeft size={24} />
             </Link>
-            <h1 className="text-3xl font-bold text-white tracking-tight">System Settings</h1>
+            <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
+              System Settings
+              {saveStatus === 'saving' && (
+                <span className="text-[10px] font-mono text-primary animate-pulse flex items-center gap-1.5 bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  <RefreshCcw size={10} className="animate-spin" /> Saving...
+                </span>
+              )}
+              {saveStatus === 'saved' && (
+                <span className="text-[10px] font-mono text-green-400 flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  <CheckCircle2 size={10} /> Saved
+                </span>
+              )}
+              {saveStatus === 'error' && (
+                <span className="text-[10px] font-mono text-error flex items-center gap-1.5 bg-error/10 border border-error/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  <XCircle size={10} /> Sync Error
+                </span>
+              )}
+            </h1>
           </div>
           <div className="flex gap-3">
             {view === 'list' ? (
