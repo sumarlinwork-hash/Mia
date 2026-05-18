@@ -43,12 +43,12 @@ class StudioSessionManager:
         if session.project_id != project_id:
             raise Exception(format_studio_error(StudioErrorType.SECURITY, "Session/Project mismatch violation"))
 
-    def run_studio_code(self, project_id: str, session_id: str, code: str) -> str:
+    def run_studio_code(self, project_id: str, session_id: str, code: str, profile_type: str = "COMPACT") -> str:
         self.verify_identity(project_id, session_id)
         from .version_service import studio_version_service
         from .models import SnapshotLabel
         studio_version_service.take_snapshot(project_id, SnapshotLabel.PRE_RUN)
-        execution_id = self.execution_service.run_code(project_id, code, session_id)
+        execution_id = self.execution_service.run_code(project_id, code, session_id, profile_type)
         self.sessions[session_id].current_execution_id = execution_id
         return execution_id
 

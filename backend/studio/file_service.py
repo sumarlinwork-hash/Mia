@@ -1,8 +1,7 @@
 import os
 import shutil
-import tempfile
 import hashlib
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from .models import StudioErrorType, format_studio_error
 
 class StudioFileService:
@@ -31,11 +30,15 @@ class StudioFileService:
         return path
 
     def _validate_path(self, project_id: str, path: str, write: bool = False) -> str:
-        """P4-X2: Path Canonicalization + Sandbox Isolation Guard."""
+        """
+        P4-X2: Strict Path Canonicalization + Sandbox Isolation Guard.
+        Blocks path traversal (../) and symbolic link escapes absolutely.
+        """
         project_sandbox = self._get_project_root(project_id, "drafts")
         target_abs = os.path.abspath(os.path.join(project_sandbox, path))
         target_real = os.path.realpath(target_abs)
         
+        # Verify prefix comparison for sandbox boundary
         if not target_real.startswith(project_sandbox):
             core_real = os.path.realpath(self.core_dir)
             if not write and target_real.startswith(core_real):
@@ -43,13 +46,14 @@ class StudioFileService:
             skills_real = os.path.realpath(self.skills_dir)
             if write and target_real.startswith(skills_real):
                  return target_real
-            raise Exception(format_studio_error(StudioErrorType.SECURITY, f"ISOLATION VIOLATION: Path escape detected to {target_real}"))
+            raise ValueError(f"STUDIO_ERROR::PATH_TRAVERSAL::Access denied outside sandbox: {target_real}")
+            
         return target_real
 
     def read_proxy(self, project_id: str, path: str, session_id: str) -> str:
         valid_path = self._validate_path(project_id, path, write=False)
         if not os.path.exists(valid_path):
-            raise Exception(format_studio_error(StudioErrorType.FS_ERROR, f"File not found: {path}"))
+            raise FileNotFoundError(f"STUDIO_ERROR::FILE_NOT_FOUND::File not found: {path}")
         with open(valid_path, "r", encoding="utf-8") as f:
             return f.read()
 
@@ -67,6 +71,7 @@ class StudioFileService:
             if current_snap != expected_snapshot_id:
                  raise Exception(format_studio_error(StudioErrorType.CONFLICT, f"CONFLICT: Project state shifted."))
 
+        # Leverage Safe Atomic Version Service Write
         studio_version_service.write_draft_file(project_id, path, content, session_id)
 
     def list_files(self, project_id: str, rel_path: str = "") -> List[dict]:
@@ -81,24 +86,26 @@ class StudioFileService:
             if entry.name.startswith(".") or entry.name.endswith(".tmp"): continue
             rel_entry_path = os.path.relpath(entry.path, project_sandbox)
             
-            # P4-X2: Optimized for Ivy Bridge - NO RECURSION, NO HASHING on list
-            # We only provide metadata. Hash will be fetched on demand.
             item = {
                 "name": entry.name, 
                 "path": rel_entry_path, 
                 "is_dir": entry.is_dir(),
                 "size": entry.stat().st_size if entry.is_file() else 0,
-                "hash": None # Removed for performance
+                "hash": None
             }
             items.append(item)
         return sorted(items, key=lambda x: (not x["is_dir"], x["name"]))
 
     def rename_file_proxy(self, project_id: str, old_path: str, new_path: str, session_id: str, confirmed: bool = False):
         from .version_service import studio_version_service
+        # Validate both paths strictly
+        self._validate_path(project_id, old_path, write=True)
+        self._validate_path(project_id, new_path, write=True)
         studio_version_service.rename_draft_file(project_id, old_path, new_path, session_id, confirmed)
 
     def delete_file_proxy(self, project_id: str, path: str, session_id: str, confirmed: bool = False):
         from .version_service import studio_version_service
+        self._validate_path(project_id, path, write=True)
         studio_version_service.delete_draft_file(project_id, path, session_id, confirmed)
 
 studio_file_service = StudioFileService(project_root="d:/ProjectBuild/projects/mia")

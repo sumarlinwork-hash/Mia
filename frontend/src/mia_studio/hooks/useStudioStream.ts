@@ -23,7 +23,7 @@ export interface UseStudioStreamReturn {
   offEvent: (cb: (event: StudioEvent) => void) => void;
 }
 
-export const useStudioStream = (maxLogLines: number = 1000): UseStudioStreamReturn => {
+export const useStudioStream = (maxLogLines: number = 5000): UseStudioStreamReturn => {
   const { currentProjectId, currentSessionId } = useFileStore();
   const [logs, setLogs] = useState<string[]>([]);
   const [graphEvents, setGraphEvents] = useState<StudioEvent[]>([]);

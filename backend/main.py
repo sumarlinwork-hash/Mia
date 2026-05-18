@@ -325,6 +325,7 @@ class StudioFileRequest(BaseModel):
     content: Optional[str] = None
     expected_hash: Optional[str] = None
     expected_snapshot_id: Optional[str] = None
+    profile_type: Optional[str] = "COMPACT"
 
 class StudioRollbackRequest(BaseModel):
     project_id: str
@@ -386,6 +387,8 @@ async def studio_write_file(req: StudioFileRequest):
             req.expected_hash, 
             req.expected_snapshot_id
         )
+        # Emit reactive WebSocket signal for auto-save sync
+        studio_graph_streamer.push_system_event(req.project_id, "project_updated", {"path": req.path})
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -447,7 +450,12 @@ async def studio_delete_file(req: StudioDeleteRequest):
 @app.post("/api/studio/execution/run")
 async def studio_run_code(req: StudioFileRequest):
     try:
-        execution_id = studio_session_manager.run_studio_code(req.project_id, req.session_id, req.content or "")
+        execution_id = studio_session_manager.run_studio_code(
+            req.project_id, 
+            req.session_id, 
+            req.content or "", 
+            req.profile_type or "COMPACT"
+        )
         return {"status": "success", "execution_id": execution_id}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -485,33 +493,35 @@ class StudioIdeRequest(BaseModel):
     ide_command: str
 
 @app.get("/api/studio/ide/list")
-async def studio_list_ides():
-    """Detect local IDEs."""
-    import shutil
-    ides = []
-    if shutil.which("code"): ides.append({"id": "code", "name": "VS Code"})
-    if shutil.which("cursor"): ides.append({"id": "cursor", "name": "Cursor"})
-    if shutil.which("idea64"): ides.append({"id": "idea64", "name": "IntelliJ IDEA"})
-    if shutil.which("webstorm"): ides.append({"id": "webstorm", "name": "WebStorm"})
-    return {"status": "success", "ides": ides}
+async def studio_list_ides(refresh: bool = False):
+    """Detect local IDEs using registry and path scanners (cached)."""
+    try:
+        from studio.ide_discovery_service import studio_ide_discovery_service
+        discovered = studio_ide_discovery_service.scan_installed_ides(force_refresh=refresh)
+        return {"status": "success", "ides": discovered}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @app.post("/api/studio/ide/open")
 async def studio_open_ide(req: StudioIdeRequest):
     """Open project in local IDE safely."""
     try:
-        import subprocess
-        import shutil
-        # P4-X2: Path Guard - validate project root via StudioFileService to prevent traversal
-        target_dir = studio_file_service._get_project_root(req.project_id, "drafts")
-        
-        # Verify IDE is actually installed
-        ide_path = shutil.which(req.ide_command)
-        if not ide_path:
-            return {"status": "error", "message": f"IDE '{req.ide_command}' not found on system."}
-            
-        # Launch IDE without blocking
-        subprocess.Popen([ide_path, target_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"status": "success"}
+        from studio.ide_discovery_service import studio_ide_discovery_service
+        success = studio_ide_discovery_service.open_ide(req.project_id, req.ide_command)
+        if success:
+            return {"status": "success"}
+        else:
+            return {"status": "error", "message": f"Failed to launch IDE '{req.ide_command}'"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/studio/git/status")
+async def studio_get_git_status():
+    """Passive, safe branch and modified files tracker."""
+    try:
+        from studio.git_guard_service import studio_git_guard
+        status = studio_git_guard.get_git_status()
+        return {"status": "success", "branch": status["branch"], "dirty_count": status["dirty_count"]}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

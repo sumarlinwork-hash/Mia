@@ -6,8 +6,8 @@ interface UseExecutionReturn {
   state: ExecutionState;
   executionId: string | null;
   error: string | null;
-  runCode: (sessionId: string, code: string) => Promise<string | null>;
-  stopCode: (sessionId: string) => Promise<void>;
+  runCode: (projectId: string, sessionId: string, code: string, profileType?: string) => Promise<string | null>;
+  stopCode: (projectId: string, sessionId: string) => Promise<void>;
   setCompleted: () => void;
   setError: (msg: string) => void;
   setRunning: () => void;
@@ -19,7 +19,7 @@ export const useExecution = (): UseExecutionReturn => {
   const [error, setErrorState] = useState<string | null>(null);
   const [isRequesting, setIsRequesting] = useState(false);
 
-  const runCode = useCallback(async (sessionId: string, code: string) => {
+  const runCode = useCallback(async (projectId: string, sessionId: string, code: string, profileType: string = 'COMPACT') => {
     if (state === 'STARTING' || state === 'RUNNING' || isRequesting) return null;
     
     setIsRequesting(true);
@@ -29,7 +29,13 @@ export const useExecution = (): UseExecutionReturn => {
       const res = await fetch('/api/studio/execution/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, path: '', content: code })
+        body: JSON.stringify({ 
+          project_id: projectId, 
+          session_id: sessionId, 
+          path: '', 
+          content: code,
+          profile_type: profileType
+        })
       });
       const data = await res.json();
       if (data.status === 'success') {
@@ -50,14 +56,18 @@ export const useExecution = (): UseExecutionReturn => {
     }
   }, [state, isRequesting]);
 
-  const stopCode = useCallback(async (sessionId: string) => {
+  const stopCode = useCallback(async (projectId: string, sessionId: string) => {
     if (!executionId) return;
     setState('TERMINATING');
     try {
       const res = await fetch('/api/studio/execution/stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, path: executionId })
+        body: JSON.stringify({ 
+          project_id: projectId,
+          session_id: sessionId, 
+          path: executionId 
+        })
       });
       const data = await res.json();
       if (data.status !== 'success') {

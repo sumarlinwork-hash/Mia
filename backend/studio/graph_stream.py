@@ -142,6 +142,36 @@ class StudioGraphStreamer:
                 await asyncio.sleep(batch_window)
         finally: pass
 
+    def get_system_queue(self, project_id: str) -> asyncio.Queue:
+        with self._lock:
+            if project_id not in self.system_event_queues:
+                self.system_event_queues[project_id] = asyncio.Queue()
+                self.system_sequences[project_id] = 0
+            return self.system_event_queues[project_id]
+
+    def push_system_event(self, project_id: str, event_type: str, payload: Optional[Dict[str, Any]] = None):
+        queue = self.get_system_queue(project_id)
+        with self._lock:
+            seq = self.system_sequences.get(project_id, 0)
+            self.system_sequences[project_id] = seq + 1
+        
+        event = {
+            "sequence_id": seq,
+            "type": event_type,
+            "payload": payload or {},
+            "timestamp": time.time(),
+            "project_id": project_id
+        }
+        
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.call_soon_threadsafe(queue.put_nowait, event)
+            else:
+                queue.put_nowait(event)
+        except Exception:
+            pass
+
     def get_delta(self, execution_id: str, from_seq: int, to_seq: int) -> list[dict]:
         """GAP-11: Fetch missing events for frontend reconciliation."""
         start_time = time.perf_counter()

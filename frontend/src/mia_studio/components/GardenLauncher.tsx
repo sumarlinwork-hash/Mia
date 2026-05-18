@@ -37,6 +37,9 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
   const [prompt, setPrompt] = useState('');
   const [ides, setIdes] = useState<{id: string, name: string}[]>([]);
   const [showIdeDropdown, setShowIdeDropdown] = useState(false);
+  const [selectedIde, setSelectedIde] = useState<string>(() => {
+    return localStorage.getItem('mia_selected_ide') || '';
+  });
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
@@ -44,10 +47,16 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
 
   // Fetch IDEs on mount
   useEffect(() => {
-    fetch('http://localhost:8000/api/studio/ide/list')
+    fetch('/api/studio/ide/list')
       .then(r => r.json())
       .then(d => {
-        if (d.status === 'success' && d.ides) setIdes(d.ides);
+        if (d.status === 'success' && d.ides) {
+          setIdes(d.ides);
+          if (!localStorage.getItem('mia_selected_ide') && d.ides.length > 0) {
+            setSelectedIde(d.ides[0].id);
+            localStorage.setItem('mia_selected_ide', d.ides[0].id);
+          }
+        }
       })
       .catch(e => console.error("Failed to fetch IDEs:", e));
   }, []);
@@ -63,10 +72,31 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
     return () => window.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
+  const refreshIdeScan = async () => {
+    try {
+      const response = await fetch('/api/studio/ide/list?refresh=true');
+      const d = await response.json();
+      if (d.status === 'success' && d.ides) {
+        setIdes(d.ides);
+        if (d.ides.length > 0) {
+          const currentSelectionExists = d.ides.some((i: { id: string }) => i.id === selectedIde);
+          if (!currentSelectionExists) {
+            setSelectedIde(d.ides[0].id);
+            localStorage.setItem('mia_selected_ide', d.ides[0].id);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to refresh IDEs:", e);
+    }
+  };
+
   const openLocalIde = async (ide_command: string) => {
+    setSelectedIde(ide_command);
+    localStorage.setItem('mia_selected_ide', ide_command);
     setShowIdeDropdown(false);
     try {
-      await fetch('http://localhost:8000/api/studio/ide/open', {
+      await fetch('/api/studio/ide/open', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: projectName || 'mia', ide_command })
@@ -191,11 +221,12 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
               <div className="relative" ref={dropdownRef}>
                 <button 
                   onClick={() => setShowIdeDropdown(!showIdeDropdown)}
-                  className="flex h-7 items-center gap-2 rounded-lg border border-white/15 bg-[#171717] px-2 hover:bg-[#222] transition-colors" 
+                  className="flex h-7 items-center gap-2 rounded-lg border border-white/15 bg-[#171717] px-2.5 text-xs text-white hover:bg-[#222] transition-colors" 
                   title="Open in Local IDE"
                 >
-                  <Monitor size={14} className="text-white" />
-                  <ChevronDown size={13} />
+                  <Monitor size={13} className="text-primary" />
+                  <span>IDE: {ides.find(i => i.id === selectedIde)?.name || "Select IDE"}</span>
+                  <ChevronDown size={12} className="opacity-50" />
                 </button>
                 {showIdeDropdown && (
                   <div className="absolute right-0 top-full mt-2 w-48 rounded-lg border border-white/10 bg-[#171717] shadow-xl overflow-hidden z-50">
@@ -205,7 +236,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
                     {ides.length === 0 ? (
                       <div className="px-3 py-3 text-[12px] text-white/50">No IDEs found.</div>
                     ) : (
-                      <div className="py-1">
+                      <div className="py-1 border-b border-white/10">
                         {ides.map(ide => (
                           <button
                             key={ide.id}
@@ -218,6 +249,18 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
                         ))}
                       </div>
                     )}
+                    <div className="py-1 bg-black/20">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          refreshIdeScan();
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-primary hover:text-primary-soft hover:bg-white/5 transition-colors flex items-center gap-1.5"
+                      >
+                        <Sparkles size={11} className="animate-pulse text-primary" />
+                        Refresh Scan
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

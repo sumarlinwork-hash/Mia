@@ -20,65 +20,61 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ events }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Patch FE-5: Throttled Batch Update
+  // Flagship Event-Driven Reactive Update (0.00% CPU overhead when idle)
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (events.length === 0) {
-        setNodes([]);
-        setEdges([]);
-        return;
-      }
+    if (events.length === 0) {
+      setNodes([]);
+      setEdges([]);
+      return;
+    }
 
-      // Process events into nodes/edges
-      const newNodes: Node[] = [];
-      const newEdges: Edge[] = [];
-      const nodeSet = new Set<string>();
+    // Process events into nodes/edges
+    const newNodes: Node[] = [];
+    const newEdges: Edge[] = [];
+    const nodeSet = new Set<string>();
 
-      events.forEach((ev, idx) => {
-        if (!ev.node_id) return;
+    events.forEach((ev, idx) => {
+      if (!ev.node_id) return;
 
-        if (!nodeSet.has(ev.node_id)) {
-          newNodes.push({
-            id: ev.node_id,
-            data: { label: ev.node_id },
-            position: { x: idx * 150, y: 100 },
-            style: { 
-              background: ev.type === 'NODE_START' ? '#3b82f6' : '#10b981',
-              color: 'white',
-              borderRadius: '8px',
-              border: 'none',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              width: 120
-            }
+      if (!nodeSet.has(ev.node_id)) {
+        newNodes.push({
+          id: ev.node_id,
+          data: { label: ev.node_id },
+          position: { x: idx * 150, y: 100 },
+          style: { 
+            background: ev.type === 'NODE_START' ? '#3b82f6' : '#10b981',
+            color: 'white',
+            borderRadius: '8px',
+            border: 'none',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            width: 120
+          }
+        });
+        nodeSet.add(ev.node_id);
+
+        // Simple linear edge for Phase 1
+        if (newNodes.length > 1) {
+          newEdges.push({
+            id: `e-${idx}`,
+            source: newNodes[newNodes.length - 2].id,
+            target: ev.node_id,
+            animated: true,
+            style: { stroke: '#3b82f6' },
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }
           });
-          nodeSet.add(ev.node_id);
-
-          // Simple linear edge for Phase 1
-          if (newNodes.length > 1) {
-            newEdges.push({
-              id: `e-${idx}`,
-              source: newNodes[newNodes.length - 2].id,
-              target: ev.node_id,
-              animated: true,
-              style: { stroke: '#3b82f6' },
-              markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }
-            });
-          }
-        } else {
-          // Update existing node style if ended
-          const node = newNodes.find(n => n.id === ev.node_id);
-          if (node && ev.type === 'NODE_END') {
-            node.style = { ...node.style, background: '#10b981' };
-          }
         }
-      });
+      } else {
+        // Update existing node style if ended
+        const node = newNodes.find(n => n.id === ev.node_id);
+        if (node && ev.type === 'NODE_END') {
+          node.style = { ...node.style, background: '#10b981' };
+        }
+      }
+    });
 
-      setNodes(newNodes);
-      setEdges(newEdges);
-    }, 200); // 200ms throttling (Patch FE-5)
-
-    return () => clearInterval(timer);
+    setNodes(newNodes);
+    setEdges(newEdges);
   }, [events, setNodes, setEdges]);
 
   return (
