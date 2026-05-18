@@ -7,7 +7,8 @@ import {
   Image as ImageIcon, FileText, MonitorUp, Volume2, VolumeX,
   Search, Code, Zap, Database, CheckSquare, Sparkles, XCircle,
   ThumbsUp, ThumbsDown, Pin, Pencil, Trash2, Download, PlayCircle,
-  Copy, Check, AlertCircle, Info as InfoIcon, Heart, Droplets, RotateCcw
+  Copy, Check, AlertCircle, Info as InfoIcon, Heart, Droplets, RotateCcw,
+  ArrowDown
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -94,11 +95,13 @@ export default function Home() {
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
   const [intimacyError, setIntimacyError] = useState<string | null>(null);
   const [isTogglingIntimacy, setIsTogglingIntimacy] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // --- 2. REFS ---
   const { send, status: wsStatus } = useWebSocket();
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const currentAudio = useRef<HTMLAudioElement | null>(null);
@@ -114,6 +117,16 @@ export default function Home() {
     const id = Date.now();
     setToasts(prev => [...prev, { id, msg, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  }, []);
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const element = e.currentTarget;
+    const isNearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 300;
+    setShowScrollButton(!isNearBottom);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
   const playSFX = useCallback((type: 'send' | 'receive' | 'pop' | 'error') => {
@@ -435,7 +448,18 @@ export default function Home() {
 
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const element = chatContainerRef.current;
+    if (!element) return;
+    
+    // Always scroll to bottom if the last message is from the user
+    const lastMsg = messages[messages.length - 1];
+    const isFromUser = lastMsg && lastMsg.role === 'You';
+    
+    const isNearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 300;
+    
+    if (isNearBottom || isFromUser) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -782,7 +806,11 @@ export default function Home() {
 
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto mb-6 pr-2 space-y-6 custom-scrollbar scroll-smooth">
+      <div
+        ref={chatContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto mb-6 pr-2 space-y-6 custom-scrollbar scroll-smooth"
+      >
         {messages.length === 0 && (
           <div className="h-full flex items-center justify-center opacity-40">
             <div className="px-6 py-4 rounded-2xl border border-white/10 font-mono text-white text-center">
@@ -820,6 +848,18 @@ export default function Home() {
 
       {/* Input Area */}
       <div className="relative flex flex-col gap-2 shrink-0">
+        {/* Scroll to Bottom Button */}
+        {showScrollButton && (
+          <div className="absolute bottom-[115%] right-6 z-50 pointer-events-auto">
+            <button
+              onClick={scrollToBottom}
+              className="p-3 bg-primary text-black hover:bg-primary/90 rounded-full shadow-[0_4px_25px_rgba(0,255,204,0.4)] border border-white/10 transition-all duration-300 hover:scale-110 active:scale-95 animate-bounce flex items-center justify-center"
+              title="Scroll to bottom"
+            >
+              <ArrowDown size={20} />
+            </button>
+          </div>
+        )}
         {/* Status LEDs - Instrument Panel Style */}
         <div className="absolute -bottom-5 left-7 flex gap-2.5 z-10 px-1">
           <div className="flex flex-col items-center gap-0.5">
