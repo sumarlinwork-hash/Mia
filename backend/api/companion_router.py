@@ -470,6 +470,7 @@ async def websocket_graph_stream(websocket: WebSocket, graph_id: str):
 @companion_router.websocket("/ws/chat/heartbeat")
 @companion_router.websocket("/api/chat/heartbeat")
 async def websocket_heartbeat(websocket: WebSocket):
+    global active_module
     await websocket.accept()
     print("[WS] MIA Heartbeat Connected - Pipeline Open")
     crone_daemon.register_websocket(websocket)
@@ -503,7 +504,6 @@ async def websocket_heartbeat(websocket: WebSocket):
                         continue
                         
                     if payload.get("type") == "SWITCH_TO_STUDIO":
-                        global active_module
                         active_module = "studio"
                         print("[Power-State] Switching to STUDIO. Suspending companion loops.")
                         crone_daemon.pause_job("proactive_caring")
@@ -512,7 +512,6 @@ async def websocket_heartbeat(websocket: WebSocket):
                         continue
 
                     if payload.get("type") == "SWITCH_TO_COMPANION":
-                        global active_module
                         active_module = "companion"
                         print("[Power-State] Switching to COMPANION. Resuming companion loops.")
                         crone_daemon.resume_job("proactive_caring")

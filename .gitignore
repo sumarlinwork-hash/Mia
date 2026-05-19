@@ -100,3 +100,5 @@ node_modules/
 *.db-journal
 *.sqlite
 *.sqlite3
+
+antigravity_app/

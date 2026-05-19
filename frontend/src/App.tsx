@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, memo, lazy, Suspense } from 'react';
+import { useWebSocket } from './hooks/useWebSocket';
 import { ThemeProvider } from './context/ThemeProvider';
 import Sidebar from './Sidebar';
 const HomeLazy = lazy(() => import('./Home'));
@@ -261,6 +262,8 @@ function AppShell() {
 
   const effectiveSidebarCollapsed = sidebarCollapsed || isNarrowViewport;
 
+  const { send, status: wsStatus } = useWebSocket();
+
 
 
   useEffect(() => {
@@ -273,6 +276,13 @@ function AppShell() {
 
   }, [isOnboarded, isOnboardingRoute, navigate]);
 
+  useEffect(() => {
+    const command = isStudioRoute ? 'SWITCH_TO_STUDIO' : 'SWITCH_TO_COMPANION';
+    const payload = JSON.stringify({ type: command });
+    if (wsStatus === 'connected') {
+      send(payload);
+    }
+  }, [isStudioRoute, wsStatus, send]);
 
 
   // STAGE 4: Staged Startup Sequence & Hardware Detection

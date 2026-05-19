@@ -12,7 +12,7 @@ Agar sistem modular kita tidak membingungkan Bos secara visual, kita memetakan *
 
 ### 📊 1. Peta Distribusi Halaman & Kartu Pengaturan (Where does everything go?)
 
-Untuk menghilangkan kebingungan visual (*zero visual headache*), **7 pilihan sidebar lama** dikonsolidasikan secara elegan menjadi **4 Gerbang Utama di Sidebar (The 4 Flagship Gateways)**:
+Setiap Gateway kini bertindak sebagai **Isolated Kernel Environment** dengan pengaturan mandiri. Tombol Settings di Sidebar atau tiap Gateway akan membuka menu yang relevan dengan konteks Kernel tersebut.
 
 ```
 [MIA SHELL SIDEBAR]
@@ -21,6 +21,9 @@ Untuk menghilangkan kebingungan visual (*zero visual headache*), **7 pilihan sid
   ├── 🧠 3. /llm (LLM Warehouse)       --> Konsolidasi: Registrasi model, API keys, & Latency Ping
   └── 🛍️ 4. /skills (Mia Store)        --> Konsolidasi: App Store terpadu (Lifestyle & Developer tabs)
 ```
+
+**Companion Hub (Rich UI Restoration):**
+Gateway ini harus mengembalikan fitur kustomisasi visual penuh. Pengguna dapat mengakses tab internal untuk "Resonance" (Emosi) dan "Soul" (Memory Editor) tanpa meninggalkan Gateway Home.
 
 Seluruh elemen UI eksisting dipetakan secara tegas ke dalam keempat gerbang ini:
 
@@ -32,10 +35,8 @@ Seluruh elemen UI eksisting dipetakan secara tegas ke dalam keempat gerbang ini:
 | **Mia Store (`/skills` - `SkillMarketplace.tsx`)** | 🏠/💻 **Shared App Store** | Satu-satunya toko unduhan terpadu dengan **Filter Tab Kategori**: Tab `"Lifestyle & Chat"` (Companion) dan Tab `"Developer & Automation"` (Studio/MCP). Mencegah kebingungan Bos! |
 | **Kartu Kelola Abilities (Tab `skills` Settings)** | 🏠/💻 **Shared Settings** | Pengelolaan kemampuan dengan pembagian tab yang rapi: Kode Python interaktif companion dikelola di setelan `/companion`, sedangkan izin eksekusi tool otonom dikelola di setelan `/studio`. |
 | **Halaman Onboarding Wizard (`/onboarding` - `Onboarding.tsx`)** | 🏠 `/companion` (Home Hub Setup) | Wizard inisialisasi awal (nama pengguna, setelan suara dasar, kalibrasi jiwa awal). |
-| **Kartu Transparansi UI (UI Opacity Slider)** | 🏠 `/companion` (Home Hub Settings) | Mengatur tingkat transparansi panel visual anime (10% hingga 100%). |
-| **Kartu Warna & Opacity Balon Chat (Bubble Color & Alpha)** | 🏠 `/companion` (Home Hub Settings) | Slider kustomisasi warna dan tingkat transparansi balon chat MIA dan User. |
-| **Kartu Background Solid / Tema Cepat (Aurora, Sakura, Midnight, Graphite)** | 🏠 `/companion` (Home Hub Settings) | Pilihan palet gradasi warna latar belakang anime visual premium secara instan. |
-| **Kartu Unggah Latar Belakang (Background URL / Local Upload)** | 🏠 `/companion` (Home Hub Settings) | Input teks path file video/gambar kustom atau tombol unggah background lokal. |
+| **Rich Appearance (Opacity, Bubbles, Video BG)** | 🏠 `/companion` (Home Hub Settings) | **RESTORE:** Slider transparansi, warna bubble, opacity chat, dan support Background Video/Image/Solid. |
+| **Theming System (Themes Selector)** | 🏠 `/companion` (Home Hub Settings) | **RESTORE:** Pemilihan tema (Aurora, Sakura, Midnight, Graphite) secara instan. |
 | **Kartu Core Personality** (AI Name, Bot Age) | 🏠 `/companion` (Home Hub Settings) | Mengatur nama panggilan khusus AI, umur virtual AI, dan deskripsi system persona. |
 | **Kartu Speech & Voice Engine** (STT & TTS Selectors) | 🏠 `/companion` (Home Hub Settings) | Pemilihan STT Engine (Python Native/Whisper) dan TTS Engine (Edge-TTS, ElevenLabs, gTTS). |
 | **Kartu ElevenLabs API Key Config** | 🏠 `/companion` (Home Hub Settings) | Input kunci API ElevenLabs (disembunyikan otomatis) jika engine TTS ElevenLabs aktif. |
@@ -174,4 +175,3 @@ backend/
     *   Melakukan penyimpanan berkas studio bertubi-tubi (auto-save cepat) sembari menyentuh sensor ketukan companion di UI secara simultan. Memastikan tidak ada *write corruption* atau data yang hilang.
 
 ---
-

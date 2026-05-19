@@ -17,6 +17,7 @@ import {
 import { useConfig } from '../../hooks/useConfig';
 import { useInstalledSkills } from '../../hooks/useMIAQueries';
 import type { App as Skill } from '../../utils/viewModel';
+import type { ProviderConfig } from '../../types/config';
 import { useExecution } from '../hooks/useExecution';
 import { useStudioStream } from '../hooks/useStudioStream';
 import { useProject, useProjectEvents } from '../hooks/useProject';
@@ -563,7 +564,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                     >
                       <span>🤖 DYNAMIC ROUTING</span>
                     </button>
-                    {Object.entries(config?.providers ?? {}).map(([name, p]: [string, any]) => (
+                    {Object.entries(config?.providers ?? {}).map(([name, p]: [string, ProviderConfig]) => (
                       <button
                         key={name}
                         onClick={() => handleSelectOverrideModel(name)}

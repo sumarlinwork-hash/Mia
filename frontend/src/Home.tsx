@@ -17,7 +17,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { useConfig } from './hooks/useConfig';
-import type { MIAConfig } from './types/config';
+import type { MIAConfig, ProviderConfig } from './types/config';
 
 
 interface WaveformBarProps {
@@ -107,7 +107,7 @@ export default function Home() {
       } else {
         addToast('Gagal merubah model active selector', 'error');
       }
-    } catch (e) {
+    } catch {
       addToast('Masalah koneksi saat mengubah model', 'error');
     } finally {
       setShowModelDropdown(false);
@@ -140,6 +140,7 @@ export default function Home() {
   const [audioLevel, setAudioLevel] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
+  const [powerState, setPowerState] = useState<'WAKE' | 'SLEEP'>('WAKE');
   const [mood] = useState("neutral");
   const [statusStage, setStatusStage] = useState<string>("DONE");
   const [statusMessage, setStatusMessage] = useState<string>("Idle");
@@ -150,6 +151,31 @@ export default function Home() {
 
   // --- 2. REFS ---
   const { send, status: wsStatus } = useWebSocket();
+
+  useEffect(() => {
+    const loadPowerState = async () => {
+      try {
+        const res = await fetch('/api/power_state');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.state === 'SLEEP' || data.state === 'WAKE') {
+          setPowerState(data.state);
+        }
+      } catch (err) {
+        console.error('[Home] Failed to fetch power state:', err);
+      }
+    };
+
+    loadPowerState();
+  }, []);
+
+  useWebSocketMessage(useCallback((data: WSMessage) => {
+    if (data.type === 'power_state') {
+      const nextState = data.state === 'SLEEP' ? 'SLEEP' : 'WAKE';
+      setPowerState(nextState);
+    }
+  }, []));
+
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -805,9 +831,9 @@ export default function Home() {
                 status.includes("Connected") ? "text-primary animate-pulse z-10 relative" : "text-error z-10 relative"
             } size={16} />
             <div className="flex items-center gap-1 font-mono text-[9px] font-bold text-white/50">
-              <span className={`w-1.5 h-1.5 rounded-full ${intimacyActive ? 'bg-pink-500 shadow-[0_0_6px_#ff007f] animate-pulse' : 'bg-green-400 shadow-[0_0_6px_#00ff66] animate-pulse'}`} />
-              <span className={intimacyActive ? 'text-pink-400' : 'text-green-400'}>
-                {intimacyActive ? 'WAKE (SOULMATE)' : 'WAKE'}
+              <span className={`w-1.5 h-1.5 rounded-full ${intimacyActive ? 'bg-pink-500 shadow-[0_0_6px_#ff007f] animate-pulse' : powerState === 'SLEEP' ? 'bg-amber-300 shadow-[0_0_6px_#ffd68a] animate-pulse' : 'bg-green-400 shadow-[0_0_6px_#00ff66] animate-pulse'}`} />
+              <span className={intimacyActive ? 'text-pink-400' : powerState === 'SLEEP' ? 'text-amber-300' : 'text-green-400'}>
+                {intimacyActive ? 'WAKE (SOULMATE)' : powerState === 'SLEEP' ? 'SLEEP' : 'WAKE'}
               </span>
             </div>
             {(isSpeaking || (intimacyActive && audioLevel > 5)) && (
@@ -1043,7 +1069,7 @@ export default function Home() {
                   {(config?.active_provider_override ?? 'auto') === 'auto' && <Check size={12} />}
                 </button>
 
-                {Object.entries(config?.providers ?? {}).map(([name, p]: [string, any]) => (
+                {Object.entries(config?.providers ?? {}).map(([name, p]: [string, ProviderConfig]) => (
                   <button
                     key={name}
                     onClick={() => handleSelectOverrideModel(name)}
