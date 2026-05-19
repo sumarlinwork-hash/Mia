@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Search, Zap, Plus, Book, Music, MessageCircle, CheckCircle, Star, Sparkles, X, ChevronRight } from 'lucide-react';
+import { Search, Zap, Plus, MessageCircle, CheckCircle, Star, Sparkles, X, ChevronRight, Code } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from './hooks/useMIAQueries';
@@ -29,7 +29,7 @@ export interface AppManifest {
 const SkillMarketplace: React.FC = () => {
   const { config } = useConfig();
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('Semua');
+  const [selectedCategory, setSelectedCategory] = useState('Lifestyle & Chat');
   
   // Modals state
   const [showModeSelector, setShowModeSelector] = useState(false);
@@ -145,16 +145,15 @@ const SkillMarketplace: React.FC = () => {
   };
 
   const categories = [
-    { name: 'Semua', icon: Zap },
-    { name: 'Kreativitas', icon: Book },
-    { name: 'Media', icon: Music },
-    { name: 'Interaksi', icon: MessageCircle },
+    { name: 'Lifestyle & Chat', icon: MessageCircle },
+    { name: 'Developer & Automation', icon: Code },
   ];
 
   const filteredApps = apps.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) || 
                          s.description.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedCategory === 'Semua' || s.category === selectedCategory;
+    const isDev = ['Developer & Automation', 'Automation', 'Developer', 'Media', 'System'].includes(s.category);
+    const matchesCategory = selectedCategory === 'Lifestyle & Chat' ? !isDev : isDev;
     return matchesSearch && matchesCategory;
   });
 

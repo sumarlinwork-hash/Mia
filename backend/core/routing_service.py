@@ -90,6 +90,12 @@ class RoutingService:
                 return await self.select_best_provider(purpose="llm", exclude=exclude_list)
             raise Exception("No active AI providers available.")
 
+        # 0. Active Provider Override (Contract/UI Choice)
+        override = getattr(config, "active_provider_override", "auto")
+        if override and override != "auto" and override in all_active:
+            print(f"[Routing] OVERRIDE: Forcing provider '{override}' by user selection.")
+            return override, all_active[override]
+
         # 2. Filter out circuit breaker active providers
         healthy_active = {name: p for name, p in all_active.items() if p.circuit_breaker_until < now}
         

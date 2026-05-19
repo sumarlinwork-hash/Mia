@@ -82,6 +82,7 @@ class MIAConfig(BaseModel):
     is_professional_mode: bool = False
     is_production_mode: bool = False
     os_mode: str = "SAFE_MODE" # SAFE_MODE, POWER_MODE, BEGINNER_MODE
+    active_provider_override: str = "auto"
     
     # ARE (Affective Resonance Engine) Parameters - Synchronized with SSOT v5
     care_pulse_enabled: bool = True
@@ -125,34 +126,20 @@ def load_config(force_reload: bool = False) -> MIAConfig:
     if _cached_config and not force_reload:
         return _cached_config
 
-    if not os.path.exists(CONFIG_FILE):
-        default_config = get_default_config()
-        save_config(default_config)
-        _cached_config = default_config
-        return default_config
-    
     try:
-        with open(CONFIG_FILE, "r") as f:
-            data = json.load(f)
-            # Migrate older configs
-            if "appearance" not in data:
-                data["appearance"] = AppearanceConfig().dict()
-            data["appearance"]["theme_hue"] = normalize_theme_hue(
-                data["appearance"].get("theme_hue")
-            )
-            _cached_config = MIAConfig(**data)
-            return _cached_config
+        from core.state_store import state_store
+        _cached_config = state_store.get_config_sync()
+        return _cached_config
     except Exception as e:
-        print(f"Error loading config: {e}. Using default.")
+        print(f"Error loading config from SQLite: {e}. Falling back to default.")
         return get_default_config()
 
 def save_config(config: MIAConfig):
     global _cached_config
     _cached_config = config
-    with open(CONFIG_FILE, "w") as f:
-        # Pydantic v2 compatible serialization
-        try:
-            f.write(config.model_dump_json(indent=4))
-        except AttributeError:
-            # Pydantic v1 fallback
-            f.write(config.json(indent=4))
+    try:
+        from core.state_store import state_store
+        state_store.set_config_sync(config)
+    except Exception as e:
+        print(f"Error saving config to SQLite: {e}")
+

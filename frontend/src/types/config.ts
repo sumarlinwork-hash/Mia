@@ -41,4 +41,5 @@ export interface MIAConfig {
   bio_sync_enabled: boolean;
   os_mode: string;
   test_timeout: number;
+  active_provider_override?: string;
 }

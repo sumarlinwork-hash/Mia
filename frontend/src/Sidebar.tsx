@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Settings2, Brain, Activity, ChevronLeft, ChevronRight, Heart, Zap, Shield, Flower } from 'lucide-react';
+import { Home, Brain, ChevronLeft, ChevronRight, Zap, Shield, Flower } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
 import { useEmotion } from './hooks/useEmotion';
 
@@ -19,13 +19,10 @@ export default function Sidebar({ onToggleZen, isZenMode, collapsed, setCollapse
   const isPro = config?.is_professional_mode;
 
   const navItems = [
-    { name: isPro ? "Home" : "Chat with me", icon: <Home size={22} />, path: "/" },
-    { name: isPro ? "Crone Tasks" : "My grind", icon: <Activity size={22} />, path: "/crone" },
-    { name: isPro ? "Memory Store" : "I'm Mia", icon: <Brain size={22} />, path: "/iam-mia" },
-    { name: isPro ? "Resonance Hub" : "My heart", icon: <Heart size={22} />, path: "/emotion" },
+    { name: isPro ? "Companion Hub" : "Chat with me", icon: <Home size={22} />, path: "/" },
+    { name: isPro ? "Studio Workspace" : "My Garden", icon: <Flower size={22} />, path: "/studio" },
+    { name: "LLM Warehouse", icon: <Brain size={22} />, path: "/llm" },
     { name: isPro ? "Mia Store" : "My Store", icon: <Zap size={22} />, path: "/skills" },
-    { name: isPro ? "Mia Studio" : "My Garden", icon: <Flower size={22} />, path: "/studio" },
-    { name: "Settings", icon: <Settings2 size={22} />, path: "/settings" },
   ];
 
   return (

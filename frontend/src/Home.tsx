@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { useWebSocket, useWebSocketMessage, useWebSocketEvent, type WSMessage } from './hooks/useWebSocket';
 import { useMemoryFiles, useIntimacyStatus, useChatHistory, queryKeys } from './hooks/useMIAQueries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -8,7 +8,7 @@ import {
   Search, Code, Zap, Database, CheckSquare, Sparkles, XCircle,
   ThumbsUp, ThumbsDown, Pin, Pencil, Trash2, Download, PlayCircle,
   Copy, Check, AlertCircle, Info as InfoIcon, Heart, Droplets, RotateCcw,
-  ArrowDown
+  ArrowDown, ChevronDown
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -17,6 +17,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { useConfig } from './hooks/useConfig';
+import type { MIAConfig } from './types/config';
 
 
 interface WaveformBarProps {
@@ -65,7 +66,7 @@ interface Toast {
 export default function Home() {
   const location = useLocation();
   // --- 1. STATES ---
-  const { config, loading: configLoading } = useConfig();
+  const { config, loading: configLoading, updateConfig, refreshConfig } = useConfig();
   const { data: messages = [] } = useChatHistory();
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Disconnected");
@@ -79,6 +80,56 @@ export default function Home() {
   const { data: memoryFiles = [] } = useMemoryFiles();
   const { data: intimacyActive = false } = useIntimacyStatus();
   const queryClient = useQueryClient();
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showCompanionSettings, setShowCompanionSettings] = useState(false);
+
+  const activeModelName = useMemo(() => {
+    const override = config?.active_provider_override ?? 'auto';
+    if (override === 'auto') return 'DYNAMIC AUTO';
+    return override;
+  }, [config]);
+
+  const handleSelectOverrideModel = async (name: string) => {
+    if (!config) return;
+    const newConf = { ...config, active_provider_override: name };
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConf)
+      });
+      if (res.ok) {
+        if (queryClient) {
+          queryClient.setQueryData(['config'], newConf);
+        }
+        await refreshConfig();
+        addToast(`Model berhasil dialihkan ke ${name === 'auto' ? 'Dynamic Routing' : name}`, 'success');
+      } else {
+        addToast('Gagal merubah model active selector', 'error');
+      }
+    } catch (e) {
+      addToast('Masalah koneksi saat mengubah model', 'error');
+    } finally {
+      setShowModelDropdown(false);
+    }
+  };
+
+  const updateConfigLocal = async (newConf: MIAConfig) => {
+    if (queryClient) {
+      queryClient.setQueryData(['config'], newConf);
+    }
+    updateConfig(newConf);
+    try {
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConf)
+      });
+      await refreshConfig();
+    } catch (e) {
+      console.error("Failed to auto-save config on home page change:", e);
+    }
+  };
   const [filteredFiles, setFilteredFiles] = useState<string[]>([]);
   const [filteredCommands, setFilteredCommands] = useState(COMMANDS);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -744,15 +795,21 @@ export default function Home() {
       {/* Floating Top Controls */}
       <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-20 pointer-events-none">
         {/* Left: Status & Aura */}
-        <div className="flex items-center gap-4 pointer-events-auto">
+        <div className="flex items-center gap-4 pointer-events-auto bg-black/20 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/5">
           <div
-            className="relative cursor-pointer group/aura"
+            className="relative cursor-pointer group/aura flex items-center gap-2"
             onClick={handleTouch}
           >
             <Activity className={
               intimacyActive ? "text-pink-500 animate-heartbeat z-10 relative" :
                 status.includes("Connected") ? "text-primary animate-pulse z-10 relative" : "text-error z-10 relative"
-            } size={20} />
+            } size={16} />
+            <div className="flex items-center gap-1 font-mono text-[9px] font-bold text-white/50">
+              <span className={`w-1.5 h-1.5 rounded-full ${intimacyActive ? 'bg-pink-500 shadow-[0_0_6px_#ff007f] animate-pulse' : 'bg-green-400 shadow-[0_0_6px_#00ff66] animate-pulse'}`} />
+              <span className={intimacyActive ? 'text-pink-400' : 'text-green-400'}>
+                {intimacyActive ? 'WAKE (SOULMATE)' : 'WAKE'}
+              </span>
+            </div>
             {(isSpeaking || (intimacyActive && audioLevel > 5)) && (
               <div
                 className={`absolute inset-0 rounded-full blur-md transition-transform duration-75 ${intimacyActive ? 'bg-pink-500/40' : 'bg-primary/40'}`}
@@ -798,9 +855,13 @@ export default function Home() {
           >
             <Droplets size={20} className={intimacyActive ? "fill-pink-500" : ""} />
           </button>
-          <Link to="/settings" className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-primary">
+          <button 
+            onClick={() => setShowCompanionSettings(true)}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-primary"
+            title="Companion Settings"
+          >
             <Settings2 size={20} />
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -954,6 +1015,55 @@ export default function Home() {
             disabled={isThinking}
           />
 
+          {/* Active Model Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowModelDropdown(!showModelDropdown)}
+              className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-primary hover:bg-white/10 transition-all flex items-center gap-1"
+              title="Active LLM Selector"
+            >
+              <Brain size={12} />
+              {activeModelName}
+              <ChevronDown size={10} />
+            </button>
+            
+            {showModelDropdown && (
+              <div className="absolute bottom-full right-0 mb-3 w-56 rounded-2xl bg-black/95 backdrop-blur-3xl border border-white/10 shadow-2xl p-2 z-[200] space-y-1">
+                <div className="text-[9px] uppercase font-bold text-white/30 px-3 py-1.5 font-mono tracking-widest border-b border-white/5 mb-1">PILIH INTEL MIA</div>
+                
+                <button
+                  onClick={() => handleSelectOverrideModel('auto')}
+                  className={`w-full text-left px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center justify-between ${
+                    (config?.active_provider_override ?? 'auto') === 'auto'
+                      ? 'bg-primary/20 text-primary border border-primary/20'
+                      : 'text-white/70 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <span>🤖 DYNAMIC ROUTING</span>
+                  {(config?.active_provider_override ?? 'auto') === 'auto' && <Check size={12} />}
+                </button>
+
+                {Object.entries(config?.providers ?? {}).map(([name, p]: [string, any]) => (
+                  <button
+                    key={name}
+                    onClick={() => handleSelectOverrideModel(name)}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center justify-between ${
+                      (config?.active_provider_override ?? 'auto') === name
+                        ? 'bg-primary/20 text-primary border border-primary/20'
+                        : 'text-white/70 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-bold">{name}</span>
+                      <span className="text-[8px] text-white/30 truncate max-w-[150px]">{p.model_id}</span>
+                    </div>
+                    {(config?.active_provider_override ?? 'auto') === name && <Check size={12} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button onClick={handleMic} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${isRecording ? 'text-secondary animate-pulse' : 'text-white/60 hover:text-primary'}`}><Mic size={20} /></button>
 
           <button
@@ -1047,6 +1157,148 @@ export default function Home() {
               >
                 Mengerti 💖
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Control Drawer for Companion Settings */}
+      {showCompanionSettings && config && (
+        <div className="fixed inset-y-0 right-0 w-96 bg-black/95 border-l border-white/10 backdrop-blur-3xl p-8 z-[1000] shadow-2xl animate-fade-in custom-scrollbar overflow-y-auto space-y-6">
+          <div className="flex justify-between items-center pb-4 border-b border-white/10">
+            <h2 className="text-sm font-bold font-mono text-white flex items-center gap-2 uppercase tracking-widest">
+              <Settings2 className="text-primary" size={18} />
+              Setelan Companion
+            </h2>
+            <button 
+              onClick={() => setShowCompanionSettings(false)}
+              className="px-3 py-1 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-[10px] font-mono font-bold text-white transition-colors"
+            >
+              TUTUP
+            </button>
+          </div>
+
+          {/* Personality Settings */}
+          <div className="space-y-4">
+            <h3 className="text-[10px] uppercase font-bold tracking-widest text-primary font-mono border-b border-primary/20 pb-1">1. Personalitas MIA</h3>
+            
+            <div className="space-y-1">
+              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Nama Panggilan Bot</label>
+              <input 
+                type="text" 
+                value={config.bot_name}
+                onChange={(e) => updateConfigLocal({ ...config, bot_name: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Umur Bot (Tahun)</label>
+              <input 
+                type="number" 
+                value={config.bot_age}
+                onChange={(e) => updateConfigLocal({ ...config, bot_age: parseInt(e.target.value) || 18 })}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Persona & Karakter Utama</label>
+              <textarea 
+                value={config.bot_persona}
+                rows={4}
+                onChange={(e) => updateConfigLocal({ ...config, bot_persona: e.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none leading-relaxed"
+              />
+            </div>
+          </div>
+
+          {/* Speech Engine Settings */}
+          <div className="space-y-4">
+            <h3 className="text-[10px] uppercase font-bold tracking-widest text-primary font-mono border-b border-primary/20 pb-1">2. Mesin Suara (Speech)</h3>
+            
+            <div className="space-y-1">
+              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">TTS Engine</label>
+              <select
+                value={config.tts_engine}
+                onChange={(e) => updateConfigLocal({ ...config, tts_engine: e.target.value })}
+                className="w-full bg-black border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none appearance-none"
+              >
+                <option value="edge-tts">Edge-TTS (Gratis & Cepat)</option>
+                <option value="elevenlabs">ElevenLabs (Premium & Realistis)</option>
+              </select>
+            </div>
+
+            {config.tts_engine === 'elevenlabs' && (
+              <>
+                <div className="space-y-1">
+                  <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Elevenlabs API Key</label>
+                  <input 
+                    type="password" 
+                    value={config.elevenlabs_api_key}
+                    placeholder="••••••••"
+                    onChange={(e) => updateConfigLocal({ ...config, elevenlabs_api_key: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Voice ID</label>
+                  <input 
+                    type="text" 
+                    value={config.elevenlabs_voice_id}
+                    onChange={(e) => updateConfigLocal({ ...config, elevenlabs_voice_id: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Appearance Settings */}
+          <div className="space-y-4">
+            <h3 className="text-[10px] uppercase font-bold tracking-widest text-primary font-mono border-b border-primary/20 pb-1">3. Tampilan Antarmuka</h3>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-[9px] text-white/40 font-mono font-bold">
+                <span>Transparansi UI</span>
+                <span>{Math.round(uiOpacity * 100)}%</span>
+              </div>
+              <input 
+                type="range" 
+                min="0.1" 
+                max="1.0" 
+                step="0.05"
+                value={uiOpacity}
+                onChange={(e) => updateConfigLocal({
+                  ...config,
+                  appearance: {
+                    ...config.appearance,
+                    ui_opacity: parseFloat(e.target.value)
+                  }
+                })}
+                className="w-full accent-primary cursor-pointer"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Aksen Warna Tema</label>
+              <select
+                value={config.appearance?.theme_hue ?? 'teal'}
+                onChange={(e) => updateConfigLocal({
+                  ...config,
+                  appearance: {
+                    ...config.appearance,
+                    theme_hue: e.target.value
+                  }
+                })}
+                className="w-full bg-black border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none appearance-none"
+              >
+                <option value="teal">Neon Teal</option>
+                <option value="violet">Cyber Violet</option>
+                <option value="amber">Retrowave Amber</option>
+                <option value="emerald">Matrix Emerald</option>
+                <option value="rose">Love Rose</option>
+              </select>
             </div>
           </div>
         </div>

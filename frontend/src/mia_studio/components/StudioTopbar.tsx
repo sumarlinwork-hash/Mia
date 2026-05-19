@@ -71,6 +71,11 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
             )} />
             <span className="text-[10px] font-bold text-white/50 uppercase tracking-tight">SHAD-CSA: {systemStatus}</span>
           </div>
+
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/[0.03] border border-white/5">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.8)] animate-pulse" />
+            <span className="text-[9px] font-mono font-bold text-cyan-400 uppercase tracking-widest">SLEEP MODE</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
