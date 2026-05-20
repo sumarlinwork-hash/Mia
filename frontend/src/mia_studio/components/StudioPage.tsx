@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useConfig } from '../../hooks/useConfig';
 import { useInstalledSkills } from '../../hooks/useMIAQueries';
+import { useWebSocket } from '../../hooks/useWebSocket';
 import type { App as Skill } from '../../utils/viewModel';
 import type { ProviderConfig } from '../../types/config';
 import { useExecution } from '../hooks/useExecution';
@@ -60,7 +61,14 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
   const { currentProjectId, currentSessionId } = useFileStore();
   const { config, updateConfig, refreshConfig } = useConfig();
   const { data: skills = [] } = useInstalledSkills();
+  const { send, status: wsStatus } = useWebSocket();
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+
+  useEffect(() => {
+    if (wsStatus === 'connected') {
+      send(JSON.stringify({ type: 'SWITCH_TO_STUDIO' }));
+    }
+  }, [wsStatus, send]);
   const [showWorkspaceSettings, setShowWorkspaceSettings] = useState(false);
   const [showTaskPlanner, setShowTaskPlanner] = useState(true);
 

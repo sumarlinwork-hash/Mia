@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+from datetime import datetime
 import json
 import sqlite3
 import shutil
@@ -30,6 +31,8 @@ from discovery.preview_engine import preview_engine
 
 companion_router = APIRouter(tags=["Companion Hub"])
 
+from core.event_bus import event_bus
+
 # --- STATE VARIABLES ---
 intimacy_mode = False  # Global state for Intimacy Mode
 pending_intimacy_offer = False
@@ -37,6 +40,30 @@ offer_timestamp = 0
 active_module = "companion" # Dynamic active engine state
 app_builder = AppBuilderService()
 IAM_MIA_DIR = os.path.join(parent_dir, "iam_mia")
+COMPANION_SKILL_CATEGORIES = ("companion", "shared")
+
+async def _handle_module_switch(module_name: str):
+    global active_module
+    if active_module == module_name:
+        return
+        
+    print(f"[Power State] Switching from {active_module} to {module_name}")
+    active_module = module_name
+    
+    if module_name == "studio":
+        print("[Power State] Studio active: Suspending companion background loops (STT/TTS, Polling)")
+        # STT and TTS are inherently disabled because frontend stops sending requests, 
+        # but we can proactively trigger backend stop if they had internal loops.
+        # Suspending crone daemon companion jobs
+        crone_daemon.pause_companion_jobs()
+        emotion_manager.suspend()
+    else:
+        print("[Power State] Companion active: Waking up companion loops")
+        crone_daemon.resume_companion_jobs()
+        emotion_manager.resume()
+
+event_bus.subscribe("SWITCH_TO_STUDIO", lambda _: _handle_module_switch("studio"))
+event_bus.subscribe("SWITCH_TO_COMPANION", lambda _: _handle_module_switch("companion"))
 
 # --- MODEL DEFINITIONS ---
 class SkillSaveRequest(BaseModel):
@@ -103,7 +130,11 @@ async def get_bootstrap():
         return await asyncio.to_thread(history_manager.get_history, limit=20)
     
     async def get_skills_task():
-        return await asyncio.to_thread(skill_manager.scan_skills, directory=skill_manager.SKILLS_DIR)
+        return await asyncio.to_thread(
+            skill_manager.scan_skills,
+            directory=skill_manager.SKILLS_DIR,
+            categories=COMPANION_SKILL_CATEGORIES
+        )
 
     async def get_memory_files_task():
         try:
@@ -113,7 +144,11 @@ async def get_bootstrap():
 
     async def get_marketplace_task():
         try:
-            apps = await asyncio.to_thread(skill_manager.scan_skills, directory=skill_manager.MARKETPLACE_DIR)
+            apps = await asyncio.to_thread(
+                skill_manager.scan_skills,
+                directory=skill_manager.MARKETPLACE_DIR,
+                categories=COMPANION_SKILL_CATEGORIES
+            )
             for app in apps:
                 app["downloads"] = 1000 if "chatbot" in app["id"] else 42
                 app["executions"] = 5400
@@ -153,11 +188,19 @@ async def get_bootstrap():
 
 @companion_router.get("/api/skills/installed")
 async def get_installed_skills():
-    return await asyncio.to_thread(skill_manager.scan_skills, directory=skill_manager.SKILLS_DIR)
+    return await asyncio.to_thread(
+        skill_manager.scan_skills,
+        directory=skill_manager.SKILLS_DIR,
+        categories=COMPANION_SKILL_CATEGORIES
+    )
 
 @companion_router.get("/api/skills/marketplace")
 async def get_marketplace_skills():
-    apps = await asyncio.to_thread(skill_manager.scan_skills, directory=skill_manager.MARKETPLACE_DIR)
+    apps = await asyncio.to_thread(
+        skill_manager.scan_skills,
+        directory=skill_manager.MARKETPLACE_DIR,
+        categories=COMPANION_SKILL_CATEGORIES
+    )
     for app in apps:
         app["downloads"] = 1000 if "chatbot" in app["id"] else 42
         app["executions"] = 5400
@@ -190,7 +233,15 @@ async def save_skill(req: SkillSaveRequest):
 
 @companion_router.post("/api/skills/test/{skill_id}")
 async def test_skill(skill_id: str, args: dict = {}):
-    return await skill_manager.execute_skill(skill_id, args)
+    return await skill_manager.execute_skill(skill_id, args, kernel="companion")
+
+@companion_router.post("/api/skill/execute")
+async def execute_skill(req: dict):
+    skill_id = req.get("skill_id") or req.get("name")
+    args = req.get("args", {})
+    if not skill_id:
+        raise HTTPException(status_code=400, detail="Missing skill_id or name in request payload.")
+    return await skill_manager.execute_skill(skill_id, args, kernel="companion")
 
 @companion_router.get("/api/apps/templates")
 async def get_app_templates():
@@ -247,11 +298,6 @@ async def get_trending():
         app["executions"] = 5000
         
     return ranker.get_trending(apps)
-
-@companion_router.post("/api/skill/execute")
-async def execute_skill(req: dict):
-    # Safe handler for skill calling
-    return {"status": "success"}
 
 @companion_router.get("/api/emotion")
 async def get_emotion():
@@ -420,22 +466,55 @@ async def list_memory_files():
     def sync_list():
         if not os.path.exists(IAM_MIA_DIR):
             os.makedirs(IAM_MIA_DIR, exist_ok=True)
-        return [f for f in os.listdir(IAM_MIA_DIR) if f.endswith('.md')]
+        files = []
+        for f in os.listdir(IAM_MIA_DIR):
+            if not f.endswith('.md'):
+                continue
+            filepath = os.path.join(IAM_MIA_DIR, f)
+            if not os.path.isfile(filepath):
+                continue
+            stat = os.stat(filepath)
+            preview = ""
+            try:
+                with open(filepath, "r", encoding="utf-8") as fh:
+                    preview = fh.read(180).replace("\n", " ").strip()
+            except:
+                preview = ""
+            files.append({
+                "name": f,
+                "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "size": stat.st_size,
+                "preview": preview
+            })
+        return files
     
     files = await asyncio.to_thread(sync_list)
-    return {"files": files}
+    # The frontend is expecting just a list of strings, so we map the names
+    return [f["name"] for f in files]
 
 @companion_router.get("/api/memory/file")
 async def get_memory_file(name: str):
     def sync_read():
         filepath = os.path.join(IAM_MIA_DIR, name)
-        if os.path.exists(filepath):
-            with open(filepath, "r", encoding="utf-8") as f:
-                return f.read()
-        return ""
+        if not os.path.exists(filepath):
+            return {"content": "", "metadata": {}}
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        stat = os.stat(filepath)
+        return {
+            "content": content,
+            "modified": stat.st_mtime,
+            "metadata": {
+                "name": name,
+                "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "size": stat.st_size
+            }
+        }
     
     content = await asyncio.to_thread(sync_read)
-    return {"content": content}
+    return content
 
 @companion_router.post("/api/memory/file")
 async def save_memory_file(req: MemorySaveRequest):
@@ -508,6 +587,7 @@ async def websocket_heartbeat(websocket: WebSocket):
                         print("[Power-State] Switching to STUDIO. Suspending companion loops.")
                         crone_daemon.pause_job("proactive_caring")
                         crone_daemon.pause_job("Heartbeat Daemon")
+                        crone_daemon.pause_job("Memory Pruning")
                         await websocket.send_json({"type": "power_state", "state": "SLEEP"})
                         continue
 
@@ -516,6 +596,7 @@ async def websocket_heartbeat(websocket: WebSocket):
                         print("[Power-State] Switching to COMPANION. Resuming companion loops.")
                         crone_daemon.resume_job("proactive_caring")
                         crone_daemon.resume_job("Heartbeat Daemon")
+                        crone_daemon.resume_job("Memory Pruning")
                         await websocket.send_json({"type": "power_state", "state": "WAKE"})
                         continue
                         
@@ -560,7 +641,7 @@ async def websocket_heartbeat(websocket: WebSocket):
                         try:
                             response_text = await asyncio.wait_for(
                                 brain_orchestrator.execute_request(
-                                    clean_query, context, is_intimate=is_intimate_turn, on_status=handle_status_update
+                                    clean_query, context, is_intimate=is_intimate_turn, on_status=handle_status_update, kernel="companion"
                                 ),
                                 timeout=60.0
                             )

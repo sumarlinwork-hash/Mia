@@ -10,7 +10,7 @@ class GraphCompiler:
         self.graph_id_prefix = graph_id_prefix
         self.tool_registry = tool_registry
 
-    def compile(self, llm_output: str) -> ExecutionGraph:
+    def compile(self, llm_output: str, tool_registry: Any = None) -> ExecutionGraph:
         """
         4-Layer Pipeline to transform LLM output into a Hardened ExecutionGraph.
         """
@@ -18,7 +18,7 @@ class GraphCompiler:
         raw_data = self._parse_layer(llm_output)
         
         # 2. Validate Layer (Strict Schema + Deep Integrity)
-        self._validate_layer(raw_data)
+        self._validate_layer(raw_data, tool_registry=tool_registry)
         
         # 3. Normalize Layer
         graph = self._normalize_layer(raw_data)
@@ -46,11 +46,12 @@ class GraphCompiler:
         except json.JSONDecodeError as e:
             raise ValueError(f"GraphCompiler [ParseLayer] Failed: Invalid JSON format. {str(e)}")
 
-    def _validate_layer(self, data: List[Dict[str, Any]]):
+    def _validate_layer(self, data: List[Dict[str, Any]], tool_registry: Any = None):
         """
         Strict schema, tool existence, and deep integrity validation.
         """
         node_ids = set()
+        registry = tool_registry if tool_registry is not None else self.tool_registry
         for i, raw_node in enumerate(data):
             # Basic Schema Validation
             try:
@@ -65,7 +66,7 @@ class GraphCompiler:
             node_ids.add(node_id)
 
             # Tool Existence Validation
-            if self.tool_registry and raw_node["tool"] not in self.tool_registry:
+            if registry and raw_node["tool"] not in registry:
                 raise ValueError(f"GraphCompiler [ValidateLayer] Unknown tool '{raw_node['tool']}' in node '{node_id}'")
 
         # Deep Integrity: Missing Dependencies & Cycles

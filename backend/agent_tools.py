@@ -13,9 +13,13 @@ class AgentTools:
         self.screenshot_dir = os.path.join(os.path.dirname(__file__), "temp_screens")
         os.makedirs(self.screenshot_dir, exist_ok=True)
 
-    def get_tool_names(self):
-        """Returns a list of callable tool names."""
-        return ["take_screenshot_bytes", "click", "type_text", "press_key", "run_command", "save_skill", "execute_skill"]
+    def get_tool_names(self, kernel: str | None = None):
+        """Returns a list of callable tool names, restricted by the active kernel if provided."""
+        default_tools = ["take_screenshot_bytes", "click", "type_text", "press_key", "run_command", "save_skill", "execute_skill"]
+        if kernel == "studio":
+            # Studio can execute skills, but does not save companion-defined skills directly.
+            return [tool for tool in default_tools if tool != "save_skill"]
+        return default_tools
 
     def take_screenshot_bytes(self) -> bytes:
         """Takes a screenshot and returns the raw bytes."""
@@ -65,9 +69,9 @@ class AgentTools:
         from skill_manager import skill_manager
         return skill_manager.save_skill(name, code)
 
-    async def execute_skill(self, name: str, args: dict = {}):
-        """Executes a previously saved skill."""
+    async def execute_skill(self, name: str, args: dict = {}, kernel: str | None = None):
+        """Executes a previously saved skill. Respects optional `kernel` context to enforce permissions."""
         from skill_manager import skill_manager
-        return await skill_manager.execute_skill(name, args)
+        return await skill_manager.execute_skill(name, args, kernel=kernel)
 
 agent_tools = AgentTools()

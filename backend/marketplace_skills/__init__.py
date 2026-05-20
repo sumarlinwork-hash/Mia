@@ -1,3 +1,14 @@
+__skill_metadata__ = {
+    "id": "music_recommender",
+    "name": "Music Recommender",
+    "version": "1.0.0",
+    "category": "shared",
+    "description": "Analyzes your mood and suggests a matching playlist.",
+    "author": "MIA Core",
+    "mcp_enabled": False,
+    "permissions": ["music_recommendation"]
+}
+
 import random
 
 class Skill:

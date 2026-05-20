@@ -76,6 +76,20 @@ class CroneDaemon:
         """Allow main.py to register the active WebSocket so heartbeat can push updates."""
         self._websocket_ref = ws
 
+    def pause_companion_jobs(self):
+        """Phase 4: Deep Suspend Companion Jobs"""
+        for job_id in ["proactive_caring", "Heartbeat Daemon"]:
+            job = self.scheduler.get_job(job_id)
+            if job:
+                job.pause()
+
+    def resume_companion_jobs(self):
+        """Phase 4: Wake Companion Jobs"""
+        for job_id in ["proactive_caring", "Heartbeat Daemon"]:
+            job = self.scheduler.get_job(job_id)
+            if job:
+                job.resume()
+
     async def proactive_caring_job(self):
         """Algorithm: Care-Pulse ARE v2.0 Compliance."""
         from core.emotion_manager import emotion_manager

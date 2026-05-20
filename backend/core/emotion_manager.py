@@ -26,7 +26,17 @@ class EmotionManager:
         }
         self._last_save_time = 0
         self.save_path = os.path.join(os.path.dirname(__file__), "..", "data", "emotions.json")
+        self._is_suspended = False
         self._load()
+
+    def suspend(self):
+        """Phase 4: Suspend Emotion Polling to save CPU"""
+        self._is_suspended = True
+
+    def resume(self):
+        """Phase 4: Resume Emotion Polling"""
+        self._is_suspended = False
+        self.state["active"]["last_update"] = time.time() # Reset clock
 
     def _load(self):
         if os.path.exists(self.save_path):
@@ -63,6 +73,9 @@ class EmotionManager:
 
     def update(self):
         """CORE LOOP: Using last_update for accurate decay (Fix #1)"""
+        if self._is_suspended:
+            return
+
         now = time.time()
         active = self.state["active"]
         dt = now - active["last_update"]

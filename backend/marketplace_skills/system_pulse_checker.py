@@ -1,3 +1,14 @@
+__skill_metadata__ = {
+    "id": "system_pulse_checker",
+    "name": "System Pulse Checker",
+    "version": "1.0.0",
+    "category": "studio",
+    "description": "Analyzes disk usage and returns a health report for system storage.",
+    "author": "MIA Core",
+    "mcp_enabled": False,
+    "permissions": ["system_monitoring"]
+}
+
 """
 Menganalisis penggunaan disk pada sistem dan memberikan laporan kesehatan penyimpanan dalam format yang mudah dibaca.
 """

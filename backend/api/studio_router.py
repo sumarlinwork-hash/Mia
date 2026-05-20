@@ -17,6 +17,9 @@ from studio import (
 )
 from studio.metrics_service import studio_metrics
 from crone_daemon import crone_daemon
+from skill_manager import skill_manager
+
+STUDIO_SKILL_CATEGORIES = ("studio", "shared")
 
 studio_router = APIRouter(tags=["Studio Workspace"])
 
@@ -232,6 +235,39 @@ async def studio_get_metadata(project_id: str, session_id: str = ""):
         return {"status": "success", "metadata": meta.model_dump()}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@studio_router.get("/api/studio/skills/installed")
+async def studio_installed_skills():
+    return await asyncio.to_thread(
+        skill_manager.scan_skills,
+        directory=skill_manager.SKILLS_DIR,
+        categories=STUDIO_SKILL_CATEGORIES
+    )
+
+@studio_router.get("/api/studio/skills/marketplace")
+async def studio_marketplace_skills():
+    apps = await asyncio.to_thread(
+        skill_manager.scan_skills,
+        directory=skill_manager.MARKETPLACE_DIR,
+        categories=STUDIO_SKILL_CATEGORIES
+    )
+    for app in apps:
+        app["downloads"] = 1000 if "chatbot" in app["id"] else 42
+        app["executions"] = 5400
+        app["trust_score"] = 4.7
+    return apps
+
+@studio_router.post("/api/studio/skills/test/{skill_id}")
+async def studio_test_skill(skill_id: str, args: dict = {}):
+    return await skill_manager.execute_skill(skill_id, args, kernel="studio")
+
+@studio_router.post("/api/studio/skill/execute")
+async def studio_execute_skill(req: dict):
+    skill_id = req.get("skill_id") or req.get("name")
+    args = req.get("args", {})
+    if not skill_id:
+        raise HTTPException(status_code=400, detail="Missing skill_id or name in request payload.")
+    return await skill_manager.execute_skill(skill_id, args, kernel="studio")
 
 @studio_router.websocket("/ws/studio/events/{project_id}")
 async def studio_events_ws(websocket: WebSocket, project_id: str, session_id: str = Query(...)):

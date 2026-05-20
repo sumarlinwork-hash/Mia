@@ -24,7 +24,7 @@ class SkillManager:
         self._cached_metadata = {} # {directory: [skills]}
         self._folder_mtime = {}   # {directory: last_mtime}
 
-    def scan_skills(self, directory=None):
+    def scan_skills(self, directory=None, categories=None):
         """Scan a directory and load plugin modules or extract legacy metadata."""
         if directory is None:
             directory = self.SKILLS_DIR
@@ -38,8 +38,8 @@ class SkillManager:
             if directory in self._folder_mtime and self._folder_mtime[directory] == current_mtime:
                 return self._cached_metadata.get(directory, [])
         except:
-            pass
-            
+            current_mtime = None
+
         skills = []
         for entry in os.listdir(directory):
             full_path = os.path.join(directory, entry)
@@ -53,14 +53,17 @@ class SkillManager:
             
             if skill_id:
                 metadata = self._load_skill(skill_id, full_path)
+                if categories and metadata.get("category") not in categories:
+                    continue
                 # Check if installed (if we are scanning marketplace)
                 if directory == self.MARKETPLACE_DIR:
                     metadata["is_installed"] = self.is_installed(skill_id)
                 skills.append(metadata)
         
         # Update cache
-        self._cached_metadata[directory] = skills
-        self._folder_mtime[directory] = current_mtime
+        if current_mtime is not None:
+            self._cached_metadata[directory] = skills
+            self._folder_mtime[directory] = current_mtime
         return skills
 
     def is_installed(self, skill_id):
@@ -78,38 +81,26 @@ class SkillManager:
             if spec and spec.loader:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
-                
+
+                # Prefer explicit skill metadata if defined
+                manifest = getattr(module, "__skill_metadata__", None)
+                if not isinstance(manifest, dict):
+                    manifest = getattr(module, "manifest", None)
+                    if not isinstance(manifest, dict):
+                        manifest = getattr(module, "metadata", {}) or {}
+
+                skill_instance = None
                 if hasattr(module, "Skill"):
                     skill_instance = module.Skill()
                     # Only register to self.plugins if it's in the SKILLS_DIR
                     if self.SKILLS_DIR in path:
                         self.plugins[skill_id] = skill_instance
-                    
-                    # Try to get metadata from Skill instance or module manifest/metadata
-                    manifest = getattr(module, "manifest", getattr(module, "metadata", {}))
-                        
-                    return {
-                        "id": skill_id,
-                        "name": getattr(skill_instance, "name", manifest.get("name", skill_id.replace("_", " ").title())),
-                        "description": getattr(skill_instance, "description", manifest.get("description", "Dynamic plugin skill.")),
-                        "category": getattr(skill_instance, "category", manifest.get("category", "Plugin")),
-                        "execution_mode": manifest.get("execution_mode", "instant"),
-                        "type": "plugin",
-                        "created_at": datetime.fromtimestamp(os.path.getctime(path)).isoformat()
-                    }
 
-                # Check for manifest/metadata even if no Skill class
-                manifest = getattr(module, "manifest", getattr(module, "metadata", {}))
+                if skill_instance is not None:
+                    return self._build_skill_metadata(skill_id, path, manifest, skill_instance, module_type="plugin")
+
                 if manifest:
-                    return {
-                        "id": skill_id,
-                        "name": manifest.get("name", skill_id.replace("_", " ").title()),
-                        "description": manifest.get("description", "Module-based skill."),
-                        "category": manifest.get("category", "App"),
-                        "execution_mode": manifest.get("execution_mode", "instant"),
-                        "type": "module",
-                        "created_at": datetime.fromtimestamp(os.path.getctime(path)).isoformat()
-                    }
+                    return self._build_skill_metadata(skill_id, path, manifest, module_type="module")
 
             # Fallback to legacy metadata extraction
             return self._extract_legacy_metadata(skill_id, path)
@@ -128,12 +119,68 @@ class SkillManager:
                 "id": skill_id,
                 "name": skill_id.replace("_", " ").title(),
                 "description": docstring,
-                "execution_mode": "instant", # Default fallback
+                "execution_mode": "instant",
+                "category": "shared",
+                "mcp_enabled": False,
                 "type": "legacy",
-                "created_at": datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()
+                "created_at": datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
+                "metadata": {"category": "shared", "mcp_enabled": False}
             }
         except:
-            return {"id": skill_id, "type": "legacy", "description": "Legacy script.", "execution_mode": "instant"}
+            return {"id": skill_id, "type": "legacy", "description": "Legacy script.", "execution_mode": "instant", "category": "shared", "mcp_enabled": False}
+
+    def get_skill(self, skill_id, directory=None):
+        directory = directory or self.SKILLS_DIR
+        for skill in self.scan_skills(directory=directory):
+            if skill.get("id") == skill_id:
+                return skill
+        return None
+
+    def is_skill_allowed_for_kernel(self, skill_id, kernel):
+        skill = self.get_skill(skill_id)
+        if not skill:
+            return False
+        category = skill.get("category")
+        if kernel == "companion":
+            return category in ("companion", "shared")
+        if kernel == "studio":
+            return category in ("studio", "shared")
+        return False
+
+    def _normalize_skill_category(self, category):
+        if not category:
+            return "shared"
+        normalized = str(category).strip().lower()
+        if normalized in {"companion", "assistant", "chatbot", "chat", "companion_kernel"}:
+            return "companion"
+        if normalized in {"studio", "developer", "automation", "editor", "creative", "code", "studio_kernel"}:
+            return "studio"
+        if normalized in {"shared", "common", "utility", "global", "plugin", "module", "productivity", "media", "creativity", "voice"}:
+            return "shared"
+        return normalized
+
+    def _build_skill_metadata(self, skill_id, path, manifest, skill_instance=None, module_type="module"):
+        if not isinstance(manifest, dict):
+            manifest = {}
+
+        name = manifest.get("name") or (getattr(skill_instance, "name", None) if skill_instance is not None else None) or skill_id.replace("_", " ").title()
+        description = manifest.get("description") or (getattr(skill_instance, "description", None) if skill_instance is not None else None) or "Dynamic plugin skill."
+        category = self._normalize_skill_category(
+            manifest.get("category") or (getattr(skill_instance, "category", None) if skill_instance is not None else None) or "shared"
+        )
+        return {
+            "id": skill_id,
+            "name": name,
+            "description": description,
+            "category": category,
+            "execution_mode": manifest.get("execution_mode", "instant"),
+            "mcp_enabled": bool(manifest.get("mcp_enabled", False)),
+            "version": manifest.get("version", "1.0.0"),
+            "author": manifest.get("author", "MIA Core"),
+            "type": module_type,
+            "created_at": datetime.fromtimestamp(os.path.getctime(path)).isoformat(),
+            "metadata": manifest
+        }
 
     def install_skill(self, skill_id):
         """Install a skill by copying from marketplace to skills directory."""
@@ -171,16 +218,24 @@ class SkillManager:
             
         return {"status": "error", "message": "Skill not found."}
 
-    async def execute_skill(self, skill_id, args=None):
+    async def execute_skill(self, skill_id, args=None, kernel=None):
         """
         SHAD-CSA Phase 6: Resilient Skill Execution.
         Wired to EBARF for budget monitoring and resource safety.
         """
-        from shad_csa.economy.economic_control import ecf
+        if kernel and not self.is_skill_allowed_for_kernel(skill_id, kernel):
+            return {
+                "status": "error",
+                "message": f"SKILL_RESTRICTED: Skill '{skill_id}' is not permitted in the {kernel} kernel.",
+                "code": "SKILL_PERMISSION_DENIED"
+            }
+
+        from shad_csa.economy.economic_control import EconomicControlField
+        ecf = EconomicControlField(compute_budget=5000, node_budget=20, chaos_budget=0)
         
         # 1. Economic Safety Check (EBARF)
         # Cost per skill run is 10.0 compute units
-        if not ecf.allocate("compute", amount=10.0):
+        if not ecf.allocate("compute", cost=10.0):
             return {
                 "status": "error", 
                 "message": "ECONOMIC_SCARCITY: Anggaran komputasi tidak mencukupi untuk menjalankan skill ini.",
@@ -249,8 +304,23 @@ class SkillManager:
         # Don't add .py if it's already there
         filename = safe_name if safe_name.endswith(".py") else f"{safe_name}.py"
         filepath = os.path.join(self.SKILLS_DIR, filename)
+
+        if "__skill_metadata__" not in code:
+            default_metadata = {
+                "name": name,
+                "category": "companion",
+                "mcp_enabled": False
+            }
+            metadata_block = f"__skill_metadata__ = {json.dumps(default_metadata, indent=4, ensure_ascii=False)}\n\n"
+            code = metadata_block + code
+
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(code)
+            
+        # Invalidate folder mtime cache so new skills are loaded immediately
+        if self.SKILLS_DIR in self._folder_mtime:
+            del self._folder_mtime[self.SKILLS_DIR]
+            
         return {"status": "success", "file": filename}
 
 # Singleton

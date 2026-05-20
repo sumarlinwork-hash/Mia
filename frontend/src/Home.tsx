@@ -10,14 +10,15 @@ import {
   Copy, Check, AlertCircle, Info as InfoIcon, Heart, Droplets, RotateCcw,
   ArrowDown, ChevronDown
 } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+import MiaFigure from './components/MiaFigure';
 import { useConfig } from './hooks/useConfig';
-import type { MIAConfig, ProviderConfig } from './types/config';
+import type { ProviderConfig } from './types/config';
 
 
 interface WaveformBarProps {
@@ -65,8 +66,9 @@ interface Toast {
 
 export default function Home() {
   const location = useLocation();
+  const navigate = useNavigate();
   // --- 1. STATES ---
-  const { config, loading: configLoading, updateConfig, refreshConfig } = useConfig();
+  const { config, loading: configLoading, refreshConfig } = useConfig();
   const { data: messages = [] } = useChatHistory();
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Disconnected");
@@ -81,7 +83,6 @@ export default function Home() {
   const { data: intimacyActive = false } = useIntimacyStatus();
   const queryClient = useQueryClient();
   const [showModelDropdown, setShowModelDropdown] = useState(false);
-  const [showCompanionSettings, setShowCompanionSettings] = useState(false);
 
   const activeModelName = useMemo(() => {
     const override = config?.active_provider_override ?? 'auto';
@@ -114,22 +115,6 @@ export default function Home() {
     }
   };
 
-  const updateConfigLocal = async (newConf: MIAConfig) => {
-    if (queryClient) {
-      queryClient.setQueryData(['config'], newConf);
-    }
-    updateConfig(newConf);
-    try {
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newConf)
-      });
-      await refreshConfig();
-    } catch (e) {
-      console.error("Failed to auto-save config on home page change:", e);
-    }
-  };
   const [filteredFiles, setFilteredFiles] = useState<string[]>([]);
   const [filteredCommands, setFilteredCommands] = useState(COMMANDS);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -290,6 +275,12 @@ export default function Home() {
   useEffect(() => { playAudioRef.current = playAudio; }, [playAudio]);
   useEffect(() => { isTTSMutedRef.current = isTTSMuted; }, [isTTSMuted]);
 
+  useEffect(() => {
+    if (wsStatus === 'connected') {
+      send(JSON.stringify({ type: 'SWITCH_TO_COMPANION' }));
+    }
+  }, [wsStatus, send]);
+
   // --- 5. SYSTEM & CHAT LOGIC ---
   const sendMessage = useCallback(() => {
     const trimmedInput = input.trim();
@@ -386,8 +377,8 @@ export default function Home() {
   // --- 6. PLAIN VALUES ---
   const paletteMenuItems = [
     { icon: <Heart size={18} className={intimacyActive ? "text-pink-500 fill-pink-500" : ""} />, name: intimacyActive ? "Deactivate Soulmate" : "Activate Soulmate", desc: "Phase Utama Keintiman", action: toggleIntimacy },
-    { icon: <Zap size={18} />, name: "Kelola Aplikasi", desc: "Lihat kemampuan MIA", link: "/settings" },
-    { icon: <ImageIcon size={18} />, name: "Change Background", desc: "Appearance settings", link: "/settings?tab=appearance" },
+    { icon: <Zap size={18} />, name: "Kelola Aplikasi", desc: "Lihat kemampuan MIA", link: "/settings?tab=store" },
+    { icon: <ImageIcon size={18} />, name: "Change Background", desc: "Appearance settings", link: "/settings?tab=companion" },
     { icon: <Database size={18} />, name: "Clear Memory", desc: "Reset chat history", action: () => { setInput("/clear"); sendMessage(); setShowPalette(false); } },
     { icon: <XCircle size={18} />, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
   ];
@@ -882,7 +873,7 @@ export default function Home() {
             <Droplets size={20} className={intimacyActive ? "fill-pink-500" : ""} />
           </button>
           <button 
-            onClick={() => setShowCompanionSettings(true)}
+            onClick={() => navigate('/settings?tab=companion')}
             className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-primary"
             title="Companion Settings"
           >
@@ -891,6 +882,16 @@ export default function Home() {
         </div>
       </div>
 
+      <div className="mb-6 z-10">
+        <MiaFigure
+          name={config.bot_name || 'MIA'}
+          mood={intimacyActive ? 'Affectionate' : powerState === 'SLEEP' ? 'Dormant' : 'Focused'}
+          powerState={powerState}
+          isIntimacyMode={intimacyActive}
+          heartbeat={32 + Math.min(60, audioLevel * 6)}
+          activeModel={activeModelName}
+        />
+      </div>
 
       {/* Chat Area */}
       <div
@@ -1138,7 +1139,10 @@ export default function Home() {
               {paletteMenuItems.map((item, i) => (
                 <div
                   key={i}
-                  onClick={() => item.action ? item.action() : null}
+                  onClick={() => {
+                    if (item.action) item.action();
+                    else if (item.link) navigate(item.link);
+                  }}
                   className="flex items-center justify-between p-4 rounded-2xl hover:bg-white/5 cursor-pointer group transition-all"
                 >
                   <div className="flex items-center gap-4">
@@ -1183,148 +1187,6 @@ export default function Home() {
               >
                 Mengerti 💖
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Floating Control Drawer for Companion Settings */}
-      {showCompanionSettings && config && (
-        <div className="fixed inset-y-0 right-0 w-96 bg-black/95 border-l border-white/10 backdrop-blur-3xl p-8 z-[1000] shadow-2xl animate-fade-in custom-scrollbar overflow-y-auto space-y-6">
-          <div className="flex justify-between items-center pb-4 border-b border-white/10">
-            <h2 className="text-sm font-bold font-mono text-white flex items-center gap-2 uppercase tracking-widest">
-              <Settings2 className="text-primary" size={18} />
-              Setelan Companion
-            </h2>
-            <button 
-              onClick={() => setShowCompanionSettings(false)}
-              className="px-3 py-1 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-[10px] font-mono font-bold text-white transition-colors"
-            >
-              TUTUP
-            </button>
-          </div>
-
-          {/* Personality Settings */}
-          <div className="space-y-4">
-            <h3 className="text-[10px] uppercase font-bold tracking-widest text-primary font-mono border-b border-primary/20 pb-1">1. Personalitas MIA</h3>
-            
-            <div className="space-y-1">
-              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Nama Panggilan Bot</label>
-              <input 
-                type="text" 
-                value={config.bot_name}
-                onChange={(e) => updateConfigLocal({ ...config, bot_name: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Umur Bot (Tahun)</label>
-              <input 
-                type="number" 
-                value={config.bot_age}
-                onChange={(e) => updateConfigLocal({ ...config, bot_age: parseInt(e.target.value) || 18 })}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Persona & Karakter Utama</label>
-              <textarea 
-                value={config.bot_persona}
-                rows={4}
-                onChange={(e) => updateConfigLocal({ ...config, bot_persona: e.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none leading-relaxed"
-              />
-            </div>
-          </div>
-
-          {/* Speech Engine Settings */}
-          <div className="space-y-4">
-            <h3 className="text-[10px] uppercase font-bold tracking-widest text-primary font-mono border-b border-primary/20 pb-1">2. Mesin Suara (Speech)</h3>
-            
-            <div className="space-y-1">
-              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">TTS Engine</label>
-              <select
-                value={config.tts_engine}
-                onChange={(e) => updateConfigLocal({ ...config, tts_engine: e.target.value })}
-                className="w-full bg-black border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none appearance-none"
-              >
-                <option value="edge-tts">Edge-TTS (Gratis & Cepat)</option>
-                <option value="elevenlabs">ElevenLabs (Premium & Realistis)</option>
-              </select>
-            </div>
-
-            {config.tts_engine === 'elevenlabs' && (
-              <>
-                <div className="space-y-1">
-                  <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Elevenlabs API Key</label>
-                  <input 
-                    type="password" 
-                    value={config.elevenlabs_api_key}
-                    placeholder="••••••••"
-                    onChange={(e) => updateConfigLocal({ ...config, elevenlabs_api_key: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Voice ID</label>
-                  <input 
-                    type="text" 
-                    value={config.elevenlabs_voice_id}
-                    onChange={(e) => updateConfigLocal({ ...config, elevenlabs_voice_id: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Appearance Settings */}
-          <div className="space-y-4">
-            <h3 className="text-[10px] uppercase font-bold tracking-widest text-primary font-mono border-b border-primary/20 pb-1">3. Tampilan Antarmuka</h3>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-[9px] text-white/40 font-mono font-bold">
-                <span>Transparansi UI</span>
-                <span>{Math.round(uiOpacity * 100)}%</span>
-              </div>
-              <input 
-                type="range" 
-                min="0.1" 
-                max="1.0" 
-                step="0.05"
-                value={uiOpacity}
-                onChange={(e) => updateConfigLocal({
-                  ...config,
-                  appearance: {
-                    ...config.appearance,
-                    ui_opacity: parseFloat(e.target.value)
-                  }
-                })}
-                className="w-full accent-primary cursor-pointer"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[9px] text-white/40 uppercase font-mono font-bold">Aksen Warna Tema</label>
-              <select
-                value={config.appearance?.theme_hue ?? 'teal'}
-                onChange={(e) => updateConfigLocal({
-                  ...config,
-                  appearance: {
-                    ...config.appearance,
-                    theme_hue: e.target.value
-                  }
-                })}
-                className="w-full bg-black border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary font-mono outline-none appearance-none"
-              >
-                <option value="teal">Neon Teal</option>
-                <option value="violet">Cyber Violet</option>
-                <option value="amber">Retrowave Amber</option>
-                <option value="emerald">Matrix Emerald</option>
-                <option value="rose">Love Rose</option>
-              </select>
             </div>
           </div>
         </div>

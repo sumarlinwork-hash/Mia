@@ -320,7 +320,7 @@ class BrainOrchestrator:
         self.hf_runtime_states[name]["health_status"] = "Offline"
         raise Exception(f"HF Smart Fabric total failure: {', '.join(last_errors)}")
 
-    def _build_system_prompt(self, config, is_intimate: bool = False) -> str:
+    def _build_system_prompt(self, config, is_intimate: bool = False, kernel: str | None = None) -> str:
         """
         Assemble the MIA System Prompt from:
         1. config.bot_persona (Settings → Personality tab)
@@ -386,28 +386,29 @@ class BrainOrchestrator:
 
         # Add Agentic Capabilities instructions (Skip tools in deep intimacy for immersion, unless requested)
         if not is_intimate:
-            system_prompt += """
+            allowed_tools = agent_tools.get_tool_names(kernel=kernel)
+            system_prompt += f"""
 --- AGENTIC CAPABILITIES ---
 You can control the user's OS if requested. To use a tool, output a valid JSON block at the END of your message using this format:
 ```json
-{
+{{
   "action": "os_control",
   "method": "screenshot" | "click" | "type" | "press" | "terminal" | "save_skill" | "execute_skill",
-  "args": { ... }
-}
+  "args": {{ ... }}
+}}
 ```
-Available Tools:
-1. screenshot: Take a picture of current screen.
-2. click: x, y coordinates.
-3. type: "text" to type.
-4. press: "key" name.
-5. terminal: "command" to run in shell.
-6. save_skill: args: {"name": "skill_name", "code": "python_code"}. Use this to build your own abilities for complex tasks. When a user asks you to "Architect a Skill" or create a new ability, design a robust Python script (preferably using the Skill class plugin format) and save it using this tool.
-7. execute_skill: args: {"name": "skill_name", "args": {}}. Run a previously saved skill.
-
-If you use a tool, I will execute it and provide the result in the next turn.
+Available Tools: {', '.join(allowed_tools)}.
+Note: If a tool is not in the available tools list for this kernel, do not attempt to use it.
 """
+            if "save_skill" in allowed_tools:
+                system_prompt += "\nsave_skill: args: {\"name\": \"skill_name\", \"code\": \"python_code\"}. Use this to build your own abilities for complex tasks. When a user asks you to \"Architect a Skill\" or create a new ability, design a robust Python script (preferably using the Skill class plugin format) and save it using this tool.\n"
+            if "execute_skill" in allowed_tools:
+                system_prompt += "execute_skill: args: {\"name\": \"skill_name\", \"args\": {}}. Run a previously saved skill.\n"
+            
+            system_prompt += "\nIf you use a tool, I will execute it and provide the result in the next turn.\n"
+            
         return system_prompt
+
 
     async def select_best_provider(self, prompt: str, purpose: str = "llm") -> tuple[str, ProviderConfig]:
         """
@@ -443,13 +444,16 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 
         return clean_text, images
 
-    async def execute_request(self, prompt: str, context: str = "", is_intimate: bool = False, on_status: Optional[Callable] = None, test_mode: bool = False, mutate_stats: bool = False) -> str:
+    async def execute_request(self, prompt: str, context: str = "", is_intimate: bool = False, on_status: Optional[Callable] = None, test_mode: bool = False, mutate_stats: bool = False, kernel: str | None = None) -> str:
         """
         Hardened Entry Point: Enforces Global Timeout (Contract Section 0.3)
+        Accepts optional `kernel` so tools/skill execution can be restricted by kernel context.
         """
         self.test_mode = test_mode
         self.mutate_stats = mutate_stats if test_mode else True
         self.pipeline_start_time = time.time()
+        # Store kernel context for downstream tool execution
+        self.current_kernel = kernel
         # Increased timeout to 600s (10 mins) for Local LLM support on slow hardware
         TIMEOUT_LIMIT = 600.0
         self.pipeline_deadline = self.pipeline_start_time + TIMEOUT_LIMIT
@@ -473,6 +477,12 @@ If you use a tool, I will execute it and provide the result in the next turn.
             print(f"[Critical] Unexpected error in execute_request: {e}")
             print(traceback.format_exc())
             return await self._final_failsafe_response(f"MIA_SYSTEM_ERROR::{str(e)}")
+        finally:
+            # Clear kernel context after request completes
+            try:
+                self.current_kernel = None
+            except Exception:
+                pass
 
     async def _execute_pipeline(self, prompt: str, context: str = "", is_intimate: bool = False, on_status: Optional[Callable] = None) -> str:
         """
@@ -498,7 +508,7 @@ If you use a tool, I will execute it and provide the result in the next turn.
         clean_prompt, images = self._parse_and_load_images(prompt)
 
         # Step 3: Build System Prompt from Personality + SOUL.md
-        system_prompt = self._build_system_prompt(config, is_intimate)
+        system_prompt = self._build_system_prompt(config, is_intimate, kernel=self.current_kernel)
 
         # Step 5: Select best provider dynamically (Prioritize intimacy provider if mode is active)
         try:
@@ -704,8 +714,9 @@ If you use a tool, I will execute it and provide the result in the next turn.
         Transforms LLM output into a graph and initiates metadata.
         """
         self._cleanup_old_graphs()
-        print("[Brain] Compiling Execution Graph...")
-        graph = self.compiler.compile(llm_output)
+        print(f"[Brain] Compiling Execution Graph... (Kernel: {getattr(self, 'current_kernel', 'None')})")
+        kernel_registry = agent_tools.get_tool_names(kernel=getattr(self, 'current_kernel', None))
+        graph = self.compiler.compile(llm_output, tool_registry=kernel_registry)
         self.active_graphs[graph.id] = graph
         self.graph_timestamps[graph.id] = time.time()
         
@@ -797,7 +808,9 @@ If you use a tool, I will execute it and provide the result in the next turn.
                 res = await asyncio.to_thread(agent_tools.save_skill, args.get("name", ""), args.get("code", ""))
                 return str(res), None
             elif method == "execute_skill":
-                res = await agent_tools.execute_skill(args.get("name", ""), args.get("args", {}))
+                # Respect kernel context set on the orchestrator (e.g., 'companion' or 'studio')
+                kernel_ctx = getattr(self, 'current_kernel', None)
+                res = await agent_tools.execute_skill(args.get("name", ""), args.get("args", {}), kernel=kernel_ctx)
                 return str(res), None
         except Exception as e:
             return f"Tool Execution Error: {str(e)}", None

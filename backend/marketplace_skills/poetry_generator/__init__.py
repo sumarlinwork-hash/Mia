@@ -1,3 +1,14 @@
+__skill_metadata__ = {
+    "id": "poetry_generator",
+    "name": "Poetry Generator",
+    "version": "1.0.0",
+    "category": "companion",
+    "description": "Composes original poems based on your current feelings.",
+    "author": "MIA Core",
+    "mcp_enabled": False,
+    "permissions": ["llm_access"]
+}
+
 class Skill:
     name = "Poetry Generator"
     description = "Composes original poems based on your current feelings."
