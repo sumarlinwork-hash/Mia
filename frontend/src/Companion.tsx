@@ -8,7 +8,7 @@ import {
   Search, Code, Zap, Database, CheckSquare, Sparkles, XCircle,
   ThumbsUp, ThumbsDown, Pin, Pencil, Trash2, Download, PlayCircle,
   Copy, Check, AlertCircle, Info as InfoIcon, Heart, Droplets, RotateCcw,
-  ArrowDown, ChevronDown
+  ArrowDown, ChevronDown, Maximize2
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -846,7 +846,7 @@ export default function Companion() {
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-4 pointer-events-auto bg-black/20 backdrop-blur-md p-2 rounded-full border border-white/5">
+        <div className="flex flex-col items-center gap-4 pointer-events-auto bg-black/20 backdrop-blur-md p-2 rounded-full border border-white/5">
           <button
             onClick={() => {
               if (window.confirm("Hapus seluruh riwayat chat?")) {
@@ -869,6 +869,25 @@ export default function Companion() {
             title="Intimacy Mode (Soulmate Phase)"
           >
             <Droplets size={20} className={intimacyActive ? "fill-pink-500" : ""} />
+          </button>
+          <button 
+            onClick={() => {
+              const newFit = config?.appearance?.background_fit === 'cover' ? 'contain' : 'cover';
+              fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ...config,
+                  appearance: { ...config?.appearance, background_fit: newFit }
+                })
+              }).then(() => {
+                addToast(`Background: ${newFit === 'cover' ? 'Fit to Screen' : 'As Is'}`, 'info');
+              });
+            }}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-primary"
+            title={`Background Fit: ${config?.appearance?.background_fit === 'cover' ? 'Fit to Screen' : 'As Is'}`}
+          >
+            <Maximize2 size={20} />
           </button>
           <button 
             onClick={() => setShowSettings(true)}

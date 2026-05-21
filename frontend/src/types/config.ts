@@ -1,6 +1,7 @@
 export interface AppearanceConfig {
   background_url: string;
   background_type: 'video' | 'image' | 'color' | 'themes';
+  background_fit: 'contain' | 'cover';
   ui_opacity: number;
   bubble_color_mia: string;
   bubble_color_user: string;

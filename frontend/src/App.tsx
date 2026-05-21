@@ -65,7 +65,7 @@ const resolveBackgroundUrl = (url: string) => {
 
 
 
-const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string }) => {
+const BackgroundLayer = memo(({ bgUrl, bgType, bgFit = 'contain' }: { bgUrl: string, bgType: string, bgFit?: 'contain' | 'cover' }) => {
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -163,7 +163,7 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
 
         preload="auto"
 
-        className="absolute inset-0 w-full h-full object-contain transition-opacity duration-1000"
+        className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ${bgFit === 'cover' ? 'object-cover' : 'object-contain'}`}
 
         src={isVideo ? finalBgUrl : undefined}
 
@@ -181,7 +181,7 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
 
       <div
 
-        className="absolute inset-0 w-full h-full bg-contain bg-center transition-opacity duration-1000"
+        className={`absolute inset-0 w-full h-full transition-opacity duration-1000 bg-center ${bgFit === 'cover' ? 'bg-cover' : 'bg-contain'}`}
 
         style={{
 
@@ -353,6 +353,8 @@ function AppShell() {
           bgUrl={config?.appearance?.background_url || ''}
 
           bgType={config?.appearance?.background_type || 'color'}
+
+          bgFit={config?.appearance?.background_fit || 'contain'}
 
         />
 

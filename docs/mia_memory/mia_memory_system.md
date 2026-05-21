@@ -14,7 +14,7 @@ Ini adalah ingatan absolut dan aturan yang mendasari eksistensi MIA. Semuanya be
 *   **`SOUL.md`**: Mendefinisikan kepribadian, gaya bicara, dan persona dasar MIA.
 *   **`USER.md`**: Informasi eksplisit tentang pengguna (Bos).
 *   **`MEMORY.md`**: Catatan fakta jangka panjang tentang pengguna (Umum).
-*   **`INTIMACY.md`**: Catatan momen personal dan fakta intim yang diisolasi secara ketat.
+*   **`INTIMACY.md`**: Catatan momen personal dan fakta intim yang diisolasi secara ketat bekerja hanya saat mode intim aktif.
 *   **`TOOLS.md`, `AGENTS.md`**: Konteks opsional kapabilitas *tools* dan instruksi agen (otomatis di-load di `POWER_MODE`).
 
 ### Tier 2: Real-time Episodic Memory (Ingatan Jangka Pendek & Log Chat)
