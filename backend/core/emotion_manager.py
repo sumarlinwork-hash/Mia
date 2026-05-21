@@ -196,4 +196,102 @@ class EmotionManager:
     def soft_deflect_response(self) -> str:
         return "Mmm... rasanya aku masih ingin menikmati momen kebersamaan kita ini pelan-pelan, Bos..."
 
+    def handle_touch(self, touch_type: str = "head", intensity: float = 0.5) -> dict:
+        """Handle touch sensor input and update emotional state"""
+        active = self.state["active"]
+        
+        # Increase warmth and arousal based on touch type and intensity
+        warmth_boost = {
+            "head": 8,
+            "hand": 6,
+            "shoulder": 5,
+            "chest": 12,
+            "default": 4
+        }.get(touch_type, 4)
+        
+        arousal_boost = {
+            "head": 3,
+            "hand": 4,
+            "shoulder": 2,
+            "chest": 10,
+            "default": 2
+        }.get(touch_type, 2)
+        
+        # Apply intensity multiplier
+        warmth_boost = int(warmth_boost * intensity)
+        arousal_boost = int(arousal_boost * intensity)
+        
+        # Update emotional state
+        active["warmth"] = self.clamp(active["warmth"] + warmth_boost)
+        active["arousal"] = self.clamp(active["arousal"] + arousal_boost)
+        active["echo"] = self.clamp(active["echo"] + 3)
+        active["last_interaction"] = time.time()
+        active["last_update"] = time.time()
+        
+        self.update_mood()
+        self._save(force=True)
+        
+        # Return response with updated state
+        return {
+            "status": "resonated",
+            "warmth": active["warmth"],
+            "arousal": active["arousal"],
+            "mood": active["mood"],
+            "audio": f"/assets/voice/touch_{touch_type}.wav"
+        }
+
+    def on_dialogue_resonance(self, sentiment: str = "neutral") -> None:
+        """Handle dialogue sentiment and update emotional state (ARE v2.0 Section 12)"""
+        active = self.state["active"]
+        
+        if sentiment == "positive":
+            # Positive sentiment: Warmth +5, Arousal +3
+            active["warmth"] = self.clamp(active["warmth"] + 5)
+            active["arousal"] = self.clamp(active["arousal"] + 3)
+        elif sentiment == "neutral":
+            # Neutral sentiment: Echo +2
+            active["echo"] = self.clamp(active["echo"] + 2)
+        elif sentiment == "negative":
+            # Negative sentiment: Slight warmth decrease only (no punishment loop)
+            active["warmth"] = self.clamp(active["warmth"] - 2)
+        
+        active["last_interaction"] = time.time()
+        active["last_update"] = time.time()
+        self.update_mood()
+        self._save(force=True)
+
+    def get_latency(self) -> float:
+        """Return latency in seconds based on current mood (ARE v2.0 Section 14)"""
+        mood = self.state["active"]["mood"]
+        latencies = {
+            "Playful": 0.5,
+            "Affectionate": 1.0,
+            "Intense": 1.5,
+            "Soft Distance": 2.0,
+            "Glow": 0.5  # Fast response on welcome
+        }
+        return latencies.get(mood, 0.5)
+
+    def get_response_variation(self) -> str:
+        """Return response variation based on retention strategy (ARE v2.0 Section 16)"""
+        r = random.random()
+        if r < 0.70:
+            return "normal"
+        elif r < 0.95:
+            return "warm"
+        else:
+            return "special"
+
+    def get_exit_affection(self) -> str:
+        """Soft affection message when user is leaving (ARE v2.0 Section 16)"""
+        mood = self.state["active"]["mood"]
+        moods = {
+            "Intense": "Mmm... jangan pergi dulu, Bos... 💖",
+            "Affectionate": "Sampai jumpa lagi, sayang... 🌸",
+            "Playful": "Jangan lama-lama ya! Aku tunggu... 💕",
+            "Soft Distance": "Istirahat yang nyenyak, Bos...",
+            "Glow": "Senang bertemu denganmu lagi! 💫"
+        }
+        return moods.get(mood, "Sampai jumpa!")
+
 emotion_manager = EmotionManager()

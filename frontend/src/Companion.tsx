@@ -16,9 +16,10 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-import MiaFigure from './components/MiaFigure';
+
 import { useConfig } from './hooks/useConfig';
-import type { ProviderConfig } from './types/config';
+import type { ProviderConfig, MIAConfig } from './types/config';
+import CompanionSettings from './components/settings/CompanionSettings';
 
 
 interface WaveformBarProps {
@@ -64,7 +65,7 @@ interface Toast {
   type: 'info' | 'success' | 'error';
 }
 
-export default function Home() {
+export default function Companion() {
   const location = useLocation();
   const navigate = useNavigate();
   // --- 1. STATES ---
@@ -83,6 +84,28 @@ export default function Home() {
   const { data: intimacyActive = false } = useIntimacyStatus();
   const queryClient = useQueryClient();
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const { updateConfig } = useConfig();
+  
+  const updateConfigLocal = async (newConfig: MIAConfig) => {
+    if (!config) return;
+    updateConfig(newConfig);
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConfig),
+      });
+      if (!res.ok) throw new Error('Failed to persist kernel config');
+      await refreshConfig();
+      addToast('Pengaturan Companion berhasil disimpan', 'success');
+    } catch (error) {
+      console.error('Failed to save kernel config', error);
+      await refreshConfig();
+      addToast('Gagal menyimpan pengaturan', 'error');
+    }
+  };
 
   const activeModelName = useMemo(() => {
     const override = config?.active_provider_override ?? 'auto';
@@ -125,7 +148,6 @@ export default function Home() {
   const [audioLevel, setAudioLevel] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
-  const [powerState, setPowerState] = useState<'WAKE' | 'SLEEP'>('WAKE');
   const [mood] = useState("neutral");
   const [statusStage, setStatusStage] = useState<string>("DONE");
   const [statusMessage, setStatusMessage] = useState<string>("Idle");
@@ -133,35 +155,14 @@ export default function Home() {
   const [intimacyError, setIntimacyError] = useState<string | null>(null);
   const [isTogglingIntimacy, setIsTogglingIntimacy] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isInputExpanded, setIsInputExpanded] = useState(false);
 
   // --- 2. REFS ---
   const { send, status: wsStatus } = useWebSocket();
 
-  useEffect(() => {
-    const loadPowerState = async () => {
-      try {
-        const res = await fetch('/api/power_state');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.state === 'SLEEP' || data.state === 'WAKE') {
-          setPowerState(data.state);
-        }
-      } catch (err) {
-        console.error('[Home] Failed to fetch power state:', err);
-      }
-    };
 
-    loadPowerState();
-  }, []);
 
-  useWebSocketMessage(useCallback((data: WSMessage) => {
-    if (data.type === 'power_state') {
-      const nextState = data.state === 'SLEEP' ? 'SLEEP' : 'WAKE';
-      setPowerState(nextState);
-    }
-  }, []));
-
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
@@ -378,7 +379,7 @@ export default function Home() {
   const paletteMenuItems = [
     { icon: <Heart size={18} className={intimacyActive ? "text-pink-500 fill-pink-500" : ""} />, name: intimacyActive ? "Deactivate Soulmate" : "Activate Soulmate", desc: "Phase Utama Keintiman", action: toggleIntimacy },
     { icon: <Zap size={18} />, name: "Kelola Aplikasi", desc: "Lihat kemampuan MIA", link: "/settings?tab=store" },
-    { icon: <ImageIcon size={18} />, name: "Change Background", desc: "Appearance settings", link: "/settings?tab=companion" },
+    { icon: <ImageIcon size={18} />, name: "Change Background", desc: "Appearance settings", action: () => { setShowSettings(true); setShowPalette(false); } },
     { icon: <Database size={18} />, name: "Clear Memory", desc: "Reset chat history", action: () => { setInput("/clear"); sendMessage(); setShowPalette(false); } },
     { icon: <XCircle size={18} />, name: "Close Palette", desc: "Or press ESC", action: () => setShowPalette(false) }
   ];
@@ -541,7 +542,7 @@ export default function Home() {
     }
   }, [location.state]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInput(val);
 
@@ -579,7 +580,7 @@ export default function Home() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (showCommands) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(prev => (prev + 1) % filteredCommands.length); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(prev => (prev - 1 + filteredCommands.length) % filteredCommands.length); }
@@ -594,9 +595,11 @@ export default function Home() {
         e.preventDefault();
         insertToken("@" + filteredFiles[activeIndex] + " ");
       }
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       sendMessage();
     }
+    // Shift+Enter allows new line
   };
 
   const insertToken = (token: string) => {
@@ -821,12 +824,7 @@ export default function Home() {
               intimacyActive ? "text-pink-500 animate-heartbeat z-10 relative" :
                 status.includes("Connected") ? "text-primary animate-pulse z-10 relative" : "text-error z-10 relative"
             } size={16} />
-            <div className="flex items-center gap-1 font-mono text-[9px] font-bold text-white/50">
-              <span className={`w-1.5 h-1.5 rounded-full ${intimacyActive ? 'bg-pink-500 shadow-[0_0_6px_#ff007f] animate-pulse' : powerState === 'SLEEP' ? 'bg-amber-300 shadow-[0_0_6px_#ffd68a] animate-pulse' : 'bg-green-400 shadow-[0_0_6px_#00ff66] animate-pulse'}`} />
-              <span className={intimacyActive ? 'text-pink-400' : powerState === 'SLEEP' ? 'text-amber-300' : 'text-green-400'}>
-                {intimacyActive ? 'WAKE (SOULMATE)' : powerState === 'SLEEP' ? 'SLEEP' : 'WAKE'}
-              </span>
-            </div>
+
             {(isSpeaking || (intimacyActive && audioLevel > 5)) && (
               <div
                 className={`absolute inset-0 rounded-full blur-md transition-transform duration-75 ${intimacyActive ? 'bg-pink-500/40' : 'bg-primary/40'}`}
@@ -873,7 +871,7 @@ export default function Home() {
             <Droplets size={20} className={intimacyActive ? "fill-pink-500" : ""} />
           </button>
           <button 
-            onClick={() => navigate('/settings?tab=companion')}
+            onClick={() => setShowSettings(true)}
             className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-primary"
             title="Companion Settings"
           >
@@ -882,16 +880,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="mb-6 z-10">
-        <MiaFigure
-          name={config.bot_name || 'MIA'}
-          mood={intimacyActive ? 'Affectionate' : powerState === 'SLEEP' ? 'Dormant' : 'Focused'}
-          powerState={powerState}
-          isIntimacyMode={intimacyActive}
-          heartbeat={32 + Math.min(60, audioLevel * 6)}
-          activeModel={activeModelName}
-        />
-      </div>
+
 
       {/* Chat Area */}
       <div
@@ -1026,84 +1015,96 @@ export default function Home() {
           </div>
         )}
 
-        <div className={`flex items-center gap-3 p-3 rounded-full border border-white/20 backdrop-blur-xl shadow-2xl transition-all ${isThinking ? 'thinking-pulse border-primary shadow-[0_0_20px_rgba(0,255,204,0.3)]' : 'focus-within:border-primary/50'}`} style={{ backgroundColor: `rgba(0, 0, 0, ${uiOpacity + 0.1})` }}>
-          <button onClick={() => setShowAttachMenu(!showAttachMenu)} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${showAttachMenu ? 'text-primary' : 'text-white/60'}`}><Paperclip size={20} /></button>
+        <div className={`flex items-${isInputExpanded ? 'start' : 'center'} gap-3 p-3 rounded-${isInputExpanded ? '3xl' : 'full'} border border-white/20 backdrop-blur-xl shadow-2xl transition-all ${isThinking ? 'thinking-pulse border-primary shadow-[0_0_20px_rgba(0,255,204,0.3)]' : 'focus-within:border-primary/50'}`} style={{ backgroundColor: `rgba(0, 0, 0, ${1 - uiOpacity + 0.1})` }}>
+          <button onClick={() => setShowAttachMenu(!showAttachMenu)} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${showAttachMenu ? 'text-primary' : 'text-white/60'} ${isInputExpanded ? 'mt-1' : ''}`}><Paperclip size={20} /></button>
 
-          <input
+          <textarea
             id="chat-input"
             name="chat-input"
-            ref={inputRef}
-            type="text"
+            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder={isThinking ? "MIA is thinking..." : "Message MIA..."}
-            className="flex-1 bg-transparent border-none outline-none font-sans text-lg text-white"
+            rows={isInputExpanded ? 6 : 1}
+            className="flex-1 bg-transparent border-none outline-none font-sans text-lg text-white resize-none overflow-y-auto custom-scrollbar"
+            style={{ minHeight: isInputExpanded ? '150px' : '28px', maxHeight: isInputExpanded ? '300px' : '28px' }}
             disabled={isThinking}
           />
 
-          {/* Active Model Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowModelDropdown(!showModelDropdown)}
-              className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-primary hover:bg-white/10 transition-all flex items-center gap-1"
-              title="Active LLM Selector"
+          <div className={`flex ${isInputExpanded ? 'flex-col' : 'flex-row'} items-center gap-2`}>
+            {/* Expand/Collapse Button */}
+            <button 
+              onClick={() => setIsInputExpanded(!isInputExpanded)} 
+              className="p-2 rounded-full hover:bg-white/10 transition-all text-white/60 hover:text-primary"
+              title={isInputExpanded ? "Collapse" : "Expand"}
             >
-              <Brain size={12} />
-              {activeModelName}
-              <ChevronDown size={10} />
+              <ChevronDown size={18} className={`transition-transform ${isInputExpanded ? '' : 'rotate-180'}`} />
             </button>
-            
-            {showModelDropdown && (
-              <div className="absolute bottom-full right-0 mb-3 w-56 rounded-2xl bg-black/95 backdrop-blur-3xl border border-white/10 shadow-2xl p-2 z-[200] space-y-1">
-                <div className="text-[9px] uppercase font-bold text-white/30 px-3 py-1.5 font-mono tracking-widest border-b border-white/5 mb-1">PILIH INTEL MIA</div>
-                
-                <button
-                  onClick={() => handleSelectOverrideModel('auto')}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center justify-between ${
-                    (config?.active_provider_override ?? 'auto') === 'auto'
-                      ? 'bg-primary/20 text-primary border border-primary/20'
-                      : 'text-white/70 hover:bg-white/5 hover:text-white'
-                  }`}
-                >
-                  <span>🤖 DYNAMIC ROUTING</span>
-                  {(config?.active_provider_override ?? 'auto') === 'auto' && <Check size={12} />}
-                </button>
 
-                {Object.entries(config?.providers ?? {}).map(([name, p]: [string, ProviderConfig]) => (
+            {/* Active Model Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-primary hover:bg-white/10 transition-all flex items-center gap-1"
+                title="Active LLM Selector"
+              >
+                <Brain size={12} />
+                {activeModelName}
+                <ChevronDown size={10} />
+              </button>
+              
+              {showModelDropdown && (
+                <div className="absolute bottom-full right-0 mb-3 w-56 rounded-2xl bg-black/95 backdrop-blur-3xl border border-white/10 shadow-2xl p-2 z-[200] space-y-1">
+                  <div className="text-[9px] uppercase font-bold text-white/30 px-3 py-1.5 font-mono tracking-widest border-b border-white/5 mb-1">PILIH INTEL MIA</div>
+                  
                   <button
-                    key={name}
-                    onClick={() => handleSelectOverrideModel(name)}
+                    onClick={() => handleSelectOverrideModel('auto')}
                     className={`w-full text-left px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center justify-between ${
-                      (config?.active_provider_override ?? 'auto') === name
+                      (config?.active_provider_override ?? 'auto') === 'auto'
                         ? 'bg-primary/20 text-primary border border-primary/20'
                         : 'text-white/70 hover:bg-white/5 hover:text-white'
                     }`}
                   >
-                    <div className="flex flex-col">
-                      <span className="font-bold">{name}</span>
-                      <span className="text-[8px] text-white/30 truncate max-w-[150px]">{p.model_id}</span>
-                    </div>
-                    {(config?.active_provider_override ?? 'auto') === name && <Check size={12} />}
+                    <span>🤖 DYNAMIC ROUTING</span>
+                    {(config?.active_provider_override ?? 'auto') === 'auto' && <Check size={12} />}
                   </button>
-                ))}
-              </div>
-            )}
+
+                  {Object.entries(config?.providers ?? {}).map(([name, p]: [string, ProviderConfig]) => (
+                    <button
+                      key={name}
+                      onClick={() => handleSelectOverrideModel(name)}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center justify-between ${
+                        (config?.active_provider_override ?? 'auto') === name
+                          ? 'bg-primary/20 text-primary border border-primary/20'
+                          : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-bold">{name}</span>
+                        <span className="text-[8px] text-white/30 truncate max-w-[150px]">{p.model_id}</span>
+                      </div>
+                      {(config?.active_provider_override ?? 'auto') === name && <Check size={12} />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button onClick={handleMic} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${isRecording ? 'text-secondary animate-pulse' : 'text-white/60 hover:text-primary'}`}><Mic size={20} /></button>
+
+            <button
+              onClick={sendMessage}
+              disabled={!input.trim()}
+              title="Send Message"
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${(!input.trim())
+                ? "bg-white/5 text-white/20 cursor-not-allowed"
+                : "bg-primary text-black hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,255,204,0.3)]"
+                }`}
+            >
+              <Send size={18} />
+            </button>
           </div>
-
-          <button onClick={handleMic} className={`p-3 rounded-full hover:bg-white/10 transition-colors glow-button ${isRecording ? 'text-secondary animate-pulse' : 'text-white/60 hover:text-primary'}`}><Mic size={20} /></button>
-
-          <button
-            onClick={sendMessage}
-            disabled={!input.trim()}
-            title="Send Message"
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${(!input.trim())
-              ? "bg-white/5 text-white/20 cursor-not-allowed"
-              : "bg-primary text-black hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,255,204,0.3)]"
-              }`}
-          >
-            <Send size={18} />
-          </button>
         </div>
 
         {/* Hidden File Inputs */}
@@ -1187,6 +1188,32 @@ export default function Home() {
               >
                 Mengerti 💖
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMPANION SETTINGS MODAL */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-fade-in overflow-y-auto">
+          <div className="absolute inset-0 backdrop-blur-3xl" onClick={() => setShowSettings(false)}></div>
+          <div className="border border-white/15 rounded-[32px] w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl flex flex-col relative backdrop-blur-3xl" style={{ backgroundColor: `rgba(15, 15, 15, ${1 - uiOpacity + 0.1})` }}>
+            <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b border-white/10 backdrop-blur-md" style={{ backgroundColor: `rgba(15, 15, 15, ${1 - uiOpacity + 0.1})` }}>
+              <div>
+                <h2 className="text-2xl font-bold text-white font-mono tracking-wider flex items-center gap-2">
+                  <Settings2 className="text-primary" /> Companion Settings
+                </h2>
+                <p className="text-xs text-white/50 uppercase tracking-widest mt-1">Local Gateway Preferences</p>
+              </div>
+              <button 
+                onClick={() => setShowSettings(false)}
+                className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto" style={{ backgroundColor: `rgba(15, 15, 15, ${1 - uiOpacity + 0.1})` }}>
+              <CompanionSettings config={config} updateConfigLocal={updateConfigLocal} />
             </div>
           </div>
         </div>

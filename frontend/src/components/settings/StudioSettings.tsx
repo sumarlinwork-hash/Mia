@@ -21,7 +21,10 @@ export default function StudioKernelSettings({ config, updateConfigLocal }: Stud
 
   return (
     <div className="space-y-8">
-      <div className="rounded-[2rem] border border-white/10 bg-black/75 p-6 backdrop-blur-3xl shadow-2xl">
+      <div 
+        className="rounded-[2rem] border border-white/10 p-6 backdrop-blur-3xl shadow-2xl transition-all duration-300"
+        style={{ backgroundColor: `rgba(0, 0, 0, ${config?.appearance?.ui_opacity ?? 0.6})` }}
+      >
         <div className="flex items-center gap-3 mb-6">
           <div className="p-3 rounded-3xl bg-cyan-500/10 text-cyan-300">
             <Cpu size={22} />

@@ -3,8 +3,7 @@ import { useState, useEffect, useRef, memo, lazy, Suspense } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { ThemeProvider } from './context/ThemeProvider';
 import Sidebar from './Sidebar';
-const HomeLazy = lazy(() => import('./Home'));
-const SettingsLazy = lazy(() => import('./Settings'));
+const CompanionLazy = lazy(() => import('./Companion'));
 const IamMiaLazy = lazy(() => import('./IamMia'));
 const CroneLazy = lazy(() => import('./Crone'));
 const EmotionDashboardLazy = lazy(() => import('./EmotionDashboard'));
@@ -70,7 +69,7 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const isVideo = bgType === 'video'; 
+  const isVideo = bgType === 'video';
 
   const isImage = bgType === 'image';
 
@@ -128,7 +127,7 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
 
         if (videoRef.current && (videoRef.current.paused || videoRef.current.readyState < 2)) {
 
-          videoRef.current.play().catch(() => {});
+          videoRef.current.play().catch(() => { });
 
         }
 
@@ -156,21 +155,21 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
 
       {/* NON-UNMOUNT VIDEO ARCHITECTURE */}
 
-      <video 
+      <video
 
         ref={videoRef}
 
-        autoPlay loop muted playsInline 
+        autoPlay loop muted playsInline
 
         preload="auto"
 
-        className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000" 
+        className="absolute inset-0 w-full h-full object-contain transition-opacity duration-1000"
 
-        src={isVideo ? finalBgUrl : undefined} 
+        src={isVideo ? finalBgUrl : undefined}
 
-        style={{ 
+        style={{
 
-          opacity: isVideo ? 1 : 0, 
+          opacity: isVideo ? 1 : 0,
 
           visibility: isVideo ? 'visible' : 'hidden',
 
@@ -180,11 +179,11 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
 
       />
 
-      <div 
+      <div
 
-        className="absolute inset-0 w-full h-full bg-cover bg-center transition-opacity duration-1000" 
+        className="absolute inset-0 w-full h-full bg-contain bg-center transition-opacity duration-1000"
 
-        style={{ 
+        style={{
 
           backgroundImage: isImage ? `url("${finalBgUrl}")` : 'none',
 
@@ -194,15 +193,15 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
 
           pointerEvents: 'none'
 
-        }} 
+        }}
 
       />
 
-      <div 
+      <div
 
-        className="absolute inset-0 w-full h-full transition-opacity duration-1000" 
+        className="absolute inset-0 w-full h-full transition-opacity duration-1000"
 
-        style={{ 
+        style={{
 
           background: isTheme ? themeBackground : bgUrl,
 
@@ -212,13 +211,13 @@ const BackgroundLayer = memo(({ bgUrl, bgType }: { bgUrl: string, bgType: string
 
           pointerEvents: 'none'
 
-        }} 
+        }}
 
       />
 
-      <div 
+      <div
 
-        className={`absolute inset-0 bg-black pointer-events-none transition-all duration-500`} 
+        className={`absolute inset-0 bg-black pointer-events-none transition-all duration-500`}
 
         style={{ opacity: 'calc(1 - var(--ui-opacity, 0.5))' }}
 
@@ -323,183 +322,170 @@ function AppShell() {
 
   return (
 
-        <div 
+    <div
 
-          className={`relative min-h-screen bg-background overflow-hidden flex ${isSafeMode ? 'safe-mode' : ''}`}
+      className={`relative min-h-screen bg-background overflow-hidden flex ${isSafeMode ? 'safe-mode' : ''}`}
 
-          style={{ '--ui-opacity': config?.appearance?.ui_opacity ?? 0.5 } as React.CSSProperties}
+      style={{ '--ui-opacity': config?.appearance?.ui_opacity ?? 0.5 } as React.CSSProperties}
+
+    >
+
+      {/* Global Loading Overlay for Bootstrap */}
+
+      {isBootstrapping && startupPhase < 3 && (
+
+        <div className="fixed inset-0 z-[1000] bg-black flex items-center justify-center font-mono">
+
+          <div className="text-primary text-xl tracking-[0.3em] animate-pulse">INITIATING MIA CORE...</div>
+
+        </div>
+
+      )}
+
+
+
+      {/* Phase 1: Background Layer */}
+
+      {startupPhase >= 1 && (
+
+        <BackgroundLayer
+
+          bgUrl={config?.appearance?.background_url || ''}
+
+          bgType={config?.appearance?.background_type || 'color'}
+
+        />
+
+      )}
+
+
+
+      {/* Phase 2: Sidebar Navigation */}
+
+      {startupPhase >= 2 && !isStudioRoute && !isOnboardingRoute && (
+
+        <div
+
+          className={`transition-all duration-700 ease-in-out relative z-[100] ${isZenMode ? 'opacity-0 -translate-x-20 pointer-events-none' : 'opacity-100 translate-x-0'}`}
 
         >
 
-          {/* Global Loading Overlay for Bootstrap */}
+          <Sidebar
 
-          {isBootstrapping && startupPhase < 3 && (
+            isZenMode={isZenMode}
 
-            <div className="fixed inset-0 z-[1000] bg-black flex items-center justify-center font-mono">
+            onToggleZen={() => setIsZenMode(!isZenMode)}
 
-              <div className="text-primary text-xl tracking-[0.3em] animate-pulse">INITIATING MIA CORE...</div>
+            collapsed={effectiveSidebarCollapsed}
 
-            </div>
+            setCollapsed={setSidebarCollapsed}
 
-          )}
-
-
-
-          {/* Phase 1: Background Layer */}
-
-          {startupPhase >= 1 && (
-
-            <BackgroundLayer 
-
-              bgUrl={config?.appearance?.background_url || ''} 
-
-              bgType={config?.appearance?.background_type || 'color'} 
-
-            />
-
-          )}
-
-
-
-          {/* Phase 2: Sidebar Navigation */}
-
-          {startupPhase >= 2 && !isStudioRoute && !isOnboardingRoute && (
-
-            <div 
-
-              className={`transition-all duration-700 ease-in-out relative z-[100] ${isZenMode ? 'opacity-0 -translate-x-20 pointer-events-none' : 'opacity-100 translate-x-0'}`}
-
-            >
-
-              <Sidebar 
-
-                isZenMode={isZenMode} 
-
-                onToggleZen={() => setIsZenMode(!isZenMode)} 
-
-                collapsed={effectiveSidebarCollapsed}
-
-                setCollapsed={setSidebarCollapsed}
-
-              />
-
-            </div>
-
-          )}
-
-
-
-          {/* Phase 2: Main Content Area */}
-
-          {startupPhase >= 2 && (
-
-            <main 
-
-              className={`relative z-10 flex-1 h-screen overflow-y-auto overflow-x-hidden custom-scrollbar transition-all duration-700 ease-in-out ${
-
-                isZenMode ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
-
-              }`}
-
-              style={{ paddingLeft: (isStudioRoute || isOnboardingRoute) ? 0 : (effectiveSidebarCollapsed ? '5rem' : '16rem') }}
-
-            >
-
-              <Suspense fallback={
-
-                <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse bg-transparent">
-
-                  Memuat Modul...
-
-                </div>
-
-              }>
-
-                <Routes>
-
-                  <Route path="/" element={<HomeLazy />} />
-
-                  <Route path="/onboarding" element={<OnboardingLazy />} />
-
-                  <Route path="/crone" element={<CroneLazy />} />
-
-                  <Route path="/iam-mia" element={<IamMiaLazy />} />
-
-                  <Route path="/settings" element={<SettingsLazy />} />
-
-                  <Route path="/emotion" element={<EmotionDashboardLazy />} />
-
-                  <Route path="/skills" element={<SkillMarketplaceLazy />} />
-
-                  <Route path="/llm" element={<LLMPageLazy />} />
-
-                  <Route path="/studio" element={
-
-                    <FileStoreProvider>
-
-                      <Suspense fallback={
-
-                        <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse bg-transparent">
-
-                          Memuat Studio Module...
-
-                        </div>
-
-                      }>
-
-                        <StudioPageLazy onToggleZen={() => setIsZenMode(true)} />
-
-                      </Suspense>
-
-                    </FileStoreProvider>
-
-                  } />
-
-                </Routes>
-
-              </Suspense>
-
-            </main>
-
-          )}
-
-
-
-          {/* Phase 3: Supporting Systems */}
-
-          {startupPhase >= 3 && (
-
-            <>
-
-              <ZenModeOverlay 
-
-                isActive={isZenMode} 
-
-                onExit={() => setIsZenMode(false)} 
-
-              />
-
-              {!isStudioRoute && <ResonantOrchestrator />}
-
-              <PerformanceOverlay />
-
-            </>
-
-          )}
-
-          {/* Micro Eco-Spark - Power State Indicator */}
-          {startupPhase >= 2 && (
-            <div className="fixed top-6 right-8 z-[200] flex items-center gap-2 pointer-events-none">
-              <div 
-                className={`w-3 h-3 rounded-full ${isStudioRoute ? 'bg-cyan-500/50' : 'bg-green-400 animate-pulse'} shadow-[0_0_10px_currentColor] transition-colors duration-1000`}
-              ></div>
-              <span className="text-[10px] font-mono tracking-widest text-white/50 uppercase transition-opacity">
-                {isStudioRoute ? 'SLEEP' : 'WAKE'}
-              </span>
-            </div>
-          )}
+          />
 
         </div>
+
+      )}
+
+
+
+      {/* Phase 2: Main Content Area */}
+
+      {startupPhase >= 2 && (
+
+        <main
+
+          className={`relative z-10 flex-1 h-screen overflow-y-auto overflow-x-hidden custom-scrollbar transition-all duration-700 ease-in-out ${isZenMode ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
+
+            }`}
+
+          style={{ paddingLeft: (isStudioRoute || isOnboardingRoute) ? 0 : (effectiveSidebarCollapsed ? '5rem' : '16rem') }}
+
+        >
+
+          <Suspense fallback={
+
+            <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse bg-transparent">
+
+              Memuat Modul...
+
+            </div>
+
+          }>
+
+            <Routes>
+
+              <Route path="/" element={<CompanionLazy />} />
+
+              <Route path="/onboarding" element={<OnboardingLazy />} />
+
+              <Route path="/crone" element={<CroneLazy />} />
+
+              <Route path="/iam-mia" element={<IamMiaLazy />} />
+
+
+              <Route path="/emotion" element={<EmotionDashboardLazy />} />
+
+              <Route path="/skills" element={<SkillMarketplaceLazy />} />
+
+              <Route path="/llm" element={<LLMPageLazy />} />
+
+              <Route path="/studio" element={
+
+                <FileStoreProvider>
+
+                  <Suspense fallback={
+
+                    <div className="h-screen w-full flex items-center justify-center text-primary font-mono animate-pulse bg-transparent">
+
+                      Memuat Studio Module...
+
+                    </div>
+
+                  }>
+
+                    <StudioPageLazy onToggleZen={() => setIsZenMode(true)} />
+
+                  </Suspense>
+
+                </FileStoreProvider>
+
+              } />
+
+            </Routes>
+
+          </Suspense>
+
+        </main>
+
+      )}
+
+
+
+      {/* Phase 3: Supporting Systems */}
+
+      {startupPhase >= 3 && (
+
+        <>
+
+          <ZenModeOverlay
+
+            isActive={isZenMode}
+
+            onExit={() => setIsZenMode(false)}
+
+          />
+
+          {!isStudioRoute && <ResonantOrchestrator />}
+
+          <PerformanceOverlay />
+
+        </>
+
+      )}
+
+
+
+    </div>
 
   );
 

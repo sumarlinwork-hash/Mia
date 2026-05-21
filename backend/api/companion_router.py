@@ -24,6 +24,7 @@ from mia_comm.history_manager import history_manager
 from mia_comm.brain_orchestrator import brain_orchestrator
 from mia_comm.tts_service import tts_service
 from mia_comm.stt_service import stt_service
+from mia_comm.sentiment_analyzer import sentiment_analyzer
 from skill_manager import skill_manager
 from core.emotion_manager import emotion_manager
 from discovery.services import AppBuilderService
@@ -381,6 +382,41 @@ async def get_intimacy_status():
         pending_intimacy_offer = False
     return {"intimacy_active": intimacy_mode, "pending_offer": pending_intimacy_offer}
 
+@companion_router.get("/api/emotion/exit-affection")
+async def get_exit_affection():
+    """Get mood-appropriate exit message (ARE v2.0 Section 16)"""
+    exit_msg = emotion_manager.get_exit_affection()
+    current_state = emotion_manager.get_state()
+    return {
+        "status": "success",
+        "message": exit_msg,
+        "mood": current_state["mood"],
+        "warmth": current_state["warmth"],
+        "arousal": current_state["arousal"]
+    }
+
+@companion_router.get("/api/emotion/latency")
+async def get_emotion_latency():
+    """Get mood-based response latency (ARE v2.0 Section 14)"""
+    latency = emotion_manager.get_latency()
+    current_state = emotion_manager.get_state()
+    return {
+        "status": "success",
+        "latency": latency,
+        "mood": current_state["mood"]
+    }
+
+@companion_router.post("/api/emotion/sentiment")
+async def analyze_sentiment(text: str = Query(...)):
+    """Analyze sentiment of text (ARE v2.0 Section 12)"""
+    sentiment = sentiment_analyzer.analyze(text)
+    confidence = sentiment_analyzer.get_confidence(text)
+    return {
+        "status": "success",
+        "sentiment": sentiment,
+        "confidence": confidence
+    }
+
 @companion_router.post("/api/stt")
 async def process_speech_to_text(audio: UploadFile = File(...)):
     if active_module == "studio":
@@ -642,6 +678,11 @@ async def websocket_heartbeat(websocket: WebSocket):
                         await websocket.send_json({"type": "status", "content": "Retrieving Memories..."})
                         is_intimate_turn = intimacy_mode
                         
+                        # --- DIALOGUE RESONANCE (ARE v2.0 Section 12) ---
+                        # Analyze user sentiment and update emotional state
+                        user_sentiment = sentiment_analyzer.analyze(clean_query)
+                        emotion_manager.on_dialogue_resonance(user_sentiment)
+                        
                         context = await memory_orchestrator.assemble_context(clean_query, clean_mentions, is_intimate=is_intimate_turn)
                         await websocket.send_json({"type": "status", "content": "Thinking..."})
                         emotion_manager.on_user_interaction()
@@ -674,9 +715,18 @@ async def websocket_heartbeat(websocket: WebSocket):
                         if response_text:
                             mia_msg_id = await asyncio.to_thread(history_manager.add_message, "MIA", response_text)
                         
+                        # --- LATENCY SYSTEM (ARE v2.0 Section 14) ---
+                        # Apply mood-based response delay
+                        latency = emotion_manager.get_latency()
+                        await asyncio.sleep(latency)
+                        
                         await websocket.send_json({"type": "status", "content": "Speaking..."})
                         current_state = emotion_manager.get_state()
                         is_intimate_audio = intimacy_mode or current_state["mood"] in ["Intense", "Affectionate", "Glow"]
+                        
+                        # --- RESPONSE VARIATION (ARE v2.0 Section 16) ---
+                        # Get response variation for retention strategy
+                        response_variation = emotion_manager.get_response_variation()
                         
                         await crone_daemon.broadcast_event("history_updated")
                         await websocket.send_json({
@@ -684,7 +734,9 @@ async def websocket_heartbeat(websocket: WebSocket):
                             "id": mia_msg_id,
                             "user_msg_id": msg_id, 
                             "client_id": client_id, 
-                            "content": response_text, 
+                            "content": response_text,
+                            "variation": response_variation,
+                            "mood": current_state["mood"],
                             "audio": None 
                         })
 

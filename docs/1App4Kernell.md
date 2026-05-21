@@ -35,7 +35,7 @@ Seluruh elemen UI eksisting dipetakan secara tegas ke dalam keempat gerbang ini:
 | **Mia Store (`/skills` - `SkillMarketplace.tsx`)** | 🏠/💻 **Shared App Store** | Satu-satunya toko unduhan terpadu dengan **Filter Tab Kategori**: Tab `"Lifestyle & Chat"` (Companion) dan Tab `"Developer & Automation"` (Studio/MCP). Mencegah kebingungan Bos! |
 | **Kartu Kelola Abilities (Tab `skills` Settings)** | 🏠/💻 **Shared Settings** | Pengelolaan kemampuan dengan pembagian tab yang rapi: Kode Python interaktif companion dikelola di setelan `/companion`, sedangkan izin eksekusi tool otonom dikelola di setelan `/studio`. |
 | **Halaman Onboarding Wizard (`/onboarding` - `Onboarding.tsx`)** | 🏠 `/companion` (Home Hub Setup) | Wizard inisialisasi awal (nama pengguna, setelan suara dasar, kalibrasi jiwa awal). |
-| **Rich Appearance (Opacity, Bubbles, Video BG)** | 🏠 `/companion` (Home Hub Settings) | **RESTORE:** Slider transparansi, warna bubble, opacity chat, dan support Background Video/Image/Solid. |
+| **Rich Appearance (Opacity, Bubbles, Video BG)** | 🏠 `/companion` (Home Hub Settings) | **RESTORE:** Slider transparansi, warna bubble, opacity chat, dan support Background Video/Image/Solid. **FIXED (Task 6):** Vertical videos/images now display fully without cropping using `object-contain` and `bg-contain` CSS properties. |
 | **Theming System (Themes Selector)** | 🏠 `/companion` (Home Hub Settings) | **RESTORE:** Pemilihan tema (Aurora, Sakura, Midnight, Graphite) secara instan. |
 | **Kartu Core Personality** (AI Name, Bot Age) | 🏠 `/companion` (Home Hub Settings) | Mengatur nama panggilan khusus AI, umur virtual AI, dan deskripsi system persona. |
 | **Kartu Speech & Voice Engine** (STT & TTS Selectors) | 🏠 `/companion` (Home Hub Settings) | Pemilihan STT Engine (Python Native/Whisper) dan TTS Engine (Edge-TTS, ElevenLabs, gTTS). |
@@ -188,5 +188,17 @@ Mulai dari cetak biru arsitektur awal hingga eksekusi akhir, rencana **1App4Kern
    - Perampingan drastis komponen `MiaFigure` dari *dashboard* besar yang memakan layar menjadi *Top-Bar*/Header kompak minimalis, memastikan area *chat* berpusat lega.
    - Penambahan indikator **Micro Eco-Spark** (Hijau/Cyan) dan **Active Model Selector** pada *chat input* yang berjalan sangat mulus.
    - Penambalan di sisi *backend websocket router* yang mencegah *system fallback/payload error* bocor ke *UI Chat History* milik pengguna.
+5. **Background Video/Image Display Fix (Task 6):** Perbaikan pada komponen `BackgroundLayer` di `frontend/src/App.tsx`:
+   - **Masalah:** Video dan gambar vertikal dipotong/terpotong karena menggunakan `object-cover` dan `bg-cover`.
+   - **Solusi:** Diubah menjadi `object-contain` dan `bg-contain` untuk menampilkan konten penuh tanpa cropping.
+   - **Hasil:** Video dan gambar vertikal kini ditampilkan sepenuhnya dengan mempertahankan aspect ratio yang tepat, memberikan pengalaman visual yang lebih baik untuk background custom.
+6. **Intimacy Touch Sensor Fix:** Implementasi lengkap method `handle_touch()` di `backend/core/emotion_manager.py`:
+   - **Masalah:** Endpoint `/api/intimacy/touch` memanggil method yang tidak ada, menyebabkan error saat user menyentuh MIA.
+   - **Solusi:** Menambahkan method `handle_touch(touch_type, intensity)` yang:
+     - Meningkatkan warmth dan arousal berdasarkan jenis sentuhan (head, hand, shoulder, chest)
+     - Menerapkan multiplier intensity untuk kontrol responsivitas
+     - Memperbarui mood dan menyimpan state secara otomatis
+     - Mengembalikan response dengan audio cue yang sesuai
+   - **Hasil:** Touch sensor kini berfungsi sempurna, meningkatkan emotional state MIA secara dinamis dan memberikan feedback audio yang responsif.
 
 Sistem MIA Flagship kini beroperasi utuh pada Paradigma Modular Terdekopel secara tangguh, elegan, dan optimal! 🚀

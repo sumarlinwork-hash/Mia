@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useConfig } from './hooks/useConfig';
 import { 
   Zap, RefreshCcw, Save, Trash2, Pencil, Plus, Star, Shield, Info, ArrowLeft,
-  CheckCircle2, XCircle, Brain
+  CheckCircle2, XCircle, Brain, Activity
 } from 'lucide-react';
 
 import type { MIAConfig, ProviderConfig } from './types/config';
@@ -32,7 +32,7 @@ interface Toast {
 export default function LLMPage() {
   const { config, loading, updateConfig: setGlobalConfig, refreshConfig } = useConfig();
   const [originalConfig, setOriginalConfig] = useState<MIAConfig | null>(null);
-  const [view, setView] = useState<'list' | 'add' | 'edit'>('list');
+  const [view, setView] = useState<'list' | 'add' | 'edit' | 'health'>('list');
   const [editName, setEditName] = useState<string | null>(null);
   const [testCountdown, setTestCountdown] = useState<number>(0);
   const [activeTest, setActiveTest] = useState<string | null>(null);
@@ -282,12 +282,20 @@ export default function LLMPage() {
 
           <div className="flex items-center gap-3">
             {view === 'list' ? (
-              <button 
-                onClick={() => setView('add')}
-                className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-mono font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(0,255,204,0.3)] text-xs"
-              >
-                <Plus size={16} /> REGISTRASI MODEL
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setView('health')}
+                  className="flex items-center gap-2 px-6 py-3 bg-secondary/20 text-secondary font-mono font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all border border-secondary/30 text-xs"
+                >
+                  <Activity size={16} /> PROVIDER HEALTH
+                </button>
+                <button 
+                  onClick={() => setView('add')}
+                  className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-mono font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(0,255,204,0.3)] text-xs"
+                >
+                  <Plus size={16} /> REGISTRASI MODEL
+                </button>
+              </div>
             ) : (
               <button 
                 onClick={() => setView('list')}
@@ -300,7 +308,85 @@ export default function LLMPage() {
         </div>
 
         {/* Intelligence Settings Grid */}
-        {view === 'list' ? (
+        {view === 'health' ? (
+          // Provider Health Dashboard
+          <div className="space-y-8 animate-slide-up">
+            <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 backdrop-blur-3xl shadow-2xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2.5 rounded-xl bg-secondary/10 text-secondary"><Activity size={20} /></div>
+                <div>
+                  <h2 className="text-lg font-bold text-white font-mono tracking-wide">PROVIDER HEALTH MONITOR</h2>
+                  <p className="text-xs text-white/40 font-sans">Real-time diagnostics untuk semua LLM providers yang terdaftar.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Object.entries(config.providers).map(([name, p]: [string, ProviderConfig]) => {
+                  const healthScore = p.health_ok + p.health_fail > 0 
+                    ? Math.round((p.health_ok / (p.health_ok + p.health_fail)) * 100)
+                    : 100;
+                  
+                  // Determine health status for styling
+                  const isHealthy = healthScore > 90;
+                  const isDegraded = healthScore > 50 && healthScore <= 90;
+                  
+                  return (
+                    <div 
+                      key={name}
+                      className={`relative p-6 rounded-[2rem] border backdrop-blur-3xl transition-all ${
+                        isHealthy 
+                          ? 'border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5' 
+                          : isDegraded
+                          ? 'border-[var(--color-warning)]/20 bg-[var(--color-warning)]/5'
+                          : 'border-[var(--color-error)]/20 bg-[var(--color-error)]/5'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-black tracking-tight text-white uppercase">{name}</h3>
+                          <span className="text-[10px] font-mono text-white/40">
+                            {p.latency}ms latency
+                          </span>
+                        </div>
+                        <div className={`text-3xl font-black ${
+                          isHealthy ? 'text-[var(--color-primary)]' : isDegraded ? 'text-[var(--color-warning)]' : 'text-[var(--color-error)]'
+                        }`}>
+                          {healthScore}%
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mb-4 text-[10px] font-mono text-white/60 border-t border-b border-white/5 py-3">
+                        <div className="flex justify-between">
+                          <span>Status:</span>
+                          <span className={p.is_active ? 'text-[var(--color-primary)] font-bold' : 'text-white/40 font-bold'}>
+                            {p.is_active ? 'ONLINE' : 'OFFLINE'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Success Rate:</span>
+                          <span className="text-white/80 font-bold">{p.health_ok} OK / {p.health_fail} FAIL</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Model:</span>
+                          <span className="text-white/80 font-bold truncate">{p.model_id}</span>
+                        </div>
+                      </div>
+
+                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all ${
+                            isHealthy ? 'bg-[var(--color-primary)]' : isDegraded ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-error)]'
+                          }`}
+                          style={{ width: `${healthScore}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ) : view === 'list' ? (
           <div className="space-y-8 animate-slide-up">
             {/* System Operation Mode Panel */}
             <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 backdrop-blur-3xl shadow-2xl">
