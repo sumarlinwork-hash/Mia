@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect } from 'react';
-import { Heart, Speaker, Zap, Save, ChevronDown, Clock } from 'lucide-react';
+import { Heart, Speaker, Zap, Save, ChevronDown, Clock, Shield, Sparkles, RefreshCcw, BookOpen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { MIAConfig } from '../../types/config';
 import ThemeTab from './ThemeTab';
 
@@ -18,11 +19,13 @@ export default function CompanionKernelSettings({ config, updateConfigLocal }: C
     companion: true,
     speech: true,
     visual: true,
+    emotional: false,
     crone: false
   });
 
   const [croneStatus, setCroneStatus] = useState<CroneStatus | null>(null);
   const [croneLoading, setCroneLoading] = useState(false);
+  const navigate = useNavigate();
 
   // Fetch crone status on mount
   useEffect(() => {
@@ -115,7 +118,7 @@ export default function CompanionKernelSettings({ config, updateConfigLocal }: C
                   onClick={() => setConfig({ is_professional_mode: !config.is_professional_mode })}
                   className={`rounded-2xl px-4 py-3 text-xs font-bold font-mono transition-all ${config.is_professional_mode ? 'bg-primary text-black' : 'bg-white/[0.03] border border-white/10 text-white hover:bg-white/[0.05]'}`}
                 >
-                  {config.is_professional_mode ? 'ACTIVE' : 'PASSIVE'}
+                  {config.is_professional_mode ? 'ON' : 'OFF'}
                 </button>
               </div>
             </div>
@@ -405,6 +408,105 @@ export default function CompanionKernelSettings({ config, updateConfigLocal }: C
       {config.appearance.background_type === 'themes' && expandedCards.visual && (
         <ThemeTab config={config} updateConfigLocal={updateConfigLocal} />
       )}
+
+      {/* Emotional & Memory Card */}
+      <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 backdrop-blur-3xl shadow-2xl">
+        <button
+          onClick={() => toggleCard('emotional')}
+          className="w-full flex items-center justify-between gap-3 mb-6 hover:opacity-80 transition-opacity"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400">
+              <Heart size={20} />
+            </div>
+            <div className="text-left">
+              <h2 className="text-lg font-bold text-white font-mono tracking-wide">EMOTIONAL & MEMORY</h2>
+              <p className="text-xs text-white/40 font-sans">Resonansi & Sinkronisasi</p>
+            </div>
+          </div>
+          <ChevronDown 
+            size={20} 
+            className={`text-white/40 transition-transform ${expandedCards.emotional ? '' : 'rotate-180'}`}
+          />
+        </button>
+
+        {expandedCards.emotional && (
+          <div className="grid gap-6">
+            {/* Care Pulse & Resonant Skin */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Shield size={18} className="text-rose-400 animate-pulse" />
+                  <span className="text-[11px] uppercase tracking-[0.27em] text-white/40 font-mono">Care Pulse</span>
+                </div>
+                <button
+                  onClick={() => setConfig({ care_pulse_enabled: !config.care_pulse_enabled })}
+                  className={`w-full rounded-2xl px-4 py-3 font-semibold transition ${config.care_pulse_enabled ? 'bg-secondary text-black' : 'bg-white/5 text-white hover:bg-white/10'}`}
+                >
+                  {config.care_pulse_enabled ? 'ENABLED' : 'DISABLED'}
+                </button>
+                <p className="text-[10px] text-white/30 italic font-mono mt-2">Proactive caring messages saat Anda sedang fokus</p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Sparkles size={18} className="text-amber-400 animate-spin" style={{ animationDuration: '3s' }} />
+                  <span className="text-[11px] uppercase tracking-[0.27em] text-white/40 font-mono">Resonant Skin</span>
+                </div>
+                <button
+                  onClick={() => setConfig({ resonant_skin_enabled: !config.resonant_skin_enabled })}
+                  className={`w-full rounded-2xl px-4 py-3 font-semibold transition ${config.resonant_skin_enabled ? 'bg-primary text-black' : 'bg-white/5 text-white hover:bg-white/10'}`}
+                >
+                  {config.resonant_skin_enabled ? 'ACTIVE' : 'INACTIVE'}
+                </button>
+                <p className="text-[10px] text-white/30 italic font-mono mt-2">Responsif terhadap sentuhan dan interaksi Anda</p>
+              </div>
+            </div>
+
+            {/* Auto Sync */}
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <RefreshCcw size={18} className="text-cyan-400 animate-spin" style={{ animationDuration: '2s' }} />
+                <span className="text-[11px] uppercase tracking-[0.27em] text-white/40 font-mono">Auto Sync</span>
+              </div>
+              <label className="flex items-center gap-3 text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  checked={config.bio_sync_enabled}
+                  onChange={() => setConfig({ bio_sync_enabled: !config.bio_sync_enabled })}
+                  className="h-4 w-4 rounded border-white/20 bg-black/60 accent-primary"
+                />
+                Sinkronisasi bio-data & memory secara otomatis
+              </label>
+              <p className="text-[10px] text-white/30 italic font-mono mt-2">Menyimpan data emosi dan memori percakapan secara real-time</p>
+            </div>
+
+            {/* View Memory Button */}
+            <button
+              onClick={() => navigate('/iam-mia')}
+              className="flex items-center justify-center gap-2 w-full px-6 py-3 rounded-2xl font-bold font-mono text-xs transition-all border shadow-lg"
+              style={{
+                backgroundColor: `var(--color-primary)/20`,
+                borderColor: `var(--color-primary)/50`,
+                color: `var(--color-primary)`,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = `var(--color-primary)/30`;
+                e.currentTarget.style.borderColor = `var(--color-primary)/70`;
+                e.currentTarget.style.boxShadow = `0 0 20px var(--color-primary)/30`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = `var(--color-primary)/20`;
+                e.currentTarget.style.borderColor = `var(--color-primary)/50`;
+                e.currentTarget.style.boxShadow = `0 0 0px transparent`;
+              }}
+            >
+              <BookOpen size={16} />
+              View Memory & Soul
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Crone Daemon Card */}
       <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 backdrop-blur-3xl shadow-2xl">

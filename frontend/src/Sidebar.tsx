@@ -19,8 +19,8 @@ export default function Sidebar({ onToggleZen, isZenMode, collapsed, setCollapse
   const isPro = config?.is_professional_mode;
 
   const navItems = [
-    { name: isPro ? "Companion Hub" : "Chat with me", icon: <Home size={22} />, path: "/" },
-    { name: isPro ? "Studio Workspace" : "My Garden", icon: <Flower size={22} />, path: "/studio" },
+    { name: isPro ? "Companion" : "Chat me", icon: <Home size={22} />, path: "/" },
+    { name: isPro ? "Mia Studio" : "My Studio", icon: <Flower size={22} />, path: "/studio" },
     { name: "LLM Warehouse", icon: <Brain size={22} />, path: "/llm" },
     { name: isPro ? "Mia Store" : "My Store", icon: <Zap size={22} />, path: "/skills" },
   ];

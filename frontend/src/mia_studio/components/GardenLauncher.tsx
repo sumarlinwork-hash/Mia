@@ -17,9 +17,12 @@ import {
   TerminalSquare,
   Workflow,
   EyeOff,
-  Monitor
+  Monitor,
+  X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import StudioSettings from '../../components/settings/StudioSettings';
+import type { MIAConfig } from '../../types/config';
 
 interface GardenLauncherProps {
   projectName: string;
@@ -40,10 +43,20 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
   const [selectedIde, setSelectedIde] = useState<string>(() => {
     return localStorage.getItem('mia_selected_ide') || '';
   });
+  const [showSettings, setShowSettings] = useState(false);
+  const [config, setConfig] = useState<MIAConfig | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
   const trimmedPrompt = prompt.trim();
+
+  // Fetch config on mount
+  useEffect(() => {
+    fetch('/api/config')
+      .then(r => r.json())
+      .then(d => setConfig(d))
+      .catch(e => console.error("Failed to fetch config:", e));
+  }, []);
 
   // Fetch IDEs on mount
   useEffect(() => {
@@ -132,6 +145,19 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
     setPrompt(text);
   };
 
+  const updateConfigLocal = async (newConfig: MIAConfig) => {
+    setConfig(newConfig);
+    try {
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConfig)
+      });
+    } catch (e) {
+      console.error("Failed to save config:", e);
+    }
+  };
+
   return (
     <div className="h-screen w-full surface-root text-white overflow-hidden font-sans">
       <div className="h-full flex">
@@ -187,7 +213,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
           </div>
 
           <div className="mt-auto flex items-center justify-between px-4 pb-4">
-            <button onClick={() => navigate('/settings')} className="flex items-center gap-2 text-[13px] font-semibold text-white hover:text-white/80 transition-colors">
+            <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 text-[13px] font-semibold text-white hover:text-white/80 transition-colors">
               <Settings size={16} />
               Settings
             </button>
@@ -362,6 +388,29 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
           </div>
         </main>
       </div>
+
+      {/* Settings Modal */}
+      {showSettings && config && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#0a0a0a] border border-white/10 shadow-2xl">
+            {/* Modal Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0a0a0a]/95 backdrop-blur px-6 py-4">
+              <h2 className="text-xl font-bold text-white">Studio Settings</h2>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="p-1 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <StudioSettings config={config} updateConfigLocal={updateConfigLocal} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

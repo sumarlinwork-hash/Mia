@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Cpu, Shield, Sparkles, RefreshCcw } from 'lucide-react';
+import { Cpu } from 'lucide-react';
 import type { MIAConfig } from '../../types/config';
 
 interface StudioKernelSettingsProps {
@@ -51,47 +51,6 @@ export default function StudioKernelSettings({ config, updateConfigLocal }: Stud
                 </button>
               ))}
             </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <Shield size={18} />
-                <span className="text-[11px] uppercase tracking-[0.27em] text-white/40 font-mono">Care Pulse</span>
-              </div>
-              <button
-                onClick={() => setConfig({ care_pulse_enabled: !config.care_pulse_enabled })}
-                className={`w-full rounded-2xl px-4 py-3 font-semibold transition ${config.care_pulse_enabled ? 'bg-secondary text-black' : 'bg-white/5 text-white hover:bg-white/10'}`}
-              >
-                {config.care_pulse_enabled ? 'ENABLED' : 'DISABLED'}
-              </button>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <Sparkles size={18} />
-                <span className="text-[11px] uppercase tracking-[0.27em] text-white/40 font-mono">Resonant Skin</span>
-              </div>
-              <button
-                onClick={() => setConfig({ resonant_skin_enabled: !config.resonant_skin_enabled })}
-                className={`w-full rounded-2xl px-4 py-3 font-semibold transition ${config.resonant_skin_enabled ? 'bg-primary text-black' : 'bg-white/5 text-white hover:bg-white/10'}`}
-              >
-                {config.resonant_skin_enabled ? 'ACTIVE' : 'INACTIVE'}
-              </button>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <RefreshCcw size={18} />
-              <span className="text-[11px] uppercase tracking-[0.27em] text-white/40 font-mono">Auto Sync</span>
-            </div>
-            <label className="flex items-center gap-3 text-sm text-white/80">
-              <input
-                type="checkbox"
-                checked={config.bio_sync_enabled}
-                onChange={() => setConfig({ bio_sync_enabled: !config.bio_sync_enabled })}
-                className="h-4 w-4 rounded border-white/20 bg-black/60 accent-primary"
-              />
-              Sinkronisasi bio-data & memory secara otomatis
-            </label>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 grid gap-2">
             <div className="flex items-center gap-3">
