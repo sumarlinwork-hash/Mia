@@ -120,4 +120,21 @@ Namun terdapat gap penting:
 
 ---
 
+### Fase 6 - Peningkatan Estetika dan UX Premium (Sesuai Fact-Check)
+Berdasarkan pengecekan spesifikasi (*DxDiag: Intel i5-3470, HD Graphics*) dan codebase (Tailwind v4, `index.css`), peningkatan estetika harus berjalan ringan:
+1. **Pembersihan & Optimalisasi Fondasi Desain:**
+   - Hapus sisa kode bawaan Vite (`.hero`, `.vite`, dll) di `App.css`.
+   - Kurangi nilai blur berlapis pada kelas `.surface-*` di `index.css` diganti dengan transparansi (`bg-black/80`) + border tipis untuk mencegah lag pada GPU terintegrasi.
+2. **Peningkatan UI Layout Utama (Shell & Sidebar):**
+   - Desain ulang komponen Sidebar/Shell agar lebih minimalis menggunakan utility Tailwind.
+   - Tambahkan animasi *hover* dengan transisi `transform` yang ringan (menghindari animasi layout yang berat).
+   - Implementasikan **Micro Eco-Spark** di pojok UI sebagai indikator power-state (Hijau/Cyan).
+3. **Mempercantik Halaman Utama (Chat / Companion):**
+   - Tambahkan **Active Model Selector** (Dropdown Model LLM) di atas area input chat.
+   - Terapkan perbaikan padding, margin, dan tipografi (*font-sans* modern) pada *chat bubble*.
+   - Pasang *micro-animations* `.animate-chat-bubble-entry` (dari `index.css`) pada pesan baru.
+4. **Pemeriksaan Keamanan (Sesuai Ritual):**
+   - Wajib eksekusi `stop_mia.bat` sebelum pengerjaan.
+   - Wajib eksekusi `run_check_all.bat` pasca-coding.
+
 > Catatan: Ini adalah rencana langsung untuk diimplementasikan. Setelah selesai, saya dapat memperbarui `docs/1App4Kernell.md` agar mencerminkan status aktual dan perbaikan teknis yang telah dijalankan.

@@ -487,6 +487,18 @@ function AppShell() {
 
           )}
 
+          {/* Micro Eco-Spark - Power State Indicator */}
+          {startupPhase >= 2 && (
+            <div className="fixed top-6 right-8 z-[200] flex items-center gap-2 pointer-events-none">
+              <div 
+                className={`w-3 h-3 rounded-full ${isStudioRoute ? 'bg-cyan-500/50' : 'bg-green-400 animate-pulse'} shadow-[0_0_10px_currentColor] transition-colors duration-1000`}
+              ></div>
+              <span className="text-[10px] font-mono tracking-widest text-white/50 uppercase transition-opacity">
+                {isStudioRoute ? 'SLEEP' : 'WAKE'}
+              </span>
+            </div>
+          )}
+
         </div>
 
   );

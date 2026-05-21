@@ -71,9 +71,9 @@ export default function Sidebar({ onToggleZen, isZenMode, collapsed, setCollapse
                     navigate(item.path);
                   }
                 }}
-                className={`flex items-center gap-4 px-3 py-3 rounded-xl transition-all font-mono group cursor-pointer ${isActive
-                  ? 'bg-primary/20 text-primary border border-primary/30 shadow-[0_0_15px_rgba(0,255,204,0.1)]'
-                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+                className={`flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-300 font-mono group cursor-pointer ${isActive
+                  ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm'
+                  : 'text-white/50 hover:bg-white/5 hover:text-white hover:translate-x-2'
                   } ${collapsed ? 'justify-center' : ''}`}
                 title={collapsed ? item.name : ""}
               >

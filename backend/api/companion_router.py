@@ -585,23 +585,35 @@ async def websocket_heartbeat(websocket: WebSocket):
                     if payload.get("type") == "SWITCH_TO_STUDIO":
                         active_module = "studio"
                         print("[Power-State] Switching to STUDIO. Suspending companion loops.")
-                        crone_daemon.pause_job("proactive_caring")
-                        crone_daemon.pause_job("Heartbeat Daemon")
-                        crone_daemon.pause_job("Memory Pruning")
+                        try:
+                            crone_daemon.pause_job("proactive_caring")
+                            crone_daemon.pause_job("Heartbeat Daemon")
+                            crone_daemon.pause_job("Memory Pruning")
+                        except Exception as e:
+                            print(f"[Power-State] Job pause warning: {e}")
                         await websocket.send_json({"type": "power_state", "state": "SLEEP"})
                         continue
 
                     if payload.get("type") == "SWITCH_TO_COMPANION":
                         active_module = "companion"
                         print("[Power-State] Switching to COMPANION. Resuming companion loops.")
-                        crone_daemon.resume_job("proactive_caring")
-                        crone_daemon.resume_job("Heartbeat Daemon")
-                        crone_daemon.resume_job("Memory Pruning")
+                        try:
+                            crone_daemon.resume_job("proactive_caring")
+                            crone_daemon.resume_job("Heartbeat Daemon")
+                            crone_daemon.resume_job("Memory Pruning")
+                        except Exception as e:
+                            print(f"[Power-State] Job resume warning: {e}")
                         await websocket.send_json({"type": "power_state", "state": "WAKE"})
                         continue
                         
-                    user_text = payload.get("content", data)
-                    client_id = payload.get("client_id")
+                    if payload.get("type") == "chat":
+                        user_text = payload.get("content", data)
+                        client_id = payload.get("client_id")
+                    elif payload.get("type"):
+                        continue
+                    else:
+                        user_text = payload.get("content", data)
+                        client_id = payload.get("client_id")
                 except Exception:
                     user_text = data
                     client_id = None
