@@ -1,8 +1,10 @@
 # 🔍 KERNEL SEPARATION AUDIT REPORT
 
+> **Status Note (2026-05-23):** Audit ini valid sebagai bukti pemisahan awal Companion/Studio/LLM, tetapi bukan lagi status final flagship. SSOT saat ini adalah `docs/1App5Kernell.md`, yang menargetkan 5 kernel: Companion, Studio, LLM Warehouse, Creator, Market. Bagian "Compliance 100%" di bawah hanya berlaku untuk scope audit lama.
+
 **Date:** 2026-05-21  
 **Status:** COMPREHENSIVE AUDIT COMPLETE  
-**Overall Assessment:** ✅ **SUCCESSFULLY SEPARATED**
+**Overall Assessment:** ✅ **SUCCESSFULLY SEPARATED FOR LEGACY 2-KERNEL SCOPE**
 
 ---
 
@@ -23,7 +25,7 @@ Companion and Studio kernels **ARE successfully separated** across all layers:
 | **Resource Suspension** | ✅ SEPARATED | `_handle_module_switch()` pauses/resumes |
 | **Power State** | ✅ SEPARATED | `active_module` flag + event bus |
 
-**Compliance:** 100% ✅
+**Compliance:** 100% ✅ for legacy Companion/Studio scope; not yet complete for `1App5Kernell.md`.
 
 ---
 
@@ -435,7 +437,7 @@ The separation is implemented across all layers:
 
 ## 📚 REFERENCE DOCUMENTS
 
-- **Architecture:** `docs/1App4Kernell.md`
+- **Architecture:** `docs/1App5Kernell.md`
 - **Implementation Plan:** `KERNELLSEPARATION.md`
 - **Drift Analysis:** `docs/DRIFT_ANALYSIS.md`
 - **ARE v2.0 Implementation:** `docs/ARE_v2_0_COMPLETE_IMPLEMENTATION.md`

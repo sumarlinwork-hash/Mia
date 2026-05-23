@@ -1,4 +1,6 @@
 # 🛡️ MIA Unified Provider Architecture: Strategic Plan
+> **Status Note (2026-05-23):** Dokumen ini adalah module spec untuk LLM Provider/LLM Warehouse. SSOT app-level adalah `docs/1App5Kernell.md`. State provider harus mengikuti migrasi existing ke SQLite/state store bila tersedia, bukan memaksa `config.json` sebagai satu-satunya sumber.
+
 **Goal:** Menghilangkan kebingungan URL, memastikan penambahan provider 100% Berhasil, dan mengotomatiskan segalanya di latar belakang.
 
 ## 1. Filosofi "Zero-Configuration"
@@ -83,14 +85,14 @@ Sistem ini menjamin kepatuhan terhadap dokumen `mia_comm.md`:
 
 ---
 
-## 9. Single Source of Truth (SSOT) Enforcement (Rujukan Tunggal)
+## 9. Provider State Consistency (Rujukan Tunggal Modul)
 
 Untuk menjamin konsistensi total, sistem ini mewajibkan:
 
-- **Absolute Authority:** `config.json` adalah satu-satunya rujukan untuk status provider, model ID, dan API Key.
-- **Dynamic Refresh:** Setiap kali ada interaksi (Chat atau Test), sistem WAJIB membaca ulang `config.json` untuk memastikan data paling baru yang digunakan.
+- **Authority:** state provider harus dibaca melalui config/state abstraction yang berlaku (`state_store.py`/SQLite bila aktif, dengan fallback legacy `config.json` jika diperlukan).
+- **Dynamic Refresh:** Setiap kali ada interaksi (Chat atau Test), sistem WAJIB membaca state terbaru melalui abstraction tersebut.
 - **No Hardcoded Defaults:** Backend dilarang memiliki nilai default yang keras (hardcoded) yang bisa menimpa atau mengaburkan data di `config.json`.
-- **Synchronized State:** Perubahan di `config.json` harus langsung tercermin di semua proses (Brain & Studio) tanpa perlu restart aplikasi.
+- **Synchronized State:** Perubahan provider harus langsung tercermin di semua kernel yang memakai LLM Warehouse tanpa perlu restart aplikasi.
 
 ---
 

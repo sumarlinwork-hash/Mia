@@ -1,5 +1,7 @@
 # 📋 ARE v2.0 Implementation Summary
 
+> **Status Note (2026-05-23):** Dokumen ini adalah ringkasan implementasi historis. SSOT arsitektur flagship saat ini adalah `docs/1App5Kernell.md`.
+
 **Date:** 2026-05-21  
 **Status:** DRIFT ANALYSIS COMPLETE + CRITICAL FIXES IMPLEMENTED  
 **Compliance:** 85% → 95% (After fixes)
@@ -216,7 +218,7 @@ displayResponse(response, variation);
 - **Specification:** `docs/mia_sexy_emotion/mia_sexy_emotion.md`
 - **Drift Analysis:** `docs/DRIFT_ANALYSIS.md`
 - **Implementation:** `backend/core/emotion_manager.py`
-- **Architecture:** `docs/1App4Kernell.md`
+- **Architecture:** `docs/1App5Kernell.md`
 
 ---
 

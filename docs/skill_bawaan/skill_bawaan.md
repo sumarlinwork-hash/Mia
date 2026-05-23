@@ -1,6 +1,6 @@
-MIA AI AGENT OS — PRODUCTION SYSTEM DESIGN (FLAGSHIP SPEC)
+MIA AI AGENT OS — PRODUCTION SYSTEM DESIGN (MODULE/HISTORICAL SPEC)
 Version: 2.2 (FINAL CONSOLIDATED + EXECUTION-ALIGNED + GAP-INTEGRATED)
-Status: SINGLE SOURCE OF TRUTH — PRODUCTION ARCHITECTURE BLUEPRINT
+Status: MODULE/HISTORICAL BLUEPRINT — APP-LEVEL SSOT IS docs/1App5Kernell.md
 
 ========================================================
 0. EXECUTIVE SUMMARY
@@ -450,5 +450,5 @@ Where:
 ✔ Mode-based control system (Active - Mode Hub v1.0)
 
 ========================================================
-END OF FINAL SYSTEM SPEC v2.2 (SINGLE SOURCE OF TRUTH)
+END OF MODULE/HISTORICAL SYSTEM SPEC v2.2
 ========================================================

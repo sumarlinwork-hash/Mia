@@ -1,5 +1,7 @@
 # 📝 Code Changes: ARE v2.0 Implementation
 
+> **Status Note (2026-05-23):** Dokumen ini adalah change report historis. SSOT arsitektur flagship saat ini adalah `docs/1App5Kernell.md`.
+
 **File Modified:** `backend/core/emotion_manager.py`  
 **Date:** 2026-05-21  
 **Changes:** Added 5 new methods to EmotionManager class
@@ -318,7 +320,7 @@ for mood in ["Intense", "Affectionate", "Playful", "Soft Distance", "Glow"]:
 - **Specification:** `docs/mia_sexy_emotion/mia_sexy_emotion.md`
 - **Drift Analysis:** `docs/DRIFT_ANALYSIS.md`
 - **Implementation Summary:** `docs/IMPLEMENTATION_SUMMARY.md`
-- **Architecture:** `docs/1App4Kernell.md`
+- **Architecture:** `docs/1App5Kernell.md`
 
 ---
 

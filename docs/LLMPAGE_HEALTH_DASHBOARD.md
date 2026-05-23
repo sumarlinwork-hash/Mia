@@ -1,5 +1,7 @@
 # 🏥 LLM Warehouse Health Dashboard Integration
 
+> **Status Note (2026-05-23):** Dokumen ini adalah laporan implementasi modul LLM Warehouse. SSOT arsitektur flagship saat ini adalah `docs/1App5Kernell.md`.
+
 **Date:** 2026-05-21  
 **Status:** ✅ COMPLETE & TESTED  
 **Build Status:** 100% ERROR-FREE
@@ -120,7 +122,7 @@ const healthScore = p.health_ok + p.health_fail > 0
 
 ## 🔗 KERNEL ALIGNMENT
 
-**Follows 1App4Kernell.md Architecture:**
+**Follows current 1App5Kernell.md Architecture:**
 - ✅ LLM Warehouse is independent kernel
 - ✅ Provider management belongs in LLM Warehouse
 - ✅ Health monitoring is LLM-specific
@@ -162,7 +164,7 @@ const healthScore = p.health_ok + p.health_fail > 0
 
 ## 📚 RELATED DOCUMENTS
 
-- **Architecture:** `docs/1App4Kernell.md`
+- **Architecture:** `docs/1App5Kernell.md`
 - **Kernel Separation:** `docs/KERNEL_SEPARATION_AUDIT.md`
 - **ARE v2.0 Implementation:** `docs/ARE_v2_0_COMPLETE_IMPLEMENTATION.md`
 

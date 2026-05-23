@@ -1,6 +1,8 @@
 # MIA's Memory System (A-Z)
 **Dokumen Referensi Resmi Arsitektur Memori MIA**
 
+> **Status Note (2026-05-23):** Dokumen ini adalah module spec untuk memory. SSOT app-level adalah `docs/1App5Kernell.md`; istilah SSOT di bawah hanya berlaku untuk sinkronisasi subsistem memory.
+
 MIA menggunakan arsitektur memori multi-layer (*Multi-Tiered Memory Architecture*) yang menggabungkan kecepatan database relasional, fleksibilitas *markdown file*, dan pencarian semantik (Vector DB). Sistem ini dirancang untuk memiliki **Single Source of Truth (SSOT)** dan mensinkronisasikan UI (User Interface) dengan Backend secara absolut.
 
 ---

@@ -1,6 +1,8 @@
-# Local LLM Integration Specification (SSOT)
+# Local LLM Integration Specification
 
-This document serves as the Single Source of Truth for the integration of Local Large Language Models (LLMs) into the MIA system, focusing on **GPT4All** as the primary engine for private, offline intelligence.
+> **Status Note (2026-05-23):** Dokumen ini adalah module spec untuk Local LLM. SSOT app-level adalah `docs/1App5Kernell.md`; Local LLM sekarang diposisikan sebagai bagian dari LLM Warehouse Kernel.
+
+This document describes Local Large Language Model integration for MIA. It is subordinate to the app-level SSOT in `docs/1App5Kernell.md`.
 
 ## 1. Architectural Vision
 MIA aims to achieve total cognitive autonomy. By integrating GPT4All, MIA can function without an internet connection, ensuring 100% privacy and zero dependency on external API providers.

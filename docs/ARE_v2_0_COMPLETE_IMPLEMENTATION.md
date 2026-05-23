@@ -1,5 +1,7 @@
 # ✅ ARE v2.0 COMPLETE IMPLEMENTATION REPORT
 
+> **Status Note (2026-05-23):** Dokumen ini adalah laporan implementasi historis untuk ARE/Companion emotion system. SSOT arsitektur flagship saat ini adalah `docs/1App5Kernell.md`. Jika ada perbedaan terminologi kernel, route, Market, atau automation policy, ikuti `1App5Kernell.md`.
+
 **Date:** 2026-05-21  
 **Status:** FULLY IMPLEMENTED & TESTED  
 **Compliance:** 100% SPEC-ALIGNED  
@@ -9,7 +11,7 @@
 
 ## 🎯 EXECUTIVE SUMMARY
 
-All ARE v2.0 (Effortless Intimacy Engine) features have been fully implemented and integrated into the Companion Kernel as an independent system per `docs/1App4Kernell.md`.
+All ARE v2.0 (Effortless Intimacy Engine) features have been implemented for the Companion Kernel. The current architecture reference is `docs/1App5Kernell.md`.
 
 **Compliance Progress:**
 - Before: 70%
@@ -177,7 +179,7 @@ await websocket.send_json({
 
 ### Companion as Independent Kernel
 
-Per `docs/1App4Kernell.md`, Companion is an **Isolated Kernel Environment** with:
+Per `docs/1App5Kernell.md`, Companion is an independent kernel with:
 
 ✅ **Own Emotional State Management**
 - EmotionManager handles all emotional dynamics

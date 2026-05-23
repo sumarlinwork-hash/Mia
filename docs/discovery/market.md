@@ -1,5 +1,11 @@
 MIA MARKETPLACE — FULL EXECUTION FILE (DETAILED)
-Single Source of Truth | UX-Safe | Engineering-Ready
+Module/Historical Spec | UX-Safe | Engineering-Ready
+
+Status Note (2026-05-23):
+- App-level SSOT adalah `docs/1App5Kernell.md`.
+- Dokumen ini tetap berguna untuk state machine, CTA, setup flow, dan execution safety marketplace lama.
+- Market terbaru harus terbagi menjadi Companion Market, Studio Market, dan Creator Market.
+- PostgreSQL/Redis/Docker/WASM di bawah ini adalah future-scale option, bukan syarat MVP. MVP harus memakai SQLite `state_store.db` dan service lokal yang sudah ada.
 
 ========================================
 0. HARD CONSTRAINT (CRITICAL)
@@ -112,7 +118,8 @@ Modules:
 
 [ L6 ] TASK QUEUE
 
-* Redis / in-memory queue
+* MVP: in-memory queue or SQLite-backed queue
+* Future-scale: Redis
 
 ---
 
@@ -130,8 +137,8 @@ Modules:
 
 [ L9 ] DATA LAYER
 
-* PostgreSQL
-* Redis
+* MVP: SQLite via `backend/core/state_store.py`
+* Future-scale: PostgreSQL + Redis
 
 ========================================
 2. CTA STATE MACHINE (FULL LOGIC)

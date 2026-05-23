@@ -1,17 +1,21 @@
 # MIA ARCHITECT STUDIO (MIA-AS) — SPECIFICATION v1.3
-## STATUS: APPROVED FOR IMPLEMENTATION (SSOT)
+## STATUS: MODULE SPEC — SUPERSEDED BY `docs/1App5Kernell.md` FOR APP-LEVEL ARCHITECTURE
+
+> **Alignment Note (2026-05-23):** Dokumen ini masih berguna untuk detail legacy Studio services seperti IDE discovery, Git guard, sandbox runner, dan websocket stream. Namun arah produk terbaru menetapkan `/studio` sebagai **agent cockpit**, bukan web IDE dan bukan local-IDE-first workflow. Local IDE tetap boleh ada sebagai integrasi opsional, tetapi alur utama adalah prompt -> plan -> approval -> tools -> activity stream -> review changes.
 
 ### VISION & OBJECTIVE
 MIA Architect Studio (MIA-AS) adalah antarmuka khusus pengembang (Developer Cockpit) di dalam ekosistem MIA yang memungkinkan kolaborasi coding tingkat lanjut antara User dan MIA. Studio ini mentransformasi MIA dari sekadar Chatbot biasa menjadi **Autonomous Pair-Programmer Orchestrator**.
 
-Berbeda dengan IDE tradisional di browser yang meniru editor multi-file (VCS), MIA-AS menganut **Sleek Codex-Style Paradigm**:
-- **Local IDE as Supreme Editor:** Dibandingkan memaksakan Monaco Editor atau browser file explorer setengah matang, Studio mempercayakan penulisan kode penuh kepada IDE lokal Bos (seperti **VS Code, Cursor, Trae, Qoder, Codex, IntelliJ**, dll) yang sudah terkonfigurasi di desktop lokal Bos.
-- **IDE Auto-Discovery Service:** Saat pertama kali masuk `/studio`, backend secara otomatis mendeteksi IDE lokal apa saja yang terinstal pada sistem Windows Bos dan menampilkannya di status/dropdown bar `/studio` agar mudah diluncurkan dengan satu klik.
+Berbeda dengan IDE tradisional di browser yang meniru editor multi-file (VCS), MIA-AS menganut **Agent Cockpit Paradigm**:
+- **No Browser IDE / No Monaco Foundation:** Browser tidak menjadi tempat editing manual utama. Jika ada tampilan kode, sifatnya preview, diff, atau read-only inspection.
+- **Local IDE as Optional Companion:** IDE lokal seperti VS Code/Cursor/Trae boleh diluncurkan dari Studio, tetapi hanya sebagai integrasi opsional. Ia tidak menjadi pusat arsitektur Studio.
 - **Interactive Prompt & Observation Cockpit:** Tampilan `/studio` difokuskan menjadi dashboard kontrol minimalis dan futuristik:
-  - **Sisi Kiri:** Kolom input Prompt & Chat dengan MIA (untuk memandu, merencanakan, dan memerintahkan AI).
-  - **Sisi Kanan:** Visualisasi real-time alur berpikir MIA (`GraphViewer`) menggunakan event-driven graph stream dan panel monitoring.
+  - **Composer:** input task/follow-up untuk memberi instruksi ke agent.
+  - **Activity Stream:** event real-time seperti Thought, Analyzed, Searched, Edited, Ran command, Waiting, Verification result.
+  - **Review Changes:** diff read-only, changed-files summary, undo own changes, dan run verification.
+  - **Logs/Graph:** terminal log dan graph viewer menjadi detail observability, bukan pusat UI tunggal.
 - **Git Workspace Guard:** Workspace proyek diperlakukan sebagai repositori Git aktif. Studio mendeteksi serta menampilkan nama **Active Branch** dan status **Dirty Index** (jumlah file yang berubah tapi belum di-commit) secara real-time di antarmuka Studio untuk menjamin integritas kode Bos.
-- **Auto-Save Engine:** Setiap kali MIA menulis atau memodifikasi kode, kode tersebut secara otomatis disimpan langsung ke disk (*Auto-Save* aktif secara default) dan disinkronkan ke editor lokal Bos tanpa intervensi manual.
+- **Agent Patch / Auto-Save Engine:** Setiap kali MIA menulis atau memodifikasi kode, perubahan disimpan melalui service backend yang aman, lalu ditampilkan sebagai Review Changes. Editor lokal hanya menerima efek file system jika user membukanya, bukan menjadi alur utama.
 
 ---
 
@@ -19,8 +23,8 @@ Berbeda dengan IDE tradisional di browser yang meniru editor multi-file (VCS), M
 
 *   **P1 — CONTRACT FIRST**
     Semua eksekusi dan manipulasi file wajib menaati hukum tertulis di `mia_studio_execution_contract.md`.
-*   **P2 — LOCAL IDE & GIT SUPREMACY**
-    Editor browser ditiadakan. Semua aktivitas pengeditan dilakukan di IDE lokal terpilih. Integritas versi dikawal ketat oleh sistem Git repositori lokal.
+*   **P2 — AGENT COCKPIT & REVIEW CHANGES**
+    Editor browser ditiadakan. Perubahan file dilakukan oleh agent/tool backend melalui approval/policy gate, lalu ditampilkan sebagai diff/read-only Review Changes. IDE lokal boleh dipakai opsional untuk inspeksi manual.
 *   **P3 — STATUTORY SANDBOX ISOLATION**
     Meskipun kode ditulis langsung ke workspace, eksekusi latar belakang (`RUN`) wajib dibatasi oleh batas RAM 256MB dan waktu timeout keras 25 detik di dalam subproses atau container Docker terisolasi.
 *   **P4 — DETERMINISM OVER MAGIC**
@@ -32,18 +36,19 @@ Berbeda dengan IDE tradisional di browser yang meniru editor multi-file (VCS), M
 
 #### FRONTEND ROUTE (`/studio`):
 *   **Full-Viewport Shell:** Sidebar global dan resonant orchestrator MIA disembunyikan di rute `/studio` agar memberikan fokus visual premium layaknya desktop console.
-*   **Garden Launcher Mode:** Tampilan awal *My Garden* dengan kolom input prompt terpusat bergaya gelap (*dark Codex-like*).
-*   **Workspace Mode:** Split-screen minimalis setelah prompt disubmit:
-    - **Panel Kiri:** Kontrol percakapan & instruksi perbaikan kode langsung ke asisten MIA.
-    - **Panel Kanan:** Visualisasi Graph dinamis (`GraphViewer`) untuk melihat MIA berpikir dan berinteraksi asinkron.
-    - **Panel Bawah:** `StudioTerminal` streaming logs untuk memantau keluaran *dry-run* atau eksekusi proses lokal.
-*   **Cockpit Topbar:** Berisi **IDE Selector Dropdown** (hasil deteksi lokal), indikator status **Git Branch & Dirty Index**, tombol **Zen Mode (`EyeOff`)**, dan sakelar **Settings (Auto-Save toggle)**.
+*   **Garden Launcher Mode:** Tampilan awal dengan kolom input prompt terpusat.
+*   **Workspace Mode:** Agent cockpit setelah prompt disubmit:
+    - **Activity Stream:** transcript kerja agent.
+    - **Bottom Composer:** follow-up instruction, stop action, auto-review/model/effort control, pending approval state.
+    - **Review Changes:** changed-files summary dan diff read-only.
+    - **Details:** terminal log, graph viewer, Git status, dan optional local IDE launcher.
+*   **Cockpit Topbar:** Berisi status kernel, active model, Git Branch/Dirty Index, pending approval count, running task count, dan emergency stop. IDE Selector boleh ada sebagai menu tambahan, bukan kontrol utama.
 
 #### BACKEND SERVICES (STRICT DOMAIN ISOLATION):
 1.  **StudioSessionManager:** Mengatur status sesi, draft, dan pemetaan Execution ID.
 2.  **StudioFileService (Proxy Layer):**
     - Mengelola penulisan kode asinkron dengan taktik **Atomic Writing** (tulis ke temp -> validasi -> rename) untuk mencegah file korup di Windows.
-    - **Auto-Save Handler:** Menyuntikkan kode langsung ke disk ketika disetujui, lalu memicu notifikasi update.
+    - **Agent Patch Handler:** Menulis perubahan ke disk setelah task/approval sesuai policy, lalu memicu changed-files summary dan Review Changes.
 3.  **StudioIDEDiscoveryService:**
     - Mendeteksi letak eksekusi aplikasi IDE lokal di Windows (Cursor, Trae, Qoder, VS Code, IntelliJ) melalui pemindaian registry (`HKCU` / `HKLM`) dan path lingkungan (*Environment variables*).
     - Menyediakan API `GET /api/studio/ide/list` dan `POST /api/studio/ide/open`.
@@ -63,17 +68,17 @@ Berbeda dengan IDE tradisional di browser yang meniru editor multi-file (VCS), M
 *   **Output:** `docs/mia_studio/mia_studio_execution_contract.md`
 *   **Status:** ✔ **LULUS**
 
-#### PHASE 1 — MINIMAL COCKPIT CORE (FOUNDATION)
-*   **Goal:** Membangun antarmuka Garden Launcher terpusat, split-screen minimalis, dan IDE discovery dropdown.
+#### PHASE 1 — MINIMAL AGENT COCKPIT CORE (FOUNDATION)
+*   **Goal:** Membangun antarmuka Garden Launcher terpusat, activity stream, bottom composer, dan Review Changes.
 *   **Frontend:**
     - [ ] `GardenLauncher.tsx` - Prompt builder hitam Codex-style.
-    - [ ] `StudioPage.tsx` - Workspace mode: Prompt Chat kiri + Graph/Terminal kanan & bawah.
-    - [ ] IDE Selector Dropdown di Topbar.
+    - [ ] `StudioPage.tsx` - Workspace mode: Activity Stream + Bottom Composer + Review Changes.
+    - [ ] IDE Selector Dropdown hanya sebagai optional integration.
 *   **Backend:**
     - [ ] `StudioIDEDiscoveryService` dengan pemindai registry Windows.
     - [ ] API `GET /api/studio/ide/list` dan `POST /api/studio/ide/open`.
     - [ ] `StudioExecutionService` untuk menjalankan skrip CLI terisolasi.
-*   **Exit Criteria:** User bisa memilih IDE lokal dari browser, meluncurkannya, menulis prompt awal, dan beralih ke Workspace split-screen.
+*   **Exit Criteria:** User bisa menulis prompt awal, melihat activity stream, melihat changed-files summary, membuka Review Changes, dan menjalankan verifikasi tanpa editor browser.
 
 #### PHASE 2 — GIT GUARD & AUTO-SAVE CONFIGURATION (SAFE WORKSPACE)
 *   **Goal:** Memasang pelacak repositori Git lokal dan konfigurasi mesin Auto-Save.
@@ -124,8 +129,9 @@ Berbeda dengan IDE tradisional di browser yang meniru editor multi-file (VCS), M
 ---
 
 ### 4. DEFINITION OF DONE
-MIA Architect Studio dinyatakan **100% Selesai** jika:
-1.  Bos dapat mendikte/menulis perintah di `/studio` dan melihat logika MIA dieksekusi di `GraphViewer`.
-2.  Kode otomatis tersimpan di folder proyek lokal (*Auto-Save*) dan siap diedit/diuji di IDE lokal Bos (Trae/Cursor/VS Code).
-3.  Status Git repositori terintegrasi penuh dan terupdate secara real-time di browser.
-4.  Semua komponen aman di bawah batas sandbox defensif yang ketat.
+MIA Architect Studio dinyatakan selaras dengan `1App5Kernell.md` jika:
+1.  Bos dapat memberi perintah di `/studio` dan melihat activity stream agent secara real-time.
+2.  Perubahan file tampil sebagai changed-files summary dan Review Changes read-only.
+3.  Perubahan yang dibuat agent bisa diverifikasi, dihentikan, atau diminta follow-up.
+4.  Status Git repositori terintegrasi penuh dan terupdate secara real-time di browser.
+5.  Semua komponen aman di bawah batas sandbox defensif yang ketat.

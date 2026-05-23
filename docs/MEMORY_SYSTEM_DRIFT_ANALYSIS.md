@@ -1,4 +1,6 @@
 # MIA Memory System - Drift Analysis Report
+
+> **Status Note (2026-05-23):** Dokumen ini adalah audit modul memory. SSOT arsitektur flagship saat ini adalah `docs/1App5Kernell.md`; istilah SSOT di dokumen ini hanya berlaku untuk subsistem memory, bukan keseluruhan app.
 **Date**: May 21, 2026  
 **Analyzer**: Kiro Agent  
 **Status**: ✅ **100% COMPLIANT** (No Critical Drift Detected)
@@ -196,7 +198,7 @@ async def prune_memory_nightly():
 
 ## 6. Kernel Separation & Memory Isolation ✅
 
-### Specification Requirements (from `docs/1App4Kernell.md`)
+### Specification Requirements (current architecture reference: `docs/1App5Kernell.md`)
 - Companion Kernel: Personal chat, emotional state, memory access
 - Studio Kernel: Code editing, autonomous execution, NO memory access
 - Strict tool scoping per kernel

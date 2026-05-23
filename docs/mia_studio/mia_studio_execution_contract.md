@@ -1,11 +1,13 @@
 # MIA STUDIO EXECUTION CONTRACT (V1.3)
 TYPE: ARCHITECTURAL LAW (NON-NEGOTIABLE)
-STATUS: APPROVED (REVISED FOR SLEEK CODEX & LOCAL IDE PARADIGM)
+STATUS: MODULE CONTRACT — ALIGNED UNDER `docs/1App5Kernell.md`
 SCOPE: StudioExecutionService, StudioFileService, StudioIDEDiscoveryService, StudioGitGuard
+
+> **Alignment Note (2026-05-23):** Kontrak ini tetap berlaku untuk keamanan backend Studio. Namun "Local IDE" adalah integrasi opsional. Alur utama Studio terbaru adalah agent cockpit: prompt -> plan -> approval -> tool execution -> activity stream -> Review Changes.
 
 ---
 
-## 1. LOCAL IDE DISCOVERY & LAUNCHER SAFETY (THE "BRIDGE" RULE)
+## 1. OPTIONAL LOCAL IDE DISCOVERY & LAUNCHER SAFETY (THE "BRIDGE" RULE)
 
 ### 1.1 Discovery Scanner Sanitization
 - **Windows Registry Guard:** Layanan `StudioIDEDiscoveryService` diperbolehkan memindai registry Windows (`HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall` atau `HKLM`) untuk mencari direktori instalasi IDE (VS Code, Cursor, Trae, Qoder, Codex, IntelliJ).
@@ -32,9 +34,10 @@ SCOPE: StudioExecutionService, StudioFileService, StudioIDEDiscoveryService, Stu
 - **No Direct Mutation:** Dilarang menggunakan panggilan sistem langsung dari sandbox untuk mengubah file di luar direktori proyek. Semua operasi tulis dan baca wajib melewati `StudioFileService`.
 - **Path Normalization:** Validasi jalur absolut (`os.path.abspath()`) dan perbandingan awalan folder (`real_path.startswith(ALLOWED_ROOT)`) wajib ditegakkan untuk memblokir traversal `../` atau symbolic link escape.
 
-### 3.2 Auto-Save Execution Law
+### 3.2 Agent Patch / Auto-Save Execution Law
 - **Atomic Writing:** Setiap penulisan kode asinkron oleh MIA wajib menggunakan taktik: `Write to Temp` -> `Validate Syntax` -> `Atomic Rename`. Hal ini untuk menjamin berkas proyek tidak korup di Windows jika proses terputus.
-- **Auto-Save Status Sync:** Ketika Auto-Save aktif, berkas tertulis harus segera mengirimkan sinyal `"project_updated"` melalui WebSocket ke frontend agar status repositori disinkronkan.
+- **Review Changes First:** Perubahan yang dibuat agent wajib menghasilkan changed-files summary dan diff read-only. Auto-save boleh tetap aktif untuk penyimpanan teknis, tetapi UI harus tetap memperlihatkan perubahan sebagai Review Changes.
+- **Auto-Save Status Sync:** Ketika file berubah, backend harus mengirimkan sinyal `"project_updated"` atau event activity yang setara melalui WebSocket agar status repositori disinkronkan.
 
 ---
 
@@ -55,10 +58,10 @@ Untuk menjamin kedisiplinan pembangunan, urutan pembuatan modul wajib mengikuti 
 
 ```mermaid
 graph TD
-    A["1. StudioIDEDiscoveryService (Registry Scan & IDE Whitelist)"] --> B["2. StudioGitGuard (Safe Branch & Index Tracking)"]
-    B --> C["3. StudioFileService (Auto-Save Sync & Path Guard)"]
+    A["1. Studio Activity Stream + Composer Contract"] --> B["2. StudioGitGuard (Safe Branch & Index Tracking)"]
+    B --> C["3. StudioFileService (Agent Patch, Review Changes & Path Guard)"]
     C --> D["4. StudioExecutionService (Sandbox Subprocess & Registry)"]
-    D --> E["5. StudioPage & GardenLauncher UI (Pure Cockpit Split-Screen)"]
+    D --> E["5. Optional StudioIDEDiscoveryService (Registry Scan & IDE Whitelist)"]
 ```
 
 ---
@@ -75,6 +78,6 @@ Contoh normalisasi error:
 ---
 
 ### FINAL APPROVAL UNTUK HAL DI ATAS — MIA STUDIO EXECUTION CONTRACT v1.3
-**STATUS:** FULLY APPROVED — PROCEED TO BUILD WITH PARADIGM SHIFT
+**STATUS:** MODULE CONTRACT — PROCEED UNDER `docs/1App5Kernell.md`
 
-Hukum arsitektur ini mengunci kedisiplinan kita agar tidak membuat komponen redundan, melainkan fokus membangun jembatan lokal yang super aman, kencang, dan terintegrasi dengan Git. Lanjutkan pembangunan dengan disiplin besi!
+Hukum arsitektur ini mengunci keamanan backend Studio. Jangan membangun browser IDE. Fokus pada agent cockpit, activity stream, Review Changes, tool execution, dan integrasi lokal yang aman bila dibutuhkan.

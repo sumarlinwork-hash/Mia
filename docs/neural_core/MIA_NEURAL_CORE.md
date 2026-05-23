@@ -1,7 +1,9 @@
 # 🧠 MIA NEURAL CORE: Master Communication & Resilience Blueprint
+
+> **Status Note (2026-05-23):** Dokumen ini adalah module spec untuk komunikasi, sinkronisasi real-time, dan resiliensi. SSOT app-level adalah `docs/1App5Kernell.md`.
 ## Unified Architecture Manual (v3.0)
 
-Dokumen ini adalah **Single Source of Truth** yang mengonsolidasikan arsitektur komunikasi, sinkronisasi real-time, dan sistem imun resiliensi MIA ke dalam satu dokumen terpadu.
+Dokumen ini mengonsolidasikan arsitektur komunikasi, sinkronisasi real-time, dan sistem imun resiliensi MIA sebagai module spec di bawah `docs/1App5Kernell.md`.
 
 ```mermaid
 graph TD

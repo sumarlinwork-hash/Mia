@@ -1,14 +1,14 @@
 # MIA ARCHITECT STUDIO (MIA-AS) — MASTER PLAN V1.0
-## PANDUAN UTAMA PEMBANGUNAN (SINGLE SOURCE OF TRUTH - SSOT)
-**PARADIGMA:** Sleek Codex Cockpit + Local IDE Discovery + Git Workspace Guard
+## MODULE/HISTORICAL PLAN — APP-LEVEL SSOT: `docs/1App5Kernell.md`
+**PARADIGMA TERBARU:** Studio Agent Cockpit + Activity Stream + Review Changes + Optional Local IDE Integration
 
-Master Plan ini disusun sebagai cetak biru komprehensif dari awal hingga akhir untuk membangun **MIA Architect Studio (MIA-AS)** menjadi antarmuka pengembangan kelas flagship (*Flagship-Grade Developer Cockpit*) yang sangat aman, responsif, dan terintegrasi penuh ke lingkungan lokal.
+Master Plan ini adalah dokumen historis/module-level untuk membangun **MIA Architect Studio (MIA-AS)**. Untuk keputusan app-level terbaru, ikuti `docs/1App5Kernell.md`. Jika dokumen ini menyebut Local IDE sebagai pusat workflow, tafsirkan ulang sebagai integrasi opsional; pusat `/studio` terbaru adalah agent cockpit dengan activity stream dan Review Changes.
 
 ---
 
 ## 🗺️ PENDAHULUAN & FILOSOFI DESAIN
 
-MIA-AS tidak berupaya meniru IDE browser yang berat dan lambat. Sebaliknya, Studio ini bertindak sebagai **"Otak dan Pusat Orkestrasi Asisten"** yang beroperasi selaras di samping editor desktop tangguh Bos (Trae, Cursor, VS Code, dll).
+MIA-AS tidak berupaya meniru IDE browser yang berat dan lambat. Studio bertindak sebagai **agent cockpit**: user memberi instruksi, MIA merencanakan, meminta approval, menjalankan tools, menampilkan activity stream, dan menyajikan Review Changes. Editor desktop (Trae, Cursor, VS Code, dll) tetap boleh dibuka sebagai alat inspeksi opsional.
 
 ```
 +-------------------------------------------------------------------+
@@ -30,8 +30,8 @@ MIA-AS tidak berupaya meniru IDE browser yang berat dan lambat. Sebaliknya, Stud
 +-------------------------------------------------------------------+
 |                        LOCAL MACHINE DISK                         |
 |   +-----------------------+           +-----------------------+   |
-|   |    LOCAL IDE ACTIVE   | <-------> |    LOCAL GIT REPO     |   |
-|   | (Trae, Cursor, VSC)   | CTRL+S    | (Branch & Dirty State)|   |
+|   | OPTIONAL LOCAL IDE    | <-------> |    LOCAL GIT REPO     |   |
+|   | (Trae, Cursor, VSC)   | inspect   | (Branch & Dirty State)|   |
 |   +-----------------------+           +-----------------------+   |
 +-------------------------------------------------------------------+
 ```
@@ -98,7 +98,7 @@ Untuk memberikan kesan premium yang memukau pengembang saat pertama kali melihat
 
 ## 🏁 MASTER IMPLEMENTATION PHASES (FASE PEMBANGUNAN)
 
-### FASE 1: IDE Discovery & Launcher Droptop (Fondasi Konektivitas)
+### FASE 1: Agent Cockpit + Optional IDE Discovery (Fondasi Konektivitas)
 *   **Pekerjaan Backend:**
     *   Membangun file `backend/studio/ide_discovery_service.py`.
     *   Membuat modul pemindai Windows Registry dan memetakan letak eksekusi Trae, Cursor, VS Code, dll.
@@ -106,7 +106,7 @@ Untuk memberikan kesan premium yang memukau pengembang saat pertama kali melihat
 *   **Pekerjaan Frontend:**
     *   Membangun Dropdown IDE Selector di Topbar `StudioPage.tsx` yang secara otomatis memanggil API list saat halaman dimuat.
     *   Menghubungkan aksi klik menu dropdown ke API launcher untuk membuka editor desktop Bos dalam sekali klik.
-*   **Uji Validasi:** Membuka `/studio`, memilih "Cursor" atau "Trae" dari dropdown, mengklik tombol, dan memastikan editor di komputer lokal Bos terbuka secara instan pada folder proyek.
+*   **Uji Validasi:** Membuka `/studio`, mengirim prompt, melihat activity stream, dan membuka Review Changes. IDE lokal boleh diluncurkan dari dropdown sebagai validasi tambahan, bukan alur utama.
 
 ### FASE 2: Git Workspace Guard & Auto-Save Configuration (Keamanan Proyek)
 *   **Pekerjaan Backend:**
@@ -158,8 +158,8 @@ Untuk memberikan kesan premium yang memukau pengembang saat pertama kali melihat
 
 ## 🏆 DEFINITION OF DONE (DOD) KELAS FLAGSHIP
 
-MIA Architect Studio dinyatakan **Selesai Secara Sempurna** jika memenuhi 4 pilar berikut:
+MIA Architect Studio dinyatakan selaras dengan `1App5Kernell.md` jika memenuhi 4 pilar berikut:
 1.  **Zero-Configuration Launch:** Cukup buka `/studio`, sistem secara otomatis mendeteksi IDE komputer lokal dan siap diluncurkan tanpa konfigurasi manual.
-2.  **Zero-Latency Sync:** Setiap perubahan kode dari MIA langsung tersimpan di disk (*Auto-Save*) dan siap di-load oleh IDE lokal secara instan.
+2.  **Transparent Change Review:** Setiap perubahan kode dari MIA muncul sebagai changed-files summary dan Review Changes read-only sebelum dianggap selesai.
 3.  **Strict Sandbox Immunity:** Eksekusi kode asing tidak pernah menembus batas aman memori (256MB) dan durasi (25 detik).
 4.  **Premium UX Certified:** Lulus pengujian integrasi mendalam `.\run_check_all.bat` dengan status **SEHAT - 100% ERROR-FREE** dan konsisten berjalan pada kelancaran animasi **60 FPS**.
