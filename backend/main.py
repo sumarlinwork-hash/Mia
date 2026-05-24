@@ -42,6 +42,8 @@ from mia_comm.brain_orchestrator import brain_orchestrator
 from api.llm_router import llm_router
 from api.studio_router import studio_router
 from api.companion_router import companion_router
+from api.market_router import market_router
+from api.creator_router import creator_router
 
 # Lifespan context for startup and shutdown procedures
 @asynccontextmanager
@@ -107,6 +109,8 @@ threading.Thread(target=start_hotkey_listener, daemon=True).start()
 app.include_router(llm_router)
 app.include_router(studio_router)
 app.include_router(companion_router)
+app.include_router(market_router)
+app.include_router(creator_router)
 
 if __name__ == "__main__":
     uvicorn.run(

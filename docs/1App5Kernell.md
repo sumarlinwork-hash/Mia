@@ -1140,6 +1140,84 @@ Status bar ini adalah wajah governance MIA: user selalu tahu sistem sedang apa.
 
 ---
 
+## UI Theme Governance
+
+Setiap perubahan UI di MIA wajib mengikuti aturan tema global berikut untuk memastikan konsistensi visual dan pengalaman pengguna.
+
+### Aturan Tema Global
+
+Semua kernel kecuali Studio **wajib** menggunakan pengaturan tema global dari Companion Settings:
+
+- `config.appearance.theme_hue`: pilihan tema warna (cyan, magenta, yellow, green, blue, red, pink, orange)
+- `config.appearance.ui_opacity`: transparansi UI elemen (default 0.65)
+- `config.appearance.background_type`: jenis background (color, gradient, image)
+- `config.appearance.background_url`: URL image background jika tipe image
+- `config.appearance.background_fit`: ukuran background (cover, contain)
+
+### Implementasi per Kernel
+
+| Kernel | Aturan Tema | Catatan |
+| :--- | :--- | :--- |
+| **Companion** | Gunakan `useTheme()` + `config.appearance.*` | Master kontrol tema global. Settings ada di Companion. |
+| **Creator** | Ikuti `config.appearance.theme_hue` + `ui_opacity` dari Companion | Creator tidak punya kontrol tema sendiri. Semua komponen Creator menggunakan CSS vars dan hooks global. |
+| **LLM Warehouse** | Ikuti `config.appearance.theme_hue` + `ui_opacity` dari Companion | Tampilkan tema sesuai setting global. |
+| **Market** | Ikuti `config.appearance.theme_hue` + `ui_opacity` dari Companion | Semua komponen skill/plugin ikuti tema global. |
+| **Studio** | Tema bebas (terkunci saat ini) | Pembatasan ini bisa diubah di fase future. Untuk sekarang, Studio boleh punya tema internal sendiri. |
+
+### Pola Implementasi
+
+Untuk setiap komponen UI baru di Companion, Creator, LLM, atau Market:
+
+1. **Import hooks tema:**
+   ```typescript
+   import { useConfig } from './hooks/useConfig';
+   import { useTheme } from './hooks/useTheme';
+   ```
+
+2. **Baca nilai global:**
+   ```typescript
+   const { config } = useConfig();
+   const { hue } = useTheme();
+   const uiOpacity = config?.appearance?.ui_opacity ?? 0.65;
+   const currentHue = normalizeThemeHue(config?.appearance?.theme_hue ?? hue);
+   ```
+
+3. **Gunakan CSS vars dan inline style:**
+   ```typescript
+   <div
+     style={{
+       backgroundColor: `rgba(15, 23, 42, ${Math.max(0.12, uiOpacity)})`,
+       borderColor: `var(--color-primary)`
+     }}
+   >
+   ```
+
+4. **Jangan hardcode warna atau opacity lokal.**
+   Semua nilai visual harus derived dari `config.appearance.*`.
+
+### Tools yang Membantu
+
+- `normalizeThemeHue()`: konversi string hue ke format canonical
+- `theme.colors[hue]`: akses palet warna untuk hue tertentu
+- CSS var `--color-primary`, `--color-primary-surface`, `--color-primary-glow`: diupdate otomatis berdasarkan hue
+- `--ui-opacity`: CSS var yang di-set di `App.tsx` dari config
+
+### Pengecualian
+
+- **Studio**: dibiarkan menggunakan tema apapun saat ini. Tidak perlu mengikuti aturan tema global.
+- **Dark mode constant**: background dan text color tetap dark untuk konsistensi, tetapi accent primary boleh berubah sesuai tema.
+
+### Verifikasi
+
+Setiap PR yang menyentuh komponen UI harus:
+
+1. Memastikan tidak ada warna hardcode (kecuali neutral/dark backgrounds yang konstan)
+2. Menggunakan `config.appearance.*` untuk opacity dan hue-dependent colors
+3. Tidak menambah setting tema lokal di kernel selain Companion
+4. Lolos build tanpa TS error
+
+---
+
 ## Action and Automation Orchestrator
 
 Automation bukan kernel keenam. Automation adalah layanan bersama di Shell yang menghubungkan intent user dengan kernel yang tepat, skill yang tepat, approval yang tepat, dan audit log yang tepat.
@@ -1884,6 +1962,7 @@ MVP 3: Market Split
 MVP 4: Creator Skeleton
 
 - Creator page
+- Creator page now includes a theme-aware DALL preview card UI, matching LLM Warehouse opacity and palette rules
 - asset bin
 - preview panel
 - timeline placeholder
@@ -1935,42 +2014,75 @@ Audit cepat terhadap kondisi repo saat ini menunjukkan bahwa dokumen ini adalah 
 
 ### Sudah Ada / Sebagian Selaras
 
-- **Backend micro-kernel sudah modular sebagian.**
+- [x] **Backend micro-kernel sudah modular sebagian.**
   `backend/main.py` sudah ringan dan hanya melakukan startup, middleware, static mount, dan mounting router: `llm_router`, `studio_router`, `companion_router`.
 
-- **Kernel backend yang sudah ada: Companion, Studio, LLM.**
+- [x] **Kernel backend yang sudah ada: Companion, Studio, LLM.**
   File yang sudah ada:
   - `backend/api/companion_router.py`
   - `backend/api/studio_router.py`
   - `backend/api/llm_router.py`
 
-- **Power-state switching Companion/Studio sudah ada sebagian.**
+- [x] **Power-state switching Companion/Studio sudah ada sebagian.**
   Frontend `App.tsx` mengirim `SWITCH_TO_STUDIO` saat masuk `/studio`, selain itu mengirim `SWITCH_TO_COMPANION`. Backend `companion_router.py` menangani dua event ini dan mengirim state `SLEEP` / `WAKE`.
 
-- **Frontend lazy loading sudah ada.**
+- [x] **Frontend lazy loading sudah ada.**
   `frontend/src/App.tsx` sudah memakai `React.lazy()` untuk Companion, Studio, LLM, SkillMarketplace, Emotion, IamMia, Crone, dan Onboarding.
 
-- **Companion mode professional sudah ada sebagai toggle UI/config.**
+- [x] **Frontend 5 kernel routes sudah dimulai.**
+  `frontend/src/App.tsx` sudah menambah route `/companion`, `/market`, `/creator`, dan alias `/skills` -> `/market`.
+
+- [x] **Creator theme wiring kini selaras dengan shared app theme.**
+  `frontend/src/Creator.tsx` sekarang menggunakan `useTheme()`, `config.appearance.theme_hue`, dan variabel CSS untuk styling preview card, bukan palet lokal terpisah. Creator tidak menawarkan pengaturan tema sendiri; mengikuti tema global Companion.
+
+- [x] **Validasi build frontend selesai.**
+  `npm run build` di `frontend` berhasil setelah memperbaiki variabel TS yang tidak terpakai di `Creator.tsx`.
+
+- [x] **UI Theme Governance rules sudah terdokumentasi.**
+  Bagian baru "UI Theme Governance" menjelaskan aturan tema global untuk setiap kernel dan pola implementasi yang wajib diikuti.
+
+- [ ] **Studio activity stream / review changes UI masih belum lengkap.**
+  `frontend/src/mia_studio/components/StudioPage.tsx` sudah punya prompt chat, run/stop, integrasi IDE, terminal, dan graph panel, tetapi belum ada panel event stream dan review changes surface seperti di dokumen.
+
+- [x] **Power-state switching kini mendukung Creator / Market / LLM route events.**
+  `frontend/src/App.tsx` mengirim `SWITCH_TO_CREATOR`, `SWITCH_TO_MARKET`, dan `SWITCH_TO_LLM` berdasarkan route.
+
+- [x] **Backend shell event handling kini mendukung 5 kernel.**
+  `backend/api/companion_router.py` sekarang menangani `SWITCH_TO_COMPANION`, `SWITCH_TO_STUDIO`, `SWITCH_TO_CREATOR`, `SWITCH_TO_MARKET`, dan `SWITCH_TO_LLM`.
+
+- [x] **Market dan Creator backend router skeleton sudah dibuat.**
+  `backend/api/market_router.py` dan `backend/api/creator_router.py` sudah tersedia sebagai awal pemisahan kernel.
+
+- [x] **Sidebar navigation sudah menampilkan 5 kernel.**
+  `frontend/src/Sidebar.tsx` sekarang menampilkan Companion, Studio, LLM Warehouse, Creator, dan Market.
+
+- [x] **Creator dan Market frontend skeleton ada.**
+  `frontend/src/Creator.tsx` dan `frontend/src/Market.tsx` sudah dibuat sebagai placeholder kernel.
+
+- [x] **Companion mode professional sudah ada sebagai toggle UI/config.**
   `frontend/src/components/settings/CompanionSettings.tsx` punya toggle `is_professional_mode`. Ini selaras sebagian dengan konsep Companion `professional` mode, tetapi belum punya workflow assistant nyata.
 
-- **Companion intimacy mode sudah ada.**
+- [x] **Companion intimacy mode sudah ada.**
   `frontend/src/Companion.tsx` punya toggle intimacy dan endpoint `/api/intimacy/toggle`, termasuk touch endpoint `/api/intimacy/touch`.
 
-- **LLM Warehouse sudah ada sebagai halaman dan router.**
+- [x] **LLM Warehouse sudah ada sebagai halaman dan router.**
   `frontend/src/LLMPage.tsx` dan `backend/api/llm_router.py` sudah menjadi basis untuk provider/model management.
 
-- **Studio backend punya beberapa fondasi.**
+- [x] **Studio backend punya beberapa fondasi.**
   `backend/studio/` sudah punya service untuk execution, file/versioning, git guard, IDE discovery, graph stream, locks, logs, dan tests. `backend/api/studio_router.py` sudah menyediakan endpoint Git status, IDE discovery, skills, dan websocket events.
 
-- **Skill scoping Companion/Studio sudah ada sebagian.**
+- [x] **Skill scoping Companion/Studio sudah ada sebagian.**
   `backend/skill_manager.py` sudah memblokir skill berdasarkan `category`:
   - Companion boleh `companion` dan `shared`
   - Studio boleh `studio` dan `shared`
 
-- **Marketplace lama sudah ada.**
+- [x] **Skill manager sekarang mendukung Creator dan market metadata.**
+  `backend/skill_manager.py` kini mengenali `market`, `allowed_kernels`, dan `creator` kernel sebagai tambahan untuk kategori lama.
+
+- [x] **Marketplace lama sudah ada.**
   `frontend/src/SkillMarketplace.tsx` dan endpoint `/api/skills/marketplace` sudah ada. Marketplace saat ini masih berbasis kategori lama, tetapi bisa menjadi fondasi Market Kernel.
 
-- **Monaco belum terlihat dipakai di kode TSX.**
+- [x] **Monaco belum terlihat dipakai di kode TSX.**
   Dependency `@monaco-editor/react` masih ada di `frontend/package.json`, tetapi pencarian kode tidak menemukan import aktif. Ini berarti arah "tanpa Monaco" sudah relatif aman untuk dilanjutkan dengan cleanup dependency.
 
 ### Belum Ada / Belum Selaras
@@ -1978,7 +2090,7 @@ Audit cepat terhadap kondisi repo saat ini menunjukkan bahwa dokumen ini adalah 
 - **File lama sudah rename ke `docs/1App5Kernell.md`.**
   Referensi langsung ke `1App4Kernell.md` di dokumen utama telah diarahkan ke `1App5Kernell.md`. Jika ada referensi baru muncul, perlakukan sebagai drift dokumentasi.
 
-- **Routing final 5 kernel belum ada.**
+- [x] **Routing final 5 kernel sudah ada di frontend.**
   Target SSOT:
   - `/companion`
   - `/studio`
@@ -1987,32 +2099,34 @@ Audit cepat terhadap kondisi repo saat ini menunjukkan bahwa dokumen ini adalah 
   - `/market`
 
   Kondisi sekarang:
-  - `/` masih Companion
+  - `/` redirect ke `/companion`
+  - `/companion` sudah ada
   - `/studio` sudah ada
   - `/llm` sudah ada
-  - `/skills` masih Market lama
-  - `/creator` belum ada
-  - `/market` belum ada
-  - `/companion` belum ada
+  - `/creator` sudah ada sebagai frontend skeleton
+  - `/market` sudah ada sebagai frontend skeleton
+  - `/skills` alias ke `/market`
+  - backend routing dan orchestrator belum lengkap untuk Creator/Market
 
-- **Sidebar belum menampilkan 5 kernel.**
-  `frontend/src/Sidebar.tsx` saat ini hanya menampilkan Companion, Studio, LLM Warehouse, dan Store lama. Belum ada Creator dan belum memakai route `/market`.
+- [x] **Sidebar menampilkan 5 kernel.**
+  `frontend/src/Sidebar.tsx` sudah menampilkan Companion, Studio, LLM Warehouse, Creator, dan Market.
 
-- **Creator Kernel belum ada.**
-  Belum ditemukan:
+- [ ] **Creator Kernel belum lengkap.**
+  Frontend route skeleton sudah ada:
   - `frontend/src/Creator.tsx`
+  - route `/creator`
+  Belum ditemukan:
   - `backend/api/creator_router.py`
   - `backend/creator/`
-  - route `/creator`
   - `SWITCH_TO_CREATOR`
   - media approval gate
   - asset bin, timeline, preview player, render/export queue
 
-- **Market Kernel belum ada sebagai router/domain mandiri.**
-  Belum ada `backend/api/market_router.py`. Endpoint market masih berada di `companion_router.py` dan sebagian `studio_router.py`.
+- [x] **Market Kernel sudah mulai memiliki router/domain mandiri.**
+  `backend/api/market_router.py` sudah dibuat untuk menampung endpoint Market Kernel, meskipun endpoint kompatibilitas lama masih bertahan di `companion_router.py`.
 
-- **Market belum terbagi menjadi Companion / Studio / Creator.**
-  `SkillMarketplace.tsx` saat ini membagi tampilan ke `"Lifestyle & Chat"` vs developer-ish category. Belum ada:
+- [ ] **Market belum sepenuhnya terbagi menjadi Companion / Studio / Creator.**
+  `SkillMarketplace.tsx` masih menggunakan kategori lama dan belum menyediakan tab Market yang terpisah untuk masing-masing domain.
   - Companion Market
   - Studio Market
   - Creator Market
@@ -2020,11 +2134,11 @@ Audit cepat terhadap kondisi repo saat ini menunjukkan bahwa dokumen ini adalah 
   - `allowed_kernels`
   - permission category untuk professional assistant dan creator media workflow
 
-- **Skill metadata belum sesuai SSOT.**
-  Existing marketplace skills memakai `__skill_metadata__` dengan field `category`, bukan field `market`. `backend/skill_manager.py` juga menormalisasi `category`, belum membaca `market`, `allowed_kernels`, `requires_mode`, atau permission policy yang lebih detail.
+- [x] **Skill metadata sekarang lebih mendekati SSOT.**
+  `backend/skill_manager.py` kini mendukung `market`, `allowed_kernels`, dan mendeteksi `creator` sebagai kernel tambahan. Namun, banyak skill legacy dan marketplace masih menggunakan metadata `category` lama.
 
-- **Skill manager belum mengenal Creator.**
-  `is_skill_allowed_for_kernel()` hanya menangani `companion` dan `studio`. Kernel `creator` akan selalu ditolak karena belum ada branch creator.
+- [x] **Skill manager sekarang mengenal Creator.**
+  `is_skill_allowed_for_kernel()` kini mendukung `creator` dan `shared` skill, serta `market`/`allowed_kernels` metadata.
 
 - **Studio `/studio` belum menjadi activity-stream cockpit seperti target.**
   `StudioPage.tsx` masih punya launcher, chat cockpit, terminal, IDE discovery, graph/resilience panels, dan simulasi pesan "kode ditulis". Belum ada activity event model resmi seperti:
@@ -2091,17 +2205,17 @@ Audit cepat terhadap kondisi repo saat ini menunjukkan bahwa dokumen ini adalah 
 
 ### Yang Salah / Drift terhadap SSOT
 
-- **Marketplace endpoints berada di Companion router.**
-  Ini drift arsitektur. Market seharusnya kernel sendiri, bukan domain Companion.
+- **Marketplace endpoints di Companion router masih menjadi compatibility layer.**
+  Arsitektur baru sudah mulai memisahkan kernel dengan `backend/api/market_router.py`, tetapi beberapa endpoint lama masih berada di `companion_router.py` untuk backward compatibility.
 
-- **Skill classification masih `category`, bukan `market`.**
-  Plan SSOT meminta Market terbagi Companion/Studio/Creator. Existing code memakai kategori `companion`, `studio`, `shared`, dan UI lama `Lifestyle & Chat`. Ini perlu migrasi metadata.
+- **Skill classification masih `category`, bukan `market`, pada banyak skill existing.**
+  Plan SSOT meminta Market terbagi Companion/Studio/Creator. Existing code masih memakai kategori `companion`, `studio`, `shared`, dan UI lama `Lifestyle & Chat`. Migrasi metadata masih diperlukan.
 
 - **`media_curator` dikategorikan berbeda antara installed dan marketplace.**
   `backend/skills/media_curator.py` memakai legacy `metadata` dengan `"category": "Media"`, sementara `backend/marketplace_skills/media_curator.py` memakai `__skill_metadata__` dengan `"category": "shared"`. Ini bisa membuat filtering UI/backend tidak konsisten.
 
-- **`save_skill()` default selalu membuat skill Companion.**
-  `backend/skill_manager.py` menyisipkan metadata default `"category": "companion"` jika code belum punya `__skill_metadata__`. Ini tidak cocok untuk Market Kernel multi-domain. Default harus eksplisit dipilih user, bukan diam-diam companion.
+- **`save_skill()` kini menambahkan `market` dan `allowed_kernels` secara eksplisit, tetapi masih default ke companion saat metadata tidak disediakan.**
+  Ini adalah perbaikan dibandingkan sebelumnya, namun idealnya user harus memilih domain secara eksplisit.
 
 - **Studio UI masih mengarah ke IDE/local editor workflow.**
   SSOT memutuskan MIA bukan web IDE dan Studio adalah agent cockpit. Existing `StudioPage.tsx` masih punya IDE discovery/open IDE dan pesan "sinkronkan ke editor lokal Anda". Ini boleh tetap sebagai integrasi opsional, tetapi tidak boleh menjadi alur utama Studio.

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useState, useEffect, useRef, memo, lazy, Suspense } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { ThemeProvider } from './context/ThemeProvider';
@@ -7,7 +7,8 @@ const CompanionLazy = lazy(() => import('./Companion'));
 const IamMiaLazy = lazy(() => import('./IamMia'));
 const CroneLazy = lazy(() => import('./Crone'));
 const EmotionDashboardLazy = lazy(() => import('./EmotionDashboard'));
-const SkillMarketplaceLazy = lazy(() => import('./SkillMarketplace'));
+const MarketLazy = lazy(() => import('./SkillMarketplace'));
+const CreatorLazy = lazy(() => import('./Creator'));
 const OnboardingLazy = lazy(() => import('./Onboarding'));
 const LLMPageLazy = lazy(() => import('./LLMPage'));
 import { FileStoreProvider } from './mia_studio/context/FileStoreContext';
@@ -276,12 +277,21 @@ function AppShell() {
   }, [isOnboarded, isOnboardingRoute, navigate]);
 
   useEffect(() => {
-    const command = isStudioRoute ? 'SWITCH_TO_STUDIO' : 'SWITCH_TO_COMPANION';
+    let command = 'SWITCH_TO_COMPANION';
+    if (location.pathname.startsWith('/studio')) {
+      command = 'SWITCH_TO_STUDIO';
+    } else if (location.pathname.startsWith('/creator')) {
+      command = 'SWITCH_TO_CREATOR';
+    } else if (location.pathname.startsWith('/market')) {
+      command = 'SWITCH_TO_MARKET';
+    } else if (location.pathname.startsWith('/llm')) {
+      command = 'SWITCH_TO_LLM';
+    }
     const payload = JSON.stringify({ type: command });
     if (wsStatus === 'connected') {
       send(payload);
     }
-  }, [isStudioRoute, wsStatus, send]);
+  }, [location.pathname, wsStatus, send]);
 
 
   // STAGE 4: Staged Startup Sequence & Hardware Detection
@@ -416,8 +426,8 @@ function AppShell() {
 
             <Routes>
 
-              <Route path="/" element={<CompanionLazy />} />
-
+              <Route path="/" element={<Navigate replace to="/companion" />} />
+              <Route path="/companion" element={<CompanionLazy />} />
               <Route path="/onboarding" element={<OnboardingLazy />} />
 
               <Route path="/crone" element={<CroneLazy />} />
@@ -427,7 +437,11 @@ function AppShell() {
 
               <Route path="/emotion" element={<EmotionDashboardLazy />} />
 
-              <Route path="/skills" element={<SkillMarketplaceLazy />} />
+              <Route path="/skills" element={<Navigate replace to="/market" />} />
+
+              <Route path="/market" element={<MarketLazy />} />
+
+              <Route path="/creator" element={<CreatorLazy />} />
 
               <Route path="/llm" element={<LLMPageLazy />} />
 

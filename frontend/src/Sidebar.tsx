@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Brain, ChevronLeft, ChevronRight, Zap, Shield, Flower } from 'lucide-react';
+import { Home, Brain, ChevronLeft, ChevronRight, Layers, PlayCircle, Shield, Flower } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
 import { useEmotion } from './hooks/useEmotion';
 
@@ -19,10 +19,11 @@ export default function Sidebar({ onToggleZen, isZenMode, collapsed, setCollapse
   const isPro = config?.is_professional_mode;
 
   const navItems = [
-    { name: isPro ? "Companion" : "Chat me", icon: <Home size={22} />, path: "/" },
-    { name: isPro ? "Mia Studio" : "My Studio", icon: <Flower size={22} />, path: "/studio" },
+    { name: "Companion", icon: <Home size={22} />, path: "/companion" },
+    { name: "Studio", icon: <Flower size={22} />, path: "/studio" },
     { name: "LLM Warehouse", icon: <Brain size={22} />, path: "/llm" },
-    { name: isPro ? "Mia Store" : "My Store", icon: <Zap size={22} />, path: "/skills" },
+    { name: "Creator", icon: <PlayCircle size={22} />, path: "/creator" },
+    { name: "Market", icon: <Layers size={22} />, path: "/market" },
   ];
 
   return (

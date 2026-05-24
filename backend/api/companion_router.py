@@ -51,20 +51,20 @@ async def _handle_module_switch(module_name: str):
     print(f"[Power State] Switching from {active_module} to {module_name}")
     active_module = module_name
     
-    if module_name == "studio":
-        print("[Power State] Studio active: Suspending companion background loops (STT/TTS, Polling)")
-        # STT and TTS are inherently disabled because frontend stops sending requests, 
-        # but we can proactively trigger backend stop if they had internal loops.
-        # Suspending crone daemon companion jobs
-        crone_daemon.pause_companion_jobs()
-        emotion_manager.suspend()
-    else:
+    if module_name == "companion":
         print("[Power State] Companion active: Waking up companion loops")
         crone_daemon.resume_companion_jobs()
         emotion_manager.resume()
+    else:
+        print(f"[Power State] {module_name.capitalize()} active: Suspending companion background loops (STT/TTS, Polling)")
+        crone_daemon.pause_companion_jobs()
+        emotion_manager.suspend()
 
 event_bus.subscribe("SWITCH_TO_STUDIO", lambda _: _handle_module_switch("studio"))
 event_bus.subscribe("SWITCH_TO_COMPANION", lambda _: _handle_module_switch("companion"))
+event_bus.subscribe("SWITCH_TO_CREATOR", lambda _: _handle_module_switch("creator"))
+event_bus.subscribe("SWITCH_TO_MARKET", lambda _: _handle_module_switch("market"))
+event_bus.subscribe("SWITCH_TO_LLM", lambda _: _handle_module_switch("llm"))
 
 # --- MODEL DEFINITIONS ---
 class SkillSaveRequest(BaseModel):

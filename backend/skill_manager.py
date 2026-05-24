@@ -121,10 +121,12 @@ class SkillManager:
                 "description": docstring,
                 "execution_mode": "instant",
                 "category": "shared",
+                "market": "shared",
+                "allowed_kernels": ["companion", "studio", "creator"],
                 "mcp_enabled": False,
                 "type": "legacy",
                 "created_at": datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
-                "metadata": {"category": "shared", "mcp_enabled": False}
+                "metadata": {"category": "shared", "market": "shared", "mcp_enabled": False}
             }
         except:
             return {"id": skill_id, "type": "legacy", "description": "Legacy script.", "execution_mode": "instant", "category": "shared", "mcp_enabled": False}
@@ -140,11 +142,17 @@ class SkillManager:
         skill = self.get_skill(skill_id)
         if not skill:
             return False
+        allowed_kernels = skill.get("allowed_kernels")
+        if isinstance(allowed_kernels, (list, tuple)) and allowed_kernels:
+            return kernel in [k.lower() for k in allowed_kernels]
+
         category = skill.get("category")
         if kernel == "companion":
             return category in ("companion", "shared")
         if kernel == "studio":
             return category in ("studio", "shared")
+        if kernel == "creator":
+            return category in ("creator", "shared")
         return False
 
     def _normalize_skill_category(self, category):
@@ -155,7 +163,23 @@ class SkillManager:
             return "companion"
         if normalized in {"studio", "developer", "automation", "editor", "creative", "code", "studio_kernel"}:
             return "studio"
+        if normalized in {"creator", "content", "video", "editing", "render"}:
+            return "creator"
         if normalized in {"shared", "common", "utility", "global", "plugin", "module", "productivity", "media", "creativity", "voice"}:
+            return "shared"
+        return normalized
+
+    def _normalize_skill_market(self, market):
+        if not market:
+            return "shared"
+        normalized = str(market).strip().lower()
+        if normalized in {"companion", "assistant", "chatbot", "chat"}:
+            return "companion"
+        if normalized in {"studio", "developer", "automation", "editor", "code"}:
+            return "studio"
+        if normalized in {"creator", "content", "video", "editing", "render"}:
+            return "creator"
+        if normalized in {"shared", "common", "utility", "global", "plugin", "module", "productivity"}:
             return "shared"
         return normalized
 
@@ -168,18 +192,36 @@ class SkillManager:
         category = self._normalize_skill_category(
             manifest.get("category") or (getattr(skill_instance, "category", None) if skill_instance is not None else None) or "shared"
         )
+        market = self._normalize_skill_market(
+            manifest.get("market") or category
+        )
+        allowed_kernels = manifest.get("allowed_kernels")
+        if isinstance(allowed_kernels, str):
+            allowed_kernels = [allowed_kernels]
+        if isinstance(allowed_kernels, (list, tuple)):
+            allowed_kernels = [str(k).strip().lower() for k in allowed_kernels if str(k).strip()]
+        else:
+            allowed_kernels = None
+
+        metadata = dict(manifest)
+        metadata["market"] = market
+        if allowed_kernels is not None:
+            metadata["allowed_kernels"] = allowed_kernels
+
         return {
             "id": skill_id,
             "name": name,
             "description": description,
             "category": category,
+            "market": market,
+            "allowed_kernels": allowed_kernels,
             "execution_mode": manifest.get("execution_mode", "instant"),
             "mcp_enabled": bool(manifest.get("mcp_enabled", False)),
             "version": manifest.get("version", "1.0.0"),
             "author": manifest.get("author", "MIA Core"),
             "type": module_type,
             "created_at": datetime.fromtimestamp(os.path.getctime(path)).isoformat(),
-            "metadata": manifest
+            "metadata": metadata
         }
 
     def install_skill(self, skill_id):
@@ -309,6 +351,8 @@ class SkillManager:
             default_metadata = {
                 "name": name,
                 "category": "companion",
+                "market": "companion",
+                "allowed_kernels": ["companion"],
                 "mcp_enabled": False
             }
             metadata_block = f"__skill_metadata__ = {json.dumps(default_metadata, indent=4, ensure_ascii=False)}\n\n"
