@@ -25,9 +25,11 @@ import { useProject, useProjectEvents } from '../hooks/useProject';
 import { useFileStore } from '../context/FileStoreContext';
 import { StudioTerminal } from './StudioTerminal';
 import { GraphViewer } from './GraphViewer';
-import { StudioBottomBar } from './StudioBottomBar';
+import { StudioActivityStream } from './StudioActivityStream';
+
 import { ResilienceMonitor } from './ResilienceMonitor';
 import { GardenLauncher } from './GardenLauncher';
+import { StudioBottomBar } from './StudioBottomBar';
 import clsx from 'clsx';
 
 interface ShadTelemetryPayload {
@@ -515,7 +517,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                 </div>
               </div>
 
-              {/* Chat Log Window */}
+            <StudioActivityStream events={stream.graphEvents} logs={stream.logs} />
               <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-1 scroll-smooth">
                 {messages.length === 0 ? (
                   <div className="h-full flex items-center justify-center opacity-30">
