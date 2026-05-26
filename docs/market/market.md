@@ -36,7 +36,7 @@ Allowed:
 
 [ L1 ] FRONTEND (React)
 
-* SkillMarketplace.tsx
+* Market.tsx
 * AppCard.tsx
 * DetailPanel.tsx
 * SkillExecutor.tsx
@@ -628,7 +628,7 @@ ERROR → ["Fix", "Retry"]
 ```
 
 [x] Integrate into:
-[x] SkillMarketplace.tsx
+[x] Market.tsx
 [ ] AppCard.tsx
 
 ---

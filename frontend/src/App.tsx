@@ -7,7 +7,7 @@ const CompanionLazy = lazy(() => import('./Companion'));
 const IamMiaLazy = lazy(() => import('./IamMia'));
 const CroneLazy = lazy(() => import('./Crone'));
 const EmotionDashboardLazy = lazy(() => import('./EmotionDashboard'));
-const MarketLazy = lazy(() => import('./SkillMarketplace'));
+const MarketLazy = lazy(() => import('./Market'));
 const CreatorLazy = lazy(() => import('./Creator'));
 const OnboardingLazy = lazy(() => import('./Onboarding'));
 const LLMPageLazy = lazy(() => import('./LLMPage'));

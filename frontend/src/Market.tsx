@@ -26,22 +26,22 @@ export interface AppManifest {
   execution_mode: string;
 }
 
-const SkillMarketplace: React.FC = () => {
+const Market: React.FC = () => {
   const { config } = useConfig();
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('Lifestyle & Chat');
-  
+  const [selectedCategory, setSelectedCategory] = useState('Companion');
+
   // Modals state
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showSimpleBuilder, setShowSimpleBuilder] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [generatedAppData, setGeneratedAppData] = useState<{ manifest: AppManifest, logic: string } | null>(null);
   const [previewingApp, setPreviewingApp] = useState<App | null>(null);
-  
+
   const { data: apps = [], isLoading: loading, refetch: fetchApps } = useQuery({
     queryKey: queryKeys.marketplace,
     queryFn: async () => {
-      const res = await fetch('/api/skills/marketplace');
+      const res = await fetch('/api/market/skills');
       return res.json();
     }
   });
@@ -53,10 +53,10 @@ const SkillMarketplace: React.FC = () => {
       return res.json();
     }
   });
-  
+
   const [executingApp, setExecutingApp] = useState<App | null>(null);
   const [settingUpApp, setSettingUpApp] = useState<App | null>(null);
-  const [toasts, setToasts] = useState<{id: number, msg: string, type: string}[]>([]);
+  const [toasts, setToasts] = useState<{ id: number, msg: string, type: string }[]>([]);
 
   const addToast = useCallback((msg: string, type: string) => {
     const id = Date.now();
@@ -66,7 +66,7 @@ const SkillMarketplace: React.FC = () => {
 
   const handleInstall = async (id: string) => {
     try {
-      const res = await fetch(`/api/skills/install/${id}`, { method: 'POST' });
+      const res = await fetch(`/api/market/skills/install/${id}`, { method: 'POST' });
       const data = await res.json();
       if (data.status === 'success') {
         await fetchApps(); // Refresh status
@@ -131,7 +131,7 @@ const SkillMarketplace: React.FC = () => {
           code: generatedAppData?.logic || ""
         })
       });
-      
+
       if (res.ok) {
         addToast(`${manifest.name} berhasil diterapkan!`, "success");
         setGeneratedAppData(null);
@@ -144,16 +144,30 @@ const SkillMarketplace: React.FC = () => {
     }
   };
 
-  const categories = [
-    { name: 'Lifestyle & Chat', icon: MessageCircle },
-    { name: 'Developer & Automation', icon: Code },
+    const categories = [
+    { name: 'Companion', icon: MessageCircle },
+    { name: 'Studio', icon: Code },
+    { name: 'Creator', icon: Code },
   ];
 
   const filteredApps = apps.filter(s => {
-    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) || 
-                         s.description.toLowerCase().includes(search.toLowerCase());
-    const isDev = ['Developer & Automation', 'Automation', 'Developer', 'Media', 'System'].includes(s.category);
-    const matchesCategory = selectedCategory === 'Lifestyle & Chat' ? !isDev : isDev;
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.description.toLowerCase().includes(search.toLowerCase());
+    
+    const skillCategory = (s.category || '').toLowerCase();
+    const currentTab = selectedCategory.toLowerCase(); // 'companion', 'studio', 'creator'
+
+    const matchesCategory = (() => {
+      if (currentTab === 'companion') {
+        return skillCategory === 'companion' || skillCategory === 'shared' || s.market === 'companion';
+      } else if (currentTab === 'studio') {
+        return skillCategory === 'studio' || s.market === 'studio';
+      } else if (currentTab === 'creator') {
+        return skillCategory === 'creator' || s.market === 'creator';
+      }
+      return false;
+    })();
+
     return matchesSearch && matchesCategory;
   });
 
@@ -164,13 +178,13 @@ const SkillMarketplace: React.FC = () => {
           <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">{labels.DISCOVERY_TITLE}</h1>
           <p className="text-white/40 uppercase tracking-widest text-[10px] font-bold font-mono">{labels.DISCOVERY_SUBTITLE}</p>
         </div>
-        
+
         <div className="relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-primary transition-colors" size={18} />
-          <input 
+          <input
             id="marketplace-search"
             name="marketplace-search"
-            type="text" 
+            type="text"
             placeholder={labels.SEARCH_PLACEHOLDER}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -183,7 +197,7 @@ const SkillMarketplace: React.FC = () => {
       {/* Recommendations Carousel */}
       <AnimatePresence>
         {recommendations.length > 0 && !search && (
-          <motion.section 
+          <motion.section
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="mb-12"
           >
@@ -191,12 +205,12 @@ const SkillMarketplace: React.FC = () => {
               <Sparkles className="text-primary" size={20} />
               <h2 className="text-xl font-bold text-white">Rekomendasi Spesial</h2>
             </div>
-            
+
             <div className="flex gap-6 overflow-x-auto pb-6 -mx-4 px-4 custom-scrollbar scroll-smooth">
               {recommendations.map((rawApp) => {
                 const app = viewModel.transform(rawApp);
                 return (
-                  <motion.div 
+                  <motion.div
                     key={app.id}
                     whileHover={{ scale: 1.02 }}
                     onClick={() => setPreviewingApp(rawApp)}
@@ -207,7 +221,7 @@ const SkillMarketplace: React.FC = () => {
                         {app.recommendation_reason || "Populer"}
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-4 mb-4 pt-4">
                       <div className="p-3 rounded-2xl bg-white/5 text-primary group-hover:rotate-12 transition-transform">
                         <Zap size={24} />
@@ -217,9 +231,9 @@ const SkillMarketplace: React.FC = () => {
                         <p className="text-[10px] text-white/40 uppercase">{app.category}</p>
                       </div>
                     </div>
-                    
+
                     <p className="text-xs text-white/40 line-clamp-2 h-8 mb-4">{app.displayDescription}</p>
-                    
+
                     <div className="flex items-center justify-between pt-4 border-t border-white/5">
                       <div className="text-[10px] text-primary/60 font-bold uppercase tracking-wider">Mulai Coba</div>
                       <ChevronRight size={14} className="text-white/20 group-hover:translate-x-1 transition-all" />
@@ -234,14 +248,13 @@ const SkillMarketplace: React.FC = () => {
 
       <div className="flex gap-4 mb-12 overflow-x-auto pb-4 custom-scrollbar">
         {categories.map(cat => (
-          <button 
+          <button
             key={cat.name}
             onClick={() => setSelectedCategory(cat.name)}
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl border transition-all whitespace-nowrap ${
-              selectedCategory === cat.name 
-              ? 'bg-primary/20 border-primary text-primary' 
-              : 'border-white/10 text-white/60 hover:bg-white/10 hover:text-white'
-            }`}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl border transition-all whitespace-nowrap ${selectedCategory === cat.name
+                ? 'bg-primary/20 border-primary text-primary'
+                : 'border-white/10 text-white/60 hover:bg-white/10 hover:text-white'
+              }`}
             style={selectedCategory !== cat.name ? { backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` } : {}}
           >
             <cat.icon size={16} />
@@ -252,7 +265,7 @@ const SkillMarketplace: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Architect an App Card */}
-        <motion.div 
+        <motion.div
           whileHover={{ scale: 1.02 }}
           onClick={() => setShowModeSelector(true)}
           className="p-8 rounded-[2.5rem] bg-gradient-to-br from-primary/30 to-secondary/10 border border-primary/30 shadow-2xl flex flex-col items-center justify-center text-center group cursor-pointer"
@@ -269,7 +282,7 @@ const SkillMarketplace: React.FC = () => {
         {!loading ? filteredApps.map((rawApp, i) => {
           const app = viewModel.transform(rawApp);
           const { status, cta } = app;
-          
+
           return (
             <motion.div
               key={app.id}
@@ -282,7 +295,7 @@ const SkillMarketplace: React.FC = () => {
               <div className="absolute top-0 right-0 p-4">
                 <Star className="text-white/10 group-hover:text-yellow-400 transition-colors" size={20} />
               </div>
-              
+
               <div className="flex items-center gap-4 mb-6">
                 <div className={`p-4 rounded-2xl bg-white/5 ${app.is_installed ? 'text-green-400' : 'text-primary'}`}>
                   {app.is_installed ? <CheckCircle size={24} /> : <Zap size={24} />}
@@ -300,20 +313,19 @@ const SkillMarketplace: React.FC = () => {
                   executions: app.executions || 0,
                   trust_score: app.trust_score || 0
                 }).map((proof, i) => (
-                  <span 
+                  <span
                     key={i}
-                    className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${
-                      proof.type === 'trust' ? 'bg-green-500/10 border-green-500/20 text-green-400' :
-                      proof.type === 'popularity' ? 'bg-primary/10 border-primary/20 text-primary' :
-                      proof.type === 'activity' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
-                      'bg-white/5 border-white/10 text-white/40'
-                    }`}
+                    className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${proof.type === 'trust' ? 'bg-green-500/10 border-green-500/20 text-green-400' :
+                        proof.type === 'popularity' ? 'bg-primary/10 border-primary/20 text-primary' :
+                          proof.type === 'activity' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
+                            'bg-white/5 border-white/10 text-white/40'
+                      }`}
                   >
                     {proof.label}
                   </span>
                 ))}
               </div>
-              
+
               <p className="text-sm text-white/40 mb-8 line-clamp-3 h-12">
                 {app.displayDescription}
               </p>
@@ -327,22 +339,21 @@ const SkillMarketplace: React.FC = () => {
                   ))}
                   <div className="text-[10px] text-white/20 ml-2 mt-1.5">+24 {labels.USERS}</div>
                 </div>
-                
+
                 <div className="flex gap-2">
                   {cta.secondary && (
-                    <button 
+                    <button
                       onClick={() => setPreviewingApp(rawApp)}
                       className="px-4 py-2 rounded-xl bg-white/5 text-white text-xs font-bold hover:bg-white/10 transition-all"
                     >
                       {cta.secondary}
                     </button>
                   )}
-                  <button 
+                  <button
                     onClick={() => handleUse(rawApp)}
                     disabled={cta.disabled}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-xl font-bold transition-all ${
-                      cta.disabled ? 'bg-white/5 text-white/20' : 'bg-primary text-black hover:scale-105'
-                    }`}
+                    className={`flex items-center gap-2 px-6 py-2 rounded-xl font-bold transition-all ${cta.disabled ? 'bg-white/5 text-white/20' : 'bg-primary text-black hover:scale-105'
+                      }`}
                   >
                     {status === 'READY' && <Zap size={16} fill="currentColor" />}
                     {cta.primary}
@@ -367,7 +378,7 @@ const SkillMarketplace: React.FC = () => {
               <button onClick={() => setShowModeSelector(false)} className="absolute top-6 right-6 p-2 text-white/20 hover:text-white transition-colors">
                 <X size={24} />
               </button>
-              
+
               <div className="text-center mb-10">
                 <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center text-primary mx-auto mb-6">
                   <Sparkles size={32} />
@@ -377,7 +388,7 @@ const SkillMarketplace: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <button 
+                <button
                   onClick={() => { setShowModeSelector(false); setShowSimpleBuilder(true); }}
                   className="w-full group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-primary/40 hover:bg-primary/5 transition-all text-left flex items-center justify-between"
                 >
@@ -388,7 +399,7 @@ const SkillMarketplace: React.FC = () => {
                   <ChevronRight className="text-white/20 group-hover:text-primary transition-all group-hover:translate-x-1" />
                 </button>
 
-                <button 
+                <button
                   onClick={() => { setShowModeSelector(false); setShowWizard(true); }}
                   className="w-full group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all text-left flex items-center justify-between"
                 >
@@ -405,14 +416,14 @@ const SkillMarketplace: React.FC = () => {
       </AnimatePresence>
 
       {showSimpleBuilder && (
-        <SimpleBuilder 
+        <SimpleBuilder
           onClose={() => setShowSimpleBuilder(false)}
           onGenerate={handleGenerateApp}
         />
       )}
 
       {generatedAppData && (
-        <BuilderReview 
+        <BuilderReview
           data={generatedAppData}
           onClose={() => setGeneratedAppData(null)}
           onDeploy={handleDeployApp}
@@ -420,7 +431,7 @@ const SkillMarketplace: React.FC = () => {
       )}
 
       {previewingApp && (
-        <PreviewModal 
+        <PreviewModal
           app={previewingApp}
           onClose={() => setPreviewingApp(null)}
           onInstall={() => {
@@ -432,12 +443,12 @@ const SkillMarketplace: React.FC = () => {
       )}
 
       {executingApp && (
-        <AppExecutor 
+        <AppExecutor
           app={executingApp}
           onClose={() => setExecutingApp(null)}
           onExecute={(inputs) => {
             addToast(labels.RUNNING_APP.replace('{name}', executingApp.name), "info");
-            fetch(`/api/skill/execute?skill_id=${executingApp.id}`, { 
+            fetch(`/api/skill/execute?skill_id=${executingApp.id}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(inputs)
@@ -448,7 +459,7 @@ const SkillMarketplace: React.FC = () => {
       )}
 
       {settingUpApp && (
-        <SetupFlow 
+        <SetupFlow
           app={settingUpApp}
           onClose={() => setSettingUpApp(null)}
           onComplete={() => {
@@ -460,7 +471,7 @@ const SkillMarketplace: React.FC = () => {
       )}
 
       {showWizard && (
-        <AppWizard 
+        <AppWizard
           onClose={() => setShowWizard(false)}
           onComplete={(data) => {
             console.log("App built:", data);
@@ -474,13 +485,12 @@ const SkillMarketplace: React.FC = () => {
       {/* Toast Overlay */}
       <div className="fixed bottom-8 right-8 z-[200] flex flex-col gap-3">
         {toasts.map(t => (
-          <motion.div 
+          <motion.div
             key={t.id} initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
-            className={`px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-3 backdrop-blur-xl border ${
-              t.type === 'success' ? 'bg-primary/20 border-primary/40 text-primary' : 
-              t.type === 'error' ? 'bg-error/20 border-error/40 text-error' : 
-              'bg-white/10 border-white/20 text-white'
-            }`}
+            className={`px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-3 backdrop-blur-xl border ${t.type === 'success' ? 'bg-primary/20 border-primary/40 text-primary' :
+                t.type === 'error' ? 'bg-error/20 border-error/40 text-error' :
+                  'bg-white/10 border-white/20 text-white'
+              }`}
           >
             <CheckCircle size={18} /> {t.msg}
           </motion.div>
@@ -490,4 +500,4 @@ const SkillMarketplace: React.FC = () => {
   );
 };
 
-export default SkillMarketplace;
+export default Market;

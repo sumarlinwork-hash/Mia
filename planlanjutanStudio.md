@@ -48,7 +48,7 @@ Berdasarkan fact-check langsung terhadap kode aktual (bukan asumsi), berikut ada
 >
 > Cek faktual: di `App.tsx` line 10-11:
 > ```tsx
-> const MarketLazy = lazy(() => import('./SkillMarketplace'));  // ini yang dipakai di /market
+> const MarketLazy = lazy(() => import('./Market'));  // ini yang dipakai di /market
 > const CreatorLazy = lazy(() => import('./Creator'));
 > ```
 > Jadi `/market` saat ini render `SkillMarketplace.tsx`, bukan `Market.tsx`.
