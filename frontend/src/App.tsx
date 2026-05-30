@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, memo, lazy, Suspense } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { ThemeProvider } from './context/ThemeProvider';
 import Sidebar from './Sidebar';
+import ShellStatusBar from './shell/ShellStatusBar';
 const CompanionLazy = lazy(() => import('./Companion'));
 const IamMiaLazy = lazy(() => import('./IamMia'));
 const CroneLazy = lazy(() => import('./Crone'));
@@ -263,6 +264,7 @@ function AppShell() {
   const effectiveSidebarCollapsed = sidebarCollapsed || isNarrowViewport;
 
   const { send, status: wsStatus } = useWebSocket();
+  const showShellStatus = startupPhase >= 3 && !isOnboardingRoute;
 
 
 
@@ -498,6 +500,12 @@ function AppShell() {
         </>
 
       )}
+
+      <ShellStatusBar
+        wsStatus={wsStatus}
+        hidden={!showShellStatus}
+        onEmergencyStop={() => send(JSON.stringify({ type: 'EMERGENCY_STOP' }))}
+      />
 
 
 

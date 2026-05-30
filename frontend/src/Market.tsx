@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Search, Zap, Plus, MessageCircle, CheckCircle, Star, Sparkles, X, ChevronRight, Code } from 'lucide-react';
+import { Search, Zap, Plus, MessageCircle, CheckCircle, Star, Sparkles, X, ChevronRight, Code, Film } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from './hooks/useMIAQueries';
@@ -38,10 +38,12 @@ const Market: React.FC = () => {
   const [generatedAppData, setGeneratedAppData] = useState<{ manifest: AppManifest, logic: string } | null>(null);
   const [previewingApp, setPreviewingApp] = useState<App | null>(null);
 
+  const activeMarket = selectedCategory.toLowerCase();
+
   const { data: apps = [], isLoading: loading, refetch: fetchApps } = useQuery({
-    queryKey: queryKeys.marketplace,
+    queryKey: [...queryKeys.marketplace, activeMarket],
     queryFn: async () => {
-      const res = await fetch('/api/market/skills');
+      const res = await fetch(`/api/market/skills?market=${encodeURIComponent(activeMarket)}`);
       return res.json();
     }
   });
@@ -95,12 +97,34 @@ const Market: React.FC = () => {
     }
   };
 
+  const executeMarketSkill = async (app: App, inputs: Record<string, unknown> = {}) => {
+    try {
+      const res = await fetch('/api/market/skills/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          skill_id: app.id,
+          args: inputs,
+          target_kernel: activeMarket,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') {
+        addToast(result.detail || result.message || `Gagal menjalankan ${app.name}`, "error");
+        return;
+      }
+      addToast(`${app.name} selesai dijalankan`, "success");
+    } catch {
+      addToast(`Gagal menjalankan ${app.name}`, "error");
+    }
+  };
+
   const executeApp = (app: App) => {
     if (app.input_schema && Object.keys(app.input_schema).length > 0) {
       setExecutingApp(app);
     } else {
       addToast(labels.RUNNING_APP.replace('{name}', app.name), "info");
-      fetch(`/api/skill/execute?skill_id=${app.id}`, { method: 'POST' });
+      executeMarketSkill(app);
     }
   };
 
@@ -145,30 +169,15 @@ const Market: React.FC = () => {
   };
 
     const categories = [
-    { name: 'Companion', icon: MessageCircle },
-    { name: 'Studio', icon: Code },
-    { name: 'Creator', icon: Code },
+    { name: 'Companion', icon: MessageCircle, label: 'Companion Market' },
+    { name: 'Studio', icon: Code, label: 'Studio Market' },
+    { name: 'Creator', icon: Film, label: 'Creator Market' },
   ];
 
   const filteredApps = apps.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.description.toLowerCase().includes(search.toLowerCase());
-    
-    const skillCategory = (s.category || '').toLowerCase();
-    const currentTab = selectedCategory.toLowerCase(); // 'companion', 'studio', 'creator'
-
-    const matchesCategory = (() => {
-      if (currentTab === 'companion') {
-        return skillCategory === 'companion' || skillCategory === 'shared' || s.market === 'companion';
-      } else if (currentTab === 'studio') {
-        return skillCategory === 'studio' || s.market === 'studio';
-      } else if (currentTab === 'creator') {
-        return skillCategory === 'creator' || s.market === 'creator';
-      }
-      return false;
-    })();
-
-    return matchesSearch && matchesCategory;
+    return matchesSearch;
   });
 
   return (
@@ -258,7 +267,7 @@ const Market: React.FC = () => {
             style={selectedCategory !== cat.name ? { backgroundColor: `rgba(255, 255, 255, ${(1 - (config?.appearance?.ui_opacity ?? 0.5)) * 0.1})` } : {}}
           >
             <cat.icon size={16} />
-            <span className="font-bold text-xs uppercase tracking-wider">{cat.name}</span>
+            <span className="font-bold text-xs uppercase tracking-wider">{cat.label}</span>
           </button>
         ))}
       </div>
@@ -448,11 +457,7 @@ const Market: React.FC = () => {
           onClose={() => setExecutingApp(null)}
           onExecute={(inputs) => {
             addToast(labels.RUNNING_APP.replace('{name}', executingApp.name), "info");
-            fetch(`/api/skill/execute?skill_id=${executingApp.id}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(inputs)
-            });
+            executeMarketSkill(executingApp, inputs);
             setExecutingApp(null);
           }}
         />

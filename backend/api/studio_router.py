@@ -1,8 +1,10 @@
 import os
 import sys
 import asyncio
+import time
+import uuid
 from typing import Optional, List
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Response
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Response, HTTPException, Body
 from pydantic import BaseModel
 
 # Ensure parent directory is in sys.path for clean import of core modules
@@ -72,6 +74,56 @@ class ShadFixRequest(BaseModel):
     fix_id: str
     project_id: str
 
+class StudioToolSearchRequest(BaseModel):
+    query: str
+    root: str = "."
+    limit: int = 50
+
+class StudioToolReadFileRequest(BaseModel):
+    path: str
+    max_chars: int = 20000
+
+class StudioToolPatchRequest(BaseModel):
+    patch: str
+
+class StudioToolRunCommandRequest(BaseModel):
+    command: str
+    cwd: str = "."
+
+class StudioVerificationRequest(BaseModel):
+    scope: str = "frontend"
+
+studio_tool_commands = {}
+
+def _workspace_path(path: str = ".") -> str:
+    base = os.path.abspath(os.getcwd())
+    target = os.path.abspath(os.path.join(base, path))
+    if os.path.commonpath([base, target]) != base:
+        raise ValueError("Path escapes workspace")
+    return target
+
+async def _run_studio_tool_command(command_id: str, command: str, cwd: str):
+    entry = studio_tool_commands[command_id]
+    try:
+        process = await asyncio.create_subprocess_shell(
+            command,
+            cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        entry["pid"] = process.pid
+        entry["status"] = "running"
+        stdout, stderr = await process.communicate()
+        entry.update({
+            "status": "completed" if process.returncode == 0 else "failed",
+            "returncode": process.returncode,
+            "stdout": stdout.decode(errors="replace")[-12000:],
+            "stderr": stderr.decode(errors="replace")[-12000:],
+            "finished_at": time.time(),
+        })
+    except Exception as exc:
+        entry.update({"status": "failed", "stderr": str(exc), "finished_at": time.time()})
+
 # --- ROUTER ENDPOINTS ---
 
 @studio_router.post("/api/studio/auth/handshake")
@@ -81,6 +133,132 @@ async def studio_handshake(req: StudioHandshakeRequest):
         return {"status": "success", "session_id": session_id}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@studio_router.post("/api/studio/tools/search")
+async def studio_tool_search(req: StudioToolSearchRequest):
+    try:
+        root = _workspace_path(req.root)
+        matches = []
+        needle = req.query.lower()
+        for current_root, _, files in os.walk(root):
+            for filename in files:
+                rel_path = os.path.relpath(os.path.join(current_root, filename), os.getcwd())
+                if needle in filename.lower() or needle in rel_path.lower():
+                    matches.append(rel_path.replace("\\", "/"))
+                    if len(matches) >= req.limit:
+                        return {"status": "success", "matches": matches}
+        return {"status": "success", "matches": matches}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@studio_router.post("/api/studio/tools/read-file")
+async def studio_tool_read_file(req: StudioToolReadFileRequest):
+    try:
+        path = _workspace_path(req.path)
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            content = handle.read(req.max_chars)
+        return {"status": "success", "path": req.path, "content": content}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@studio_router.post("/api/studio/tools/apply-patch")
+async def studio_tool_apply_patch(req: StudioToolPatchRequest):
+    return {
+        "status": "pending_approval",
+        "message": "Patch application is exposed as a skeleton endpoint; execution remains controlled by the local agent.",
+        "patch_preview": req.patch[:2000],
+    }
+
+@studio_router.post("/api/studio/tools/run-command")
+async def studio_tool_run_command(req: StudioToolRunCommandRequest):
+    try:
+        command_id = str(uuid.uuid4())
+        cwd = _workspace_path(req.cwd)
+        studio_tool_commands[command_id] = {
+            "id": command_id,
+            "command": req.command,
+            "cwd": cwd,
+            "status": "queued",
+            "created_at": time.time(),
+        }
+        asyncio.create_task(_run_studio_tool_command(command_id, req.command, cwd))
+        return {"status": "success", "command_id": command_id}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@studio_router.get("/api/studio/tools/command-status/{command_id}")
+async def studio_tool_command_status(command_id: str):
+    entry = studio_tool_commands.get(command_id)
+    if not entry:
+        return {"status": "error", "message": "Command not found"}
+    return {"status": "success", "command": entry}
+
+@studio_router.post("/api/studio/tools/stop-command/{command_id}")
+async def studio_tool_stop_command(command_id: str):
+    entry = studio_tool_commands.get(command_id)
+    if not entry:
+        return {"status": "error", "message": "Command not found"}
+    entry["status"] = "stop_requested"
+    return {"status": "success", "message": "Stop requested"}
+
+@studio_router.get("/api/studio/tools/changed-files")
+async def studio_tool_changed_files():
+    proc = await asyncio.create_subprocess_exec(
+        "git", "status", "--short",
+        cwd=os.getcwd(),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        return {"status": "error", "message": stderr.decode(errors="replace")}
+    files = [{"status": line[:2].strip(), "path": line[3:]} for line in stdout.decode(errors="replace").splitlines()]
+    return {"status": "success", "files": files}
+
+@studio_router.get("/api/studio/tools/diff")
+async def studio_tool_diff(path: Optional[str] = None):
+    args = ["git", "diff", "--"]
+    if path:
+        args.append(path)
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        cwd=os.getcwd(),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        return {"status": "error", "message": stderr.decode(errors="replace")}
+    return {"status": "success", "diff": stdout.decode(errors="replace")[-50000:]}
+
+@studio_router.post("/api/studio/tools/run-verification")
+async def studio_tool_run_verification(req: StudioVerificationRequest):
+    try:
+        if req.scope == "frontend":
+            command = ["npm.cmd", "run", "build"] if os.name == "nt" else ["npm", "run", "build"]
+            cwd = _workspace_path("frontend")
+        else:
+            command = ["git", "status", "--short"]
+            cwd = _workspace_path(".")
+
+        proc = await asyncio.create_subprocess_exec(
+            *command,
+            cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
+        return {
+            "status": "success" if proc.returncode == 0 else "failed",
+            "scope": req.scope,
+            "returncode": proc.returncode,
+            "stdout": stdout.decode(errors="replace")[-20000:],
+            "stderr": stderr.decode(errors="replace")[-20000:],
+        }
+    except asyncio.TimeoutError:
+        return {"status": "failed", "scope": req.scope, "message": "Verification timed out."}
+    except Exception as e:
+        return {"status": "error", "scope": req.scope, "message": str(e)}
 
 @studio_router.get("/api/studio/file/read")
 async def studio_read_file(project_id: str, path: str, session_id: str = ""):
@@ -258,7 +436,7 @@ async def studio_marketplace_skills():
     return apps
 
 @studio_router.post("/api/studio/skills/test/{skill_id}")
-async def studio_test_skill(skill_id: str, args: dict = {}):
+async def studio_test_skill(skill_id: str, args: dict = Body(default_factory=dict)):
     return await skill_manager.execute_skill(skill_id, args, kernel="studio")
 
 @studio_router.post("/api/studio/skill/execute")

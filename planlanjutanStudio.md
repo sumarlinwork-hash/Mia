@@ -1,8 +1,8 @@
 # Implementasi Lanjutan: 1 Shell, 5 Kernels
 
-## Konteks
+## Status Terbaru
 
-Berdasarkan fact-check langsung terhadap kode aktual (bukan asumsi), berikut adalah status real kondisi repo:
+Dokumen ini sudah di-update berdasarkan audit kode setelah implementasi lanjutan. Status di bawah adalah kondisi repo saat ini, bukan rencana lama.
 
 ---
 
@@ -10,140 +10,161 @@ Berdasarkan fact-check langsung terhadap kode aktual (bukan asumsi), berikut ada
 
 | Item | Status | Catatan |
 |---|---|---|
-| 5 Route: `/companion`, `/studio`, `/llm`, `/creator`, `/market` | ✅ Ada | Semua route sudah terdaftar di `App.tsx` |
-| Sidebar 5 kernel | ✅ Ada | `Sidebar.tsx` menampilkan Companion, Studio, LLM Warehouse, Creator, Market |
-| Power-state switching 5 kernel | ✅ Ada | `App.tsx` mengirim `SWITCH_TO_*` per route (semua 5 kernel) |
-| Backend router: Companion, Studio, LLM | ✅ Ada | Router terpisah di `backend/api/` |
-| Backend router: Market | ✅ Skeleton | `market_router.py` (1.5KB) — hanya list/install/uninstall skills |
-| Backend router: Creator | ✅ Skeleton | `creator_router.py` (708B) — hanya `/status` dan `/projects` kosong |
-| `main.py` mounting semua router | ✅ Ada | 5 router sudah di-include |
-| Creator.tsx | ✅ Skeleton | DALL preview card UI, theme-aware, belum punya cockpit |
-| Market.tsx | ✅ Stub | Placeholder teks saja, belum ada tab Companion/Studio/Creator |
-| SkillMarketplace.tsx | ✅ Ada | Full marketplace lama, masih memakai kategori lama |
-| Global theme via `useTheme` + `useConfig` | ✅ Ada | Creator sudah implement ini |
-| Studio Activity Stream | ❌ Belum | `StudioPage.tsx` masih pakai chat + terminal. Tidak ada event stream resmi |
-| Studio Bottom Composer (SSOT-spec) | ❌ Belum | Ada input chat biasa, belum ada follow-up/stop/auto-review/model-selector sesuai SSOT |
-| Studio built-in tools API | ❌ Belum | Backend punya service tapi belum ada tool layer eksplisit |
-| Review Changes surface | ❌ Belum | Belum ada |
-| Global Shell Status Bar | ❌ Belum | Belum ada surface tunggal |
-| Market tab split (Companion/Studio/Creator) | ❌ Belum | Market.tsx masih stub |
-| Creator Kernel UI lengkap | ❌ Belum | Hanya DALL preview card |
-| Creator backend lengkap | ❌ Belum | Hanya skeleton `/status` dan `/projects []` |
-| Action/Automation Orchestrator | ❌ Belum | Tidak ada |
-| `Review First` / `Always Execute` | ❌ Belum | Tidak ada |
-| SQLite tables baru (SSOT) | ❌ Belum | Hanya `config_store` yang ada |
-| Monaco dependency | ⚠️ Drift | `@monaco-editor/react` masih di package.json, tidak dipakai |
+| 5 Route: `/companion`, `/studio`, `/llm`, `/creator`, `/market` | Selesai | Semua route ada di `frontend/src/App.tsx`. |
+| Sidebar 5 kernel | Selesai | `Sidebar.tsx` menampilkan Companion, Studio, LLM Warehouse, Creator, Market. |
+| Power-state switching 5 kernel | Selesai | `App.tsx` mengirim `SWITCH_TO_*` berdasarkan route aktif. |
+| Backend router: Companion, Studio, LLM | Selesai | Router terpisah sudah ada di `backend/api/`. |
+| Backend router: Market | Partial | `market_router.py` sudah punya list/install/uninstall/test dan filter `market`. Belum ada policy gate/approval per market. |
+| Backend router: Creator | Partial | `creator_router.py` sudah punya project/assets/timeline/preview/export/render-status skeleton in-memory. Belum persisted/terhubung renderer nyata. |
+| `main.py` mounting semua router | Selesai | 5 router sudah di-include. |
+| Global theme via `useTheme` + `useConfig` | Selesai | Creator tetap memakai global appearance config. |
+| Global Shell Status Bar | Selesai | `frontend/src/shell/ShellStatusBar.tsx` sudah dibuat dan dipasang di `App.tsx`. |
+| Market tab split | Selesai | `Market.tsx` sudah punya Companion Market, Studio Market, Creator Market dan query `/api/market/skills?market=...`. |
+| `SkillMarketplace.tsx` | Tidak ada | File lama tidak ada di repo. Route `/market` memakai `frontend/src/Market.tsx`. |
+| Studio Activity Stream | Partial | `StudioActivityStream.tsx` sudah ada dan dipakai, tapi masih render event/log sederhana. Belum event taxonomy lengkap, expand/collapse, file excerpt, command detail. |
+| Studio Bottom Composer | Partial | `StudioComposer.tsx` sudah ada: follow-up input, stop, auto-review, model selector trigger, attachment button, changed-files strip. Belum effort selector dan approval banner nyata. |
+| Studio built-in tools API | Partial | Endpoint search/read-file/apply-patch/run-command/status/stop/changed-files/diff sudah ada. Belum policy gate, real stop process, verification endpoint, command sandbox hardening. |
+| Review Changes surface | Partial | `ReviewChanges.tsx` sudah ada. Belum fetch daftar file/diff nyata dan undo masih placeholder. |
+| Creator Kernel UI | Partial | `Creator.tsx` sudah menjadi Creator Cockpit dengan brief, asset bin, timeline, preview, render/export, activity. Belum terhubung backend state. |
+| Creator backend | Partial | Endpoint skeleton sudah ada. Belum database, file upload, render engine, export artifacts. |
+| Action/Automation Orchestrator | Belum | Belum ada orchestrator lintas-kernel. |
+| `Review First` / `Always Execute` | Belum | Belum ada policy preference global. |
+| SQLite tables baru SSOT | Belum | Belum ada migrasi untuk tasks, approvals, creator projects, command runs, market installs. |
+| Monaco dependency | Drift | `@monaco-editor/react` masih di `package.json`, belum dipakai. |
 
 ---
 
-## Open Questions
+## Yang Sudah Dikerjakan dari Rencana Lama
 
-> [!IMPORTANT]
-> **Prioritas mana yang diinginkan user?**
-> Dokumen SSOT memiliki banyak gap. Saya perlu konfirmasi urutan MVP mana yang dikerjakan sekarang.
+### Fase C: Market Split
 
-> [!WARNING]
-> **Market.tsx vs SkillMarketplace.tsx**
-> Saat ini `/market` route pakai `SkillMarketplace.tsx` (bukan `Market.tsx`). Market.tsx adalah stub kosong. Apakah Market.tsx yang harus dikembangkan menjadi full Market Kernel (dengan 3 tab), atau SkillMarketplace.tsx yang direfactor?
->
-> Cek faktual: di `App.tsx` line 10-11:
-> ```tsx
-> const MarketLazy = lazy(() => import('./Market'));  // ini yang dipakai di /market
-> const CreatorLazy = lazy(() => import('./Creator'));
-> ```
-> Jadi `/market` saat ini render `SkillMarketplace.tsx`, bukan `Market.tsx`.
+- Selesai: `frontend/src/Market.tsx` punya 3 tab market.
+- Selesai: tab market memanggil `/api/market/skills?market=companion|studio|creator`.
+- Selesai: install/use flow lama tetap dipertahankan.
+- Selesai: `backend/api/market_router.py` punya `/api/market/skills/test/{skill_id}`.
+- Partial: filtering `market` sudah ada, termasuk `shared` untuk Companion.
 
----
+### Fase A: Shell Status Bar
 
-## Gap Prioritas (berdasarkan MVP Phasing SSOT)
+- Selesai: `frontend/src/shell/ShellStatusBar.tsx` dibuat.
+- Selesai: `App.tsx` meng-inject status bar global.
+- Selesai: status bar menampilkan active kernel, WebSocket status, active model, provider health placeholder, approvals count placeholder, running tasks placeholder, emergency stop button.
+- Belum: data approvals/tasks/provider health masih statis.
 
-### MVP 1: Shell Alignment ✅ Sudah Selesai
-- 5 route skeleton → **Done**
-- Sidebar 5 kernel → **Done**  
-- Kernel switch events → **Done**
-- Shell status bar → **Belum ada** (1 item sisa)
+### Fase B: Studio Cockpit
 
-### MVP 2: Studio Cockpit ← **Target Utama Berikutnya**
-- Activity stream → **Belum**
-- Studio composer (SSOT-spec) → **Belum**
-- Built-in tools API skeleton → **Belum**
-- Changed-files summary → **Belum**
-- Review Changes → **Belum**
+- Selesai: `StudioComposer.tsx` dibuat dan dipasang.
+- Selesai: `ReviewChanges.tsx` dibuat dan dipasang.
+- Partial: `StudioActivityStream.tsx` sudah ada, tapi masih basic renderer.
+- Partial: layout Studio masih mempertahankan chat lama, terminal, graph, resilience monitor, task planner. Belum full SSOT cockpit replacement.
+- Partial: backend tools API skeleton sudah ditambah.
 
-### MVP 3: Market Split ← **Target Paralel**
-- Market router → **Skeleton ada**
-- Market UI tabs: Companion, Studio, Creator → **Belum**
-- Skill metadata migration → **Partial** (skill_manager sudah support, UI belum)
+### Fase D: Creator Cockpit
 
-### MVP 4: Creator Skeleton ← **Sebagian ada**
-- Creator page → **DALL preview ada, cockpit belum**
-- Asset bin → **Belum**
-- Preview panel → **Belum**
-- Timeline placeholder → **Belum**
-- Render/export mock → **Belum**
+- Selesai: `Creator.tsx` di-expand dari DALL preview menjadi cockpit.
+- Selesai: ada brief composer, asset bin, timeline placeholder, preview panel, render/export mock, activity.
+- Selesai: `creator_router.py` punya endpoint skeleton sesuai daftar rencana.
+- Belum: UI belum consume backend endpoint Creator.
 
 ---
 
-## Proposed Changes
+## Gap yang Masih Terbuka
 
-### Fase A: Shell Status Bar (MVP 1 completion)
+### MVP 1: Shell Alignment
 
-#### [NEW] `frontend/src/shell/ShellStatusBar.tsx`
-Global status bar yang selalu terlihat:
-- Active kernel pill
-- WebSocket status dot
-- Active model badge
-- Provider health indicator
-- Pending approvals badge
-- Running tasks badge
-- Emergency stop button
+Status: hampir selesai.
 
-#### [MODIFY] [App.tsx](file:///d:/ProjectBuild/projects/mia/frontend/src/App.tsx)
-- Inject `ShellStatusBar` di luar `<main>` agar selalu visible
-- Posisi: top atau bottom bar, sebelum sidebar
+- Belum: Shell Status Bar mengambil jumlah pending approvals dari backend.
+- Belum: Shell Status Bar mengambil running tasks dari backend.
+- Belum: emergency stop terhubung ke orchestrator/command registry nyata, sekarang hanya mengirim event WebSocket `EMERGENCY_STOP`.
+- Belum: provider health indicator memakai data nyata dari health check provider.
+
+### MVP 2: Studio Cockpit
+
+Status: partial, masih paling besar.
+
+- Belum: Activity stream taxonomy resmi: `thought`, `analyzed_file`, `searched`, `edited`, `ran_command`, `command_status`, `waiting`, `verification_result`, `changed_files`, `blocked`.
+- Belum: expand/collapse event activity stream.
+- Belum: file badge yang membuka read-only excerpt.
+- Belum: command badge dengan stdout/stderr ringkas per command.
+- Belum: `GET /api/studio/tools` untuk registry tools, sesuai SSOT.
+- Belum: `POST /api/studio/tools/run-verification`.
+- Belum: real command stop. Endpoint stop saat ini hanya menandai `stop_requested`, belum terminate process.
+- Belum: apply-patch endpoint masih skeleton approval, belum apply patch aman.
+- Belum: Review Changes fetch `changed-files` dan `diff` nyata.
+- Belum: Undo own changes.
+- Belum: task planner lama/hardcoded masih ada di `StudioPage.tsx`.
+- Belum: dummy chat response masih ada di `StudioPage.tsx`.
+
+### MVP 3: Market Split
+
+Status: UI split selesai, policy belum.
+
+- Belum: metadata skill semua marketplace belum dimigrasi/ditandai `market`.
+- Belum: strict skill boundary per market.
+- Belum: Companion Market policy melarang file edit/terminal/Git/dependency install/PC automation berisiko.
+- Belum: Studio Market policy gate + approval untuk aksi berisiko.
+- Belum: Creator Market media approval untuk folder media, render panjang, overwrite output, voice/brand identity, publish sosial.
+- Belum: test skill endpoint belum punya sandbox/policy wrapper.
+
+### MVP 4: Creator Kernel
+
+Status: cockpit skeleton selesai.
+
+- Belum: Creator UI belum memakai `/api/creator/projects`.
+- Belum: project state masih local UI dan backend in-memory.
+- Belum: asset upload/read folder media.
+- Belum: preview/render engine nyata.
+- Belum: export output artifact.
+- Belum: media approval flow.
+- Belum: timeline model belum persisted.
+
+### Cross-Kernel / SSOT
+
+Status: belum.
+
+- Belum: Action/Automation Orchestrator.
+- Belum: global approval model: `Review First`, `Always Execute`, emergency stop semantics.
+- Belum: SQLite migrations untuk:
+  - `approvals`
+  - `tasks`
+  - `command_runs`
+  - `creator_projects`
+  - `creator_assets`
+  - `creator_timelines`
+  - `market_installs`
+  - `kernel_events`
+- Belum: unified event stream lintas kernel.
+- Belum: persistence untuk running task dan audit log.
 
 ---
 
-### Fase B: Studio Activity Stream (MVP 2 core)
+## Backend Endpoint Status
 
-#### [NEW] `frontend/src/mia_studio/components/StudioActivityStream.tsx`
-Komponen baru untuk menampilkan event stream real-time:
-- Event types: `thought`, `analyzed_file`, `searched`, `edited`, `ran_command`, `command_status`, `waiting`, `verification_result`, `changed_files`, `blocked`
-- Setiap event bisa expand/collapse
-- Spinner untuk event yang masih berjalan
-- File badge → buka read-only excerpt
-- Command badge → tampilkan stdout/stderr ringkas
+### Market
 
-#### [NEW] `frontend/src/mia_studio/components/StudioComposer.tsx`
-Bottom composer sesuai SSOT:
-- Follow-up task input
-- Stop button (connected ke execution)
-- Auto-review toggle
-- Model/effort selector
-- Attachment button (`+`)
-- Submit (send) button
-- Changed-files summary strip di atas composer
-- Pending approval state banner
+Sudah ada:
 
-#### [NEW] `frontend/src/mia_studio/components/ReviewChanges.tsx`
-Review changes surface:
-- Daftar file berubah dengan status (added/modified/deleted)
-- Addition/deletion count
-- Diff read-only viewer (syntax highlight, no edit)
-- Undo button → revert own changes
-- Run verification button
-- Request follow-up button
-
-#### [MODIFY] [StudioPage.tsx](file:///d:/ProjectBuild/projects/mia/frontend/src/mia_studio/components/StudioPage.tsx)
-- Ganti chat+terminal layout dengan activity-stream cockpit layout
-- Integrasikan `StudioActivityStream`, `StudioComposer`, `ReviewChanges`
-- Pertahankan: GardenLauncher, Git status, IDE selector (sebagai opsional/secondary)
-- Hapus: hardcoded task checklist, dummy messages
-
-#### Backend additions untuk Studio built-in tools:
-#### [MODIFY] [studio_router.py](file:///d:/ProjectBuild/projects/mia/backend/api/studio_router.py)
-Tambah tool endpoint stubs:
+```txt
+GET    /api/market/skills
+POST   /api/market/skills/install/{skill_id}
+DELETE /api/market/skills/uninstall/{skill_id}
+POST   /api/market/skills/test/{skill_id}
 ```
+
+Belum:
+
+```txt
+GET    /api/market/policies
+POST   /api/market/skills/{skill_id}/approve
+GET    /api/market/skills/{skill_id}/risk
+```
+
+### Studio
+
+Sudah ada:
+
+```txt
 POST /api/studio/tools/search
 POST /api/studio/tools/read-file
 POST /api/studio/tools/apply-patch
@@ -154,71 +175,122 @@ GET  /api/studio/tools/changed-files
 GET  /api/studio/tools/diff
 ```
 
----
+Belum:
 
-### Fase C: Market Split (MVP 3)
-
-#### [MODIFY] [SkillMarketplace.tsx](file:///d:/ProjectBuild/projects/mia/frontend/src/SkillMarketplace.tsx)
-- Tambah 3 tabs: Companion Market | Studio Market | Creator Market
-- Tab filter memanggil `/api/market/skills?market=companion` dll
-- Pertahankan install/uninstall flow yang sudah ada
-
-#### [MODIFY] [market_router.py](file:///d:/ProjectBuild/projects/mia/backend/api/market_router.py)
-- Tambah `/api/market/skills/test/{skill_id}`
-- Pastikan filtering `market` param berfungsi dengan benar
-
----
-
-### Fase D: Creator Cockpit (MVP 4)
-
-#### [MODIFY] [Creator.tsx](file:///d:/ProjectBuild/projects/mia/frontend/src/Creator.tsx)
-Expand dari DALL preview menjadi Creator Cockpit:
-- Brief composer (textarea + submit)
-- Asset bin section (placeholder dengan structure)
-- Timeline placeholder (visual bar)
-- Preview player placeholder
-- Render/export status panel
-- Activity stream (media events)
-- Pertahankan: theme-aware styling yang sudah ada
-
-#### [MODIFY] [creator_router.py](file:///d:/ProjectBuild/projects/mia/backend/api/creator_router.py)
-Tambah endpoint Creator sesuai SSOT:
+```txt
+GET  /api/studio/tools
+POST /api/studio/tools/run-verification
+POST /api/studio/tools/revert-own-change
+GET  /api/studio/activity
+GET  /api/studio/approvals
+POST /api/studio/approvals/{id}/approve
+POST /api/studio/approvals/{id}/reject
 ```
-POST /api/creator/projects
-GET  /api/creator/projects/{id}
+
+### Creator
+
+Sudah ada:
+
+```txt
+GET   /api/creator/status
+GET   /api/creator/projects
+POST  /api/creator/projects
+GET   /api/creator/projects/{id}
 PATCH /api/creator/projects/{id}
-POST /api/creator/projects/{id}/assets
-POST /api/creator/projects/{id}/timeline
-POST /api/creator/projects/{id}/preview
-POST /api/creator/projects/{id}/export
-GET  /api/creator/projects/{id}/render-status
+POST  /api/creator/projects/{id}/assets
+POST  /api/creator/projects/{id}/timeline
+POST  /api/creator/projects/{id}/preview
+POST  /api/creator/projects/{id}/export
+GET   /api/creator/projects/{id}/render-status
+```
+
+Belum:
+
+```txt
+POST /api/creator/projects/{id}/assets/upload
+GET  /api/creator/projects/{id}/assets
+GET  /api/creator/projects/{id}/timeline
+GET  /api/creator/projects/{id}/activity
+POST /api/creator/projects/{id}/approve-media-action
+GET  /api/creator/projects/{id}/exports
 ```
 
 ---
 
-## Verification Plan
+## Verification Status
 
 ### Automated
-- `npm run build` di frontend — harus 0 error
-- `python -m py_compile backend/api/*.py` — syntax clean
+
+- Selesai: `npm.cmd run build` di `frontend` sukses.
+- Belum: `python -m py_compile backend/api/*.py` belum bisa dijalankan karena Python lokal tidak tersedia.
+  - `py -0p` melaporkan tidak ada Python terinstall.
+  - `.venv/pyvenv.cfg` menunjuk ke `C:\Users\ISLAMIAH\AppData\Local\Programs\Python\Python311\python.exe`, tapi executable itu tidak ada.
 
 ### Manual
-1. Buka `/companion` → Companion normal
-2. Buka `/studio` → Activity stream cockpit tampil (bukan chat lama)
-3. Buka `/market` → 3 tabs (Companion/Studio/Creator) terlihat
-4. Buka `/creator` → Creator cockpit dengan section asset bin, timeline, preview, render
-5. Buka `/llm` → LLM Warehouse normal
-6. Shell Status Bar selalu terlihat di semua kernel
-7. WebSocket switch events terfiring saat pindah kernel
+
+Belum dilakukan penuh.
+
+Checklist manual yang masih perlu:
+
+1. Buka `/companion` dan pastikan Companion normal.
+2. Buka `/studio` dan pastikan composer/review/activity stream tampil.
+3. Buka `/market` dan pastikan 3 tab market tampil serta fetch sesuai tab.
+4. Buka `/creator` dan pastikan Creator Cockpit tampil.
+5. Buka `/llm` dan pastikan LLM Warehouse normal.
+6. Pastikan Shell Status Bar muncul di semua kernel selain onboarding.
+7. Pastikan route switch masih mengirim event WebSocket.
+
+Catatan: Vite foreground berhasil menunjukkan `http://127.0.0.1:5173/`, tetapi proses dev server background dari shell ini tidak berhasil dipertahankan.
 
 ---
 
-## Urutan Eksekusi yang Disarankan
+## Prioritas Berikutnya yang Disarankan
 
-1. **Fase C: Market Split** — paling mudah, value langsung terlihat, tidak merusak yang sudah ada
-2. **Fase A: Shell Status Bar** — 1 file baru, inject ke App.tsx
-3. **Fase B: Studio Activity Stream** — terbesar, tapi sesuai SSOT paling penting
-4. **Fase D: Creator Cockpit** — expand skeleton yang sudah ada
+1. **Studio real Review Changes**
+   - Hubungkan `ReviewChanges.tsx` ke `/api/studio/tools/changed-files` dan `/api/studio/tools/diff`.
+   - Tambah diff viewer read-only.
+   - Tambah run verification endpoint.
 
-> [!NOTE]
-> Saya akan mengerjakan sesuai urutan yang user setujui. Tidak ada coding sebelum user approve rencana ini.
+2. **Studio command lifecycle**
+   - Simpan process handle di command registry.
+   - Implement real terminate di `/api/studio/tools/stop-command/{id}`.
+   - Tambah command event ke activity stream.
+
+3. **Shell status data nyata**
+   - Endpoint untuk pending approvals dan running tasks.
+   - Hubungkan status bar ke endpoint itu.
+
+4. **Creator backend integration**
+   - Creator UI create/load project dari `/api/creator/projects`.
+   - Asset bin dan timeline consume backend state.
+
+5. **Policy/Approval Orchestrator**
+   - Implement `Review First` / `Always Execute`.
+   - Gate command, patch, market skill test, media export.
+
+6. **SQLite persistence**
+   - Tambah migrasi untuk project Creator, approvals, command runs, kernel events, market installs.
+
+---
+
+## File yang Berubah dalam Implementasi Terakhir
+
+Frontend:
+
+- `frontend/src/App.tsx`
+- `frontend/src/Market.tsx`
+- `frontend/src/Creator.tsx`
+- `frontend/src/shell/ShellStatusBar.tsx`
+- `frontend/src/mia_studio/components/StudioPage.tsx`
+- `frontend/src/mia_studio/components/StudioComposer.tsx`
+- `frontend/src/mia_studio/components/ReviewChanges.tsx`
+
+Backend:
+
+- `backend/api/market_router.py`
+- `backend/api/studio_router.py`
+- `backend/api/creator_router.py`
+
+Repo note:
+
+- `.agent.PLANNER.agent.md` dan `.agent.bane.READER.agent.md` terlihat sebagai untracked file sebelum update dokumen ini. Saya tidak mengubah atau menghapusnya.

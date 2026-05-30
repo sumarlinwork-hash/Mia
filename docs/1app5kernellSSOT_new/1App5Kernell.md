@@ -1,4 +1,4 @@
-# SSOT: 1 Shell, 5 Independent Kernels
+﻿# SSOT: 1 Shell, 5 Independent Kernels
 
 Dokumen ini adalah Single Source of Truth untuk arah flagship MIA setelah perubahan paradigma terbaru:
 
@@ -1561,8 +1561,13 @@ Frontend yang sudah ada dan harus dipakai sebagai fondasi:
 - `frontend/src/Sidebar.tsx`: navigasi shell utama.
 - `frontend/src/Companion.tsx`: Companion UI, chat, intimacy, active model selector.
 - `frontend/src/LLMPage.tsx`: LLM Warehouse UI.
-- `frontend/src/SkillMarketplace.tsx`: Market UI lama, calon basis Market Kernel.
+- `frontend/src/Market.tsx`: Market Kernel UI aktif. File `SkillMarketplace.tsx` tidak ada lagi di repo saat audit terbaru; route `/market` memakai `Market.tsx`.
+- `frontend/src/Creator.tsx`: Creator Kernel cockpit aktif, sudah berisi brief composer, asset bin, timeline placeholder, preview, render/export mock, dan activity list.
+- `frontend/src/shell/ShellStatusBar.tsx`: global Shell status bar aktif.
 - `frontend/src/mia_studio/components/StudioPage.tsx`: Studio UI utama.
+- `frontend/src/mia_studio/components/StudioActivityStream.tsx`: activity/log stream renderer awal.
+- `frontend/src/mia_studio/components/StudioComposer.tsx`: bottom composer awal untuk follow-up, stop, auto-review, model trigger, attachment, dan changed-files strip.
+- `frontend/src/mia_studio/components/ReviewChanges.tsx`: review changes surface awal.
 - `frontend/src/mia_studio/components/GardenLauncher.tsx`: launcher/prompt awal Studio.
 - `frontend/src/mia_studio/components/StudioTerminal.tsx`: terminal/log viewer.
 - `frontend/src/mia_studio/components/GraphViewer.tsx`: visual graph viewer.
@@ -1579,8 +1584,8 @@ Tambahan backend:
 ```txt
 backend/
   api/
-    creator_router.py          (NEW)
-    market_router.py           (NEW)
+    creator_router.py          (EXISTS, skeleton; needs persistence/render/media approval)
+    market_router.py           (EXISTS, partial; needs policy gate/approval)
     shell_router.py            (NEW, optional but recommended)
     automation_router.py       (NEW)
     approval_router.py         (NEW)
@@ -1605,10 +1610,10 @@ Tambahan frontend:
 
 ```txt
 frontend/src/
-  Creator.tsx                  (NEW)
-  Market.tsx                   (NEW or refactor SkillMarketplace.tsx)
+  Creator.tsx                  (EXISTS, cockpit skeleton)
+  Market.tsx                   (EXISTS, 3 market tabs)
   shell/
-    ShellStatusBar.tsx         (NEW)
+    ShellStatusBar.tsx         (EXISTS, static status data for now)
     ApprovalCenter.tsx         (NEW)
     ActivityStream.tsx         (NEW shared component)
   creator/
@@ -1618,9 +1623,9 @@ frontend/src/
     PreviewPlayer.tsx          (NEW)
     RenderPanel.tsx            (NEW)
   studio/
-    StudioActivityStream.tsx   (NEW or shared ActivityStream)
-    ReviewChanges.tsx          (NEW)
-    StudioComposer.tsx         (NEW)
+    StudioActivityStream.tsx   (EXISTS, basic renderer)
+    ReviewChanges.tsx          (EXISTS, wired to changed-files/diff; undo still placeholder)
+    StudioComposer.tsx         (EXISTS, partial SSOT composer)
   hooks/
     useShellStatus.ts          (NEW)
     useApprovals.ts            (NEW)
@@ -1804,16 +1809,16 @@ POST /api/creator/projects/{id}/stop-render
 Studio built-in tools:
 
 ```txt
-GET  /api/studio/tools
-POST /api/studio/tools/search
-POST /api/studio/tools/read-file
-POST /api/studio/tools/apply-patch
-POST /api/studio/tools/run-command
-GET  /api/studio/tools/command-status/{id}
-POST /api/studio/tools/stop-command/{id}
-POST /api/studio/tools/run-verification
-GET  /api/studio/tools/changed-files
-GET  /api/studio/tools/diff
+GET  /api/studio/tools                         (TARGET, not implemented yet)
+POST /api/studio/tools/search                  (EXISTS, skeleton)
+POST /api/studio/tools/read-file               (EXISTS, skeleton)
+POST /api/studio/tools/apply-patch             (EXISTS, approval placeholder)
+POST /api/studio/tools/run-command             (EXISTS, skeleton command runner)
+GET  /api/studio/tools/command-status/{id}     (EXISTS)
+POST /api/studio/tools/stop-command/{id}       (EXISTS, stop request only; does not terminate process yet)
+POST /api/studio/tools/run-verification        (EXISTS, frontend build verification)
+GET  /api/studio/tools/changed-files           (EXISTS)
+GET  /api/studio/tools/diff                    (EXISTS)
 ```
 
 Compatibility rule: endpoint lama seperti `/api/skills/marketplace` boleh tetap hidup sementara, tetapi harus menjadi alias ke Market router.
@@ -1939,34 +1944,34 @@ Mitigasi minimum:
 
 MVP 1: Shell Alignment
 
-- 5 route skeleton: `/companion`, `/studio`, `/llm`, `/creator`, `/market`
-- Sidebar 5 kernel
-- Shell status bar
-- kernel switch events
+- 5 route skeleton: `/companion`, `/studio`, `/llm`, `/creator`, `/market` - implemented.
+- Sidebar 5 kernel - implemented.
+- Shell status bar - implemented as `ShellStatusBar.tsx`, but approvals/tasks/provider health are still static placeholders.
+- kernel switch events - implemented for all 5 route families.
 
 MVP 2: Studio Cockpit
 
-- activity stream
-- Studio composer
-- built-in tools API skeleton
-- changed-files summary
-- Review Changes
+- activity stream - partial: basic `StudioActivityStream.tsx` exists, but taxonomy/expand/file/command details are not complete.
+- Studio composer - partial: `StudioComposer.tsx` exists; effort selector and real approval banner still missing.
+- built-in tools API skeleton - partial: search/read/apply-patch/run-command/status/stop/changed-files/diff/run-verification exist; registry, real stop, and policy gate are missing.
+- changed-files summary - partial: composer strip exists; Review Changes does not fetch real data yet.
+- Review Changes - partial: `ReviewChanges.tsx` fetches changed files and diff, and can trigger frontend verification; undo is still a placeholder.
 
 MVP 3: Market Split
 
-- Market router
-- Market UI tabs: Companion, Studio, Creator
-- skill metadata migration
-- creator-aware skill manager
+- Market router - implemented partially with list/install/uninstall/test/filter.
+- Market UI tabs: Companion, Studio, Creator - implemented in `Market.tsx`.
+- skill metadata migration - still partial.
+- creator-aware skill manager - partially implemented, but strict policy boundary is still missing.
 
 MVP 4: Creator Skeleton
 
-- Creator page
-- Creator page now includes a theme-aware DALL preview card UI, matching LLM Warehouse opacity and palette rules
-- asset bin
-- preview panel
-- timeline placeholder
-- render/export mock/status flow
+- Creator page - implemented as `Creator.tsx`.
+- Creator page now includes a full cockpit skeleton, not only the old DALL preview card.
+- asset bin - implemented as UI skeleton.
+- preview panel - implemented as UI skeleton.
+- timeline placeholder - implemented as UI skeleton.
+- render/export mock/status flow - implemented as UI skeleton and backend skeleton; not connected to real renderer/persistence yet.
 
 MVP 5: Automation Governance
 
@@ -2008,322 +2013,435 @@ Recovery rules:
 
 ---
 
-## TODO Fact-Check Existing Implementation
+## Total Fact-Check Existing Code vs SSOT
+
+Audit ini membandingkan kode aktual dengan kontrak di SSOT untuk backend, frontend, frontend wiring, data/persistence, policy, dan market/creator/studio boundaries. Status memakai kategori:
+
+- `Selesai`: sudah ada dan tersambung sesuai kontrak minimum.
+- `Partial`: ada implementasi awal, tetapi belum penuh sesuai SSOT.
+- `Belum`: belum ditemukan di kode.
+- `Redundant`: ada file/route/komponen yang tidak menjadi jalur canonical SSOT atau tidak terlihat dipakai.
+- `Duplikat/Compatibility`: ada dua jalur untuk fungsi mirip; satu perlu jadi canonical dan satu perlu alias/deprecation.
+- `Drift/Risk`: ada implementasi yang berjalan, tetapi melenceng atau berisiko terhadap SSOT.
+
+### Executive Summary
+
+| Area | Status | Ringkasan |
+|---|---|---|
+| 1 Shell, 5 route kernel | Selesai | `/companion`, `/studio`, `/llm`, `/creator`, `/market` ada di `App.tsx`; `/skills` redirect ke `/market`. |
+| Sidebar 5 kernel | Selesai | `Sidebar.tsx` menampilkan Companion, Studio, LLM Warehouse, Creator, Market. |
+| Kernel switch events | Partial | `App.tsx` mengirim `SWITCH_TO_*` untuk 5 kernel; backend event bus subscribe 5 kernel. WebSocket handler chat masih menangani eksplisit hanya Companion/Studio. |
+| Shell status bar | Partial | `ShellStatusBar.tsx` ada dan tampil global, tetapi provider health, approvals, tasks masih statis. Emergency stop hanya kirim WS event. |
+| Backend router split | Partial | `companion_router`, `studio_router`, `llm_router`, `market_router`, `creator_router` mounted di `main.py`; Market/Creator masih skeleton/partial. |
+| Frontend Market | Partial | UI tiga tab market sudah ada dan fetch `/api/market/skills?market=...`; execute sudah pindah ke `/api/market/skills/execute`; builder/recommendation flow masih memakai compatibility `/api/skills/save` dan `/api/apps/*`. |
+| Backend Market | Partial | List/filter/install/uninstall/test/execute ada; test/execute sekarang infer target kernel dari metadata skill. Belum policy gate/risk review. |
+| Frontend Creator | Partial | Creator Cockpit skeleton ada; belum consume backend Creator API. |
+| Backend Creator | Partial | Endpoint project/assets/timeline/preview/export/render-status ada, tetapi state in-memory, tanpa SQLite, upload, renderer, artifact, approval. |
+| Frontend Studio cockpit | Partial | `StudioActivityStream`, `StudioComposer`, `ReviewChanges` ada dan terpasang; chat dummy, task planner hardcoded, IDE workflow lama masih ada. |
+| Backend Studio tools | Partial | Search/read-file/apply-patch/run-command/status/stop/changed-files/diff/run-verification ada; registry, safe patch, real process stop, policy gate belum. |
+| Persistence SSOT | Partial | `state_store.py` hanya membuat `config_store`; history/stats/local runtime memakai SQLite terpisah; table approvals/tasks/creator/market/kernels belum ada. |
+| Approval / Always Execute | Belum | Tidak ada approval router/service/UI, policy store, approval center, dry-run governance. |
+| Automation Orchestrator | Belum | Crone daemon ada sebagai recurring jobs, tetapi Shell Action/Automation Orchestrator belum ada. |
+| Real-life integrations | Belum | Email/calendar/booking/shopping/selling/social publish belum ada sebagai governed workflows. |
+| Monaco/no web IDE decision | Drift | `@monaco-editor/react` masih ada di package dan lockfile, tidak ditemukan import aktif di `frontend/src`. |
+
+---
+
+## Backend Fact-Check
+
+### Backend App Composition
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| FastAPI app modular | Selesai | `backend/main.py` imports and includes `llm_router`, `studio_router`, `companion_router`, `market_router`, `creator_router`. | Sesuai micro-kernel startup. |
+| Static assets mount | Selesai | `app.mount("/assets", StaticFiles(...))`. | Untuk frontend public assets. |
+| Crone daemon startup | Partial | `crone_daemon.start()` di lifespan. | Berguna, tetapi bukan Action/Automation Orchestrator SSOT. |
+| Global hotkey listener | Drift/Risk | `pynput.keyboard.GlobalHotKeys` di `main.py`. | Bisa gagal di environment headless; bukan isu SSOT utama. |
+| Shell router | Belum | Tidak ada `backend/api/shell_router.py`. | Dibutuhkan untuk shell status, tasks, emergency stop, power policy. |
+| Approval router | Belum | Tidak ada `backend/api/approval_router.py`. | Dibutuhkan untuk `Review First` / approval center. |
+| Automation router | Belum | Tidak ada `backend/api/automation_router.py`. | Dibutuhkan untuk policies/dry-run/execute/audit. |
+
+### Companion Backend
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| Companion chat websocket | Selesai | `/ws/chat/heartbeat` and `/api/chat/heartbeat` in `companion_router.py`. | Frontend `WebSocketProvider` connects to `/ws/chat/heartbeat`. |
+| Bootstrap endpoint | Selesai | `GET /api/bootstrap`. | Seeds config/history/memory/skills/marketplace/recommendations/crone. |
+| Memory/chat endpoints | Selesai/Partial | `/api/chat/history`, `/api/memory/files`, `/api/memory/file`, delete/rewind/pin/feedback. | Companion memory exists, but not governed by new approval model. |
+| Intimacy mode endpoints | Selesai | `/api/intimacy/toggle`, `/api/intimacy/status`, `/api/intimacy/touch`, `/api/intimacy/settings`. | Professional mode toggle exists in config/UI, but real workflows missing. |
+| Power-state event bus handling | Partial | subscribes `SWITCH_TO_STUDIO`, `SWITCH_TO_COMPANION`, `SWITCH_TO_CREATOR`, `SWITCH_TO_MARKET`, `SWITCH_TO_LLM`. | `_handle_module_switch` is 5-kernel aware, but `/api/power_state` returns `SLEEP` only for studio and `WAKE` otherwise. |
+| WebSocket switch handling | Partial/Duplikat | WS handler explicitly processes `SWITCH_TO_STUDIO` and `SWITCH_TO_COMPANION`. | Other `SWITCH_TO_*` are sent by frontend but not explicitly handled in WS loop; event bus subscriber may not receive WS messages unless publish happens elsewhere. |
+| Skill endpoints in Companion | Duplikat/Compatibility | `/api/skills/installed`, `/api/skills/marketplace`, install/uninstall/upload/save/test, `/api/skill/execute`. | These duplicate/overlap Market kernel. Keep as compatibility only or alias to Market. |
+| App generation/recommendations | Partial/Compatibility | `/api/apps/templates`, generate, preview, recommendations, trending. | Still used by `Market.tsx`; not under canonical Market router. |
+| Professional assistant workflows | Belum | No email/calendar/booking/shopping/selling workflow endpoints. | Toggle exists but governed workflows absent. |
+
+### Studio Backend
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| Studio service foundation | Selesai/Partial | `backend/studio/` has execution, file, version, project, graph, git, IDE, lock, metrics services. | Strong foundation. Still not fully SSOT cockpit/tool registry. |
+| Handshake/session | Selesai | `POST /api/studio/auth/handshake`. | Used by `FileStoreContext`. |
+| File read/write/list/rename/delete | Selesai/Partial | `/api/studio/file/*`. | Existing project file service. Policy/approval not integrated. |
+| Execution run/stop | Partial | `/api/studio/execution/run`, `/api/studio/execution/stop`. | Existing execution service; separate from new tools command registry. |
+| Git status | Selesai | `GET /api/studio/git/status`. | Used by `StudioPage`. |
+| IDE list/open | Selesai/Optional | `/api/studio/ide/list`, `/api/studio/ide/open`. | SSOT allows local IDE as secondary, but not primary UX. |
+| Graph/event websockets | Selesai/Partial | `/ws/studio/events/{project_id}`, `/ws/studio/graph/{execution_id}`. | Existing graph/events; not unified cross-kernel activity stream. |
+| Studio skill endpoints | Partial | `/api/studio/skills/installed`, marketplace, test, execute. | Skill scoping exists but not full approval/policy gate. |
+| Studio tools search/read | Partial | `/api/studio/tools/search`, `/read-file`. | Skeleton direct filesystem scan/read under workspace. |
+| Studio tools apply-patch | Partial | `/api/studio/tools/apply-patch`. | Returns `pending_approval`; does not apply patch. |
+| Studio tools run-command/status | Partial | `/api/studio/tools/run-command`, `/command-status/{id}`. | Async shell command skeleton; no approval, no command allowlist, no persisted audit. |
+| Studio tools stop-command | Partial/Drift | `/api/studio/tools/stop-command/{id}`. | Only sets `stop_requested`; does not terminate process. |
+| Studio changed files/diff | Partial | `/api/studio/tools/changed-files`, `/diff`. | Uses git; frontend not yet wired to ReviewChanges. |
+| Studio tools registry | Belum | `GET /api/studio/tools` absent. | SSOT requires explicit tool registry. |
+| Verification endpoint | Belum | `POST /api/studio/tools/run-verification` absent. | Needed for Review Changes and auto-review. |
+| Approval endpoints | Belum | No `/api/studio/approvals`. | Needed for pending approvals in composer/status bar. |
+| Browser/local app verification | Belum | No Studio browser verification endpoint. | SSOT target not implemented. |
+| Crone endpoints in Studio router | Duplikat/Compatibility | `/api/crone/status`, pause/resume/trigger live in `studio_router.py`. | Crone belongs to Shell/Automation or Studio subtab, but route is mounted globally. |
+| Metrics endpoint | Drift | `GET /metrics` in studio router without `/api/studio` prefix. | Could be intentional Prometheus endpoint; note as global. |
+
+### Market Backend
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| Market router exists | Selesai | `backend/api/market_router.py`, prefix `/api/market`. | Mounted in `main.py`. |
+| List/filter skills | Partial | `GET /api/market/skills?market=...`. | Filters by `market` or `category`; Companion also accepts `shared`. Studio/Creator do not include `shared`. |
+| Install/uninstall | Selesai/Partial | `POST /skills/install/{skill_id}`, `DELETE /skills/uninstall/{skill_id}`. | No approval, risk, or audit. |
+| Test skill endpoint | Partial/Risk | `POST /skills/test/{skill_id}` calls `execute_skill(..., kernel="market")`. | `SkillManager.is_skill_allowed_for_kernel()` does not support `market`, likely causing skill restriction. Decide whether Market test should run under target kernel. |
+| Policy/risk endpoints | Belum | No `/api/market/policies`, `/risk`, `/approve`. | Required by SSOT. |
+| Skill metadata migration | Partial | `skill_manager` supports `market` and `allowed_kernels`; existing skills still mixed legacy `category`. | Need normalize all marketplace skills. |
+| Compatibility layer | Duplikat | Companion still has `/api/skills/*`, `/api/apps/*`, `/api/skill/execute`. | Frontend Market still uses some of these. |
+
+### Creator Backend
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| Creator router exists | Selesai | `backend/api/creator_router.py`, prefix `/api/creator`. | Mounted in `main.py`. |
+| Status endpoint | Selesai | `GET /api/creator/status`. | Skeleton status. |
+| Project CRUD skeleton | Partial | list/create/get/patch project endpoints. | In-memory `creator_projects` only. |
+| Assets endpoint | Partial | `POST /projects/{id}/assets`. | Metadata-only; no upload, file store, thumbnails. |
+| Timeline endpoint | Partial | `POST /projects/{id}/timeline`. | No GET timeline; no persistence. |
+| Preview/export/status | Partial | preview/export/render-status endpoints. | No real render engine, no artifacts. |
+| Stop render | Belum | SSOT target has stop-render; not implemented. |
+| Media approval | Belum | No media approval endpoint. | Required before media folder read/render overwrite/publish. |
+| Creator service package | Belum | No `backend/creator/`. | Need `project_service`, `media_service`, `timeline_service`, `render_service`. |
+
+### LLM Backend
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| LLM router exists | Selesai | `backend/api/llm_router.py`, prefix `/api`. | Mounted in `main.py`. |
+| Config endpoints | Selesai | `GET/POST /api/config`. | Shared config used across app. |
+| Provider management | Selesai/Partial | `/api/providers`, add/delete/test. | Good for LLM Warehouse; provider health not wired into ShellStatusBar. |
+| Diagnostics | Selesai/Partial | `/api/diagnostic`, `/api/system/metrics`, `/api/test-connection`. | Some UI uses `/api/diagnostic`; ResilienceDashboard not routed. |
+
+### State, Policy, Persistence
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| Main SQLite state store | Partial | `backend/core/state_store.py` only creates `config_store`. | SSOT tables missing. |
+| Chat history DB | Separate/Partial | `mia_comm/history_manager.py` uses SQLite `messages`. | Not unified with `state_store.db`. |
+| Provider stats DB | Separate/Partial | `backend/core/stats_manager.py` uses SQLite `provider_stats`. | Not integrated with Shell status. |
+| Local runtime state | Separate/Partial | `backend/core/local_runtime.py` creates generic `state`. | Separate local runtime store. |
+| Policy engine | Partial | `backend/core/policy_engine.py`; tests exist. | Generic graph policy exists, but not wired to Studio/Market/Creator actions. |
+| Permission manager | Partial | `backend/core/permission_manager.py`. | Simple permission layer, not approval workflow. |
+| Approval service/router | Belum | No approval service/router. | SSOT requirement. |
+| Audit log service | Belum | No canonical `backend/core/audit_log.py`. | Studio has `audit_service.py` but not shell-wide. |
+| Automation policies | Belum | No automation policy store/router. | SSOT requirement. |
+
+---
+
+## Frontend Fact-Check
+
+### Frontend Root Wiring
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| Providers wired | Selesai | `main.tsx`: QueryClientProvider, WebSocketProvider, ConfigProvider, EmotionProvider, App. | Correct composition. |
+| Router setup | Selesai | `App.tsx`: BrowserRouter and lazy routes. | Uses React Router future flags. |
+| Onboarding guard | Selesai/Partial | Redirects to `/onboarding` until `sessionStorage.mia_onboarded_session`. | Session-only onboarding. |
+| Background/theme layer | Selesai/Partial | `BackgroundLayer`, `useConfig`, CSS vars. | Works globally; not SSOT risk. |
+| Sidebar hidden in Studio | Design Drift/Intentional | `!isStudioRoute` hides Sidebar in Studio. | SSOT says Shell surfaces should be consistent; Studio currently full-screen cockpit without sidebar. Status bar remains visible. |
+| Shell status bar global | Partial | `ShellStatusBar` rendered after phase 3 except onboarding. | Fixed bottom; may overlay content without bottom padding in some pages. |
+| Route aliases | Partial | `/skills` redirects to `/market`; `/` redirects `/companion`. | `/crone`, `/emotion`, `/iam-mia` still top-level legacy routes. |
+
+### Frontend Routes / Pages
+
+| Route/Page | Status | Evidence | Catatan |
+|---|---|---|---|
+| `/companion` | Selesai/Partial | `Companion.tsx`. | Rich UI; professional workflow governance missing. |
+| `/studio` | Partial | `StudioPage.tsx`, FileStoreProvider. | Cockpit partial; launcher/chat/terminal/graph/IDE/task planner still mixed. |
+| `/llm` | Selesai/Partial | `LLMPage.tsx`. | Provider management exists; health not globalized. |
+| `/creator` | Partial | `Creator.tsx`. | Cockpit skeleton only, no backend data wiring. |
+| `/market` | Partial | `Market.tsx`. | 3 tabs and install flow; execution/build flow still compatibility endpoints. |
+| `/crone` | Redundant/Legacy | `Crone.tsx` routed top-level. | SSOT wants automation/crone under Studio/Shell, not a main kernel route. |
+| `/emotion` | Redundant/Legacy | `EmotionDashboard.tsx` routed top-level. | SSOT wants Companion subtab/surface, not main kernel route. |
+| `/iam-mia` | Redundant/Legacy | `IamMia.tsx` routed top-level. | SSOT wants Companion subtab/surface. |
+| `ResilienceDashboard.tsx` | Redundant/Unused | File exists, no route/import found. | Could be removed or routed under Studio diagnostics. |
+
+### Frontend Shell / Navigation
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| Sidebar 5 kernel nav | Selesai | `Sidebar.tsx` navItems includes 5 kernels. | Uses `Flower` icon for Studio. |
+| Sidebar legacy support | Partial | Top-level legacy routes not in sidebar. | They are hidden but still reachable. |
+| Shell status active kernel | Selesai | Resolves first path segment. | Unknown routes fallback Companion. |
+| Shell WebSocket indicator | Selesai | Receives `wsStatus`. | Only reports chat heartbeat socket. |
+| Shell model badge | Partial | Reads `active_provider_override`. | Does not show resolved actual dynamic provider. |
+| Shell provider health | Belum/Static | Hardcoded `Provider healthy`. | Needs backend health. |
+| Shell approvals/tasks count | Belum/Static | Hardcoded `0 approvals`, `0 tasks`. | Needs shell/approval/task endpoints. |
+| Shell emergency stop | Partial | Calls `send({ type: 'EMERGENCY_STOP' })`. | Backend does not handle it as global stop. |
+
+### Frontend Market Wiring
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| 3 market tabs | Selesai | `categories` = Companion, Studio, Creator. | UI done. |
+| Market fetch by tab | Selesai/Partial | `/api/market/skills?market=${activeMarket}`. | Backend filter partial. |
+| Install flow | Selesai/Partial | `/api/market/skills/install/{id}`. | No approval/audit. |
+| Execute installed skill | Drift/Bug | Uses `fetch(/api/skill/execute?skill_id=..., { method:'POST' })`. | Backend `/api/skill/execute` expects JSON body with `skill_id`; query string likely fails with 400. |
+| Modal executor skill run | Drift/Bug | Also posts to `/api/skill/execute?skill_id=...` with body inputs. | Body lacks `skill_id`; likely fails. |
+| App generation/save | Duplikat/Compatibility | Uses `/api/apps/generate` and `/api/skills/save`. | Still Companion compatibility, not Market canonical. |
+| Recommendations | Duplikat/Compatibility | Uses `/api/apps/recommendations`. | Still Companion/discovery endpoint. |
+| Uninstall UI | Partial/Belum | Backend supports uninstall; Market UI does not visibly expose uninstall flow in primary cards. | Confirm if modal has it; primary flow mostly install/use. |
+
+### Frontend Studio Wiring
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| Studio handshake | Selesai | `FileStoreContext` posts `/api/studio/auth/handshake`. | Establishes project/session. |
+| Studio launcher | Selesai/Partial | `GardenLauncher.tsx`. | Prompts into workspace. |
+| Studio graph stream | Selesai/Partial | `useStudioStream`, `GraphViewer`. | Execution graph available, not full activity taxonomy. |
+| Studio activity stream | Partial | `StudioActivityStream` renders JSON events/logs. | No expand/collapse, typed events, file/command detail. |
+| Studio composer | Partial | `StudioComposer`. | Stop/auto-review/model trigger exists; effort selector/approval state real data missing. |
+| Review Changes | Partial | `ReviewChanges`. | Shows branch/dirty count only; no changed-file list/diff fetch. |
+| Git status polling | Selesai | `StudioPage` polls `/api/studio/git/status`. | Feeds dirty count and branch. |
+| IDE discovery/open | Selesai/Optional | Fetches `/api/studio/ide/list`, `/ide/open`. | Optional/secondary per SSOT, but still central in UI. |
+| Terminal/log viewer | Selesai/Partial | `StudioTerminal` receives stream logs. | Fine as read-only logs. |
+| Task planner | Redundant/Drift | Hardcoded tasks in `StudioPage`. | Should be real task state or removed. |
+| Dummy MIA response | Redundant/Drift | `setTimeout` fake response after prompt. | Should be real agent/task execution. |
+| Auto-review toggle | Partial | UI state only. | No backend behavior. |
+| Attachment button | Partial/Static | Icon button with title only. | No attachment flow. |
+| StudioTopbar | Redundant/Unused | `StudioTopbar.tsx` exists, no import found. | Candidate cleanup or reintegration. |
+| ImpactModal | Redundant/Unused | `ImpactModal.tsx` exists, no import found. | Candidate cleanup or use in rename/delete impact. |
+
+### Frontend Creator Wiring
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| Creator Cockpit UI | Partial | `Creator.tsx`: brief, assets, timeline, preview, render/export, activity. | Static/local UI skeleton. |
+| Global theme usage | Selesai | `useConfig`, `useTheme`, `normalizeThemeHue`. | No separate theme controls. |
+| Backend project integration | Belum | No fetch to `/api/creator/*` in `Creator.tsx`. | Needs `useCreatorQueries`. |
+| Asset upload | Belum | Static asset cards. | No media picker/upload/API. |
+| Timeline persistence | Belum | Static bars. | No backend state. |
+| Preview/render/export | Partial/Static | Buttons/status UI only. | No API calls or renderer. |
+| Creator activity stream | Partial/Static | Local static activity list. | No event source. |
+
+### Frontend LLM Wiring
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| LLM Warehouse page | Selesai/Partial | `LLMPage.tsx`. | Uses config/provider/test endpoints. |
+| Active model global setting | Selesai/Partial | Companion/Studio use `/api/config`. | Shell badge does not resolve dynamic runtime provider. |
+| Provider health to Shell | Belum | No hook feeding ShellStatusBar. | Needed for SSOT status bar. |
+
+### Frontend Hooks / Data Layer
+
+| Item | Status | Evidence | Catatan |
+|---|---|---|---|
+| React Query setup | Selesai | `main.tsx`, `useMIAQueries.ts`. | Good base. |
+| Bootstrap seeding | Selesai/Partial | `/api/bootstrap` seeds config/history/memory/skills/marketplace/recommendations/crone. | Seeds marketplace without market tab key; `Market.tsx` uses tab-specific key. |
+| Market hooks | Belum | No `useMarketQueries.ts`. | Market fetch inline in component. |
+| Creator hooks | Belum | No `useCreatorQueries.ts`. | Creator static/local. |
+| Shell status hook | Belum | No `useShellStatus.ts`. | Shell status static. |
+| Approvals hook | Belum | No `useApprovals.ts`. | Approval UI missing. |
+| Automation policies hook | Belum | No `useAutomationPolicies.ts`. | Policy UI missing. |
+
+---
+
+## Duplicates, Redundant Files, and Compatibility Layers
+
+### Canonical vs Compatibility Endpoints
+
+| Function | Canonical Target | Existing Duplicate/Compatibility | Status |
+|---|---|---|---|
+| Market list/install/uninstall | `/api/market/skills*` | `/api/skills/marketplace`, `/api/skills/install`, `/api/skills/uninstall` in Companion | Duplikat/Compatibility. |
+| Skill execute | Kernel-specific execute route | `/api/skill/execute` in Companion, `/api/studio/skill/execute`, Market test endpoint | Duplikat/Partial. Need canonical per kernel with policy. |
+| Skill save/generate | Market/Creator builder domain | `/api/skills/save`, `/api/apps/generate` in Companion | Compatibility; Market UI still depends on it. |
+| Crone automation | Shell/Automation router target | `/api/crone/*` in Studio router and Crone page/settings | Compatibility/Drift. |
+| Power state | Shell router target | `/api/power_state` in Companion | Compatibility/Partial. |
+
+### Frontend Redundant / Legacy Surfaces
+
+| File/Route | Classification | Reason |
+|---|---|---|
+| `frontend/src/Crone.tsx` and `/crone` | Redundant/Legacy | Automation should move to Shell/Studio subtab, not top-level kernel. |
+| `frontend/src/EmotionDashboard.tsx` and `/emotion` | Redundant/Legacy | Should be Companion subtab/surface. |
+| `frontend/src/IamMia.tsx` and `/iam-mia` | Redundant/Legacy | Should be Companion memory/identity subtab. |
+| `frontend/src/ResilienceDashboard.tsx` | Redundant/Unused | No route/import found. |
+| `frontend/src/mia_studio/components/StudioTopbar.tsx` | Redundant/Unused | No import found. |
+| `frontend/src/mia_studio/components/ImpactModal.tsx` | Redundant/Unused | No import found. |
+| `frontend/src/components/ExecutionVisualizer.tsx` | Possibly Redundant | File exists; no active import found in audit. |
+| `@monaco-editor/react` dependency | Redundant/Drift | Present in package/lock, no import in `frontend/src`. |
+
+### Backend Redundant / Legacy Surfaces
+
+| File/Route | Classification | Reason |
+|---|---|---|
+| `/api/skills/*` in Companion | Duplikat/Compatibility | Market router now exists; keep only as alias while migrating UI. |
+| `/api/apps/*` in Companion | Duplikat/Compatibility | Market builder/recommendation logic still lives under Companion. |
+| `/api/crone/*` in Studio router | Drift/Compatibility | Should be Automation/Shell or Studio subtab API. |
+| `backend/_test_*.py`, `_check_*.py` | Utility/Redundant | Local diagnostic scripts, not product runtime. |
+| `backend/studio/secret.txt` | Risk | Secret-like file in repo tree; needs review. |
+| `backend/data/voice_archive/...wav` | Risk/Filesystem | `rg` hit CRC error on one wav; media archive should not affect code audit. |
+
+---
+
+## Missing SSOT Contracts
+
+### Shell / Governance Missing
+
+- `backend/api/shell_router.py` for active kernel, shell status, provider health summary, pending task count, emergency stop.
+- `backend/api/approval_router.py` for pending approvals and decisions.
+- `backend/core/approval_service.py`.
+- `backend/core/audit_log.py`.
+- `backend/core/automation_orchestrator.py`.
+- Approval UI: `ApprovalCenter.tsx`.
+- Hooks: `useShellStatus`, `useApprovals`, `useAutomationPolicies`.
+- `Review First` / `Always Execute` settings UI and persistence.
+- Dry-run flow for external actions.
+- Hard-block policy enforcement for high-stakes actions.
+
+### Studio Missing
+
+- `GET /api/studio/tools` registry.
+- `POST /api/studio/tools/run-verification`.
+- `POST /api/studio/tools/revert-own-change`.
+- Real process termination for command stop.
+- Safe patch application with ownership tracking.
+- Browser/local app verification tool.
+- Activity event taxonomy persisted/emitted consistently.
+- ReviewChanges data wiring to changed-files/diff.
+- Approval policy for write/command/network/destructive/credential actions.
+
+### Creator Missing
+
+- `backend/creator/` service package.
+- SQLite project/assets/timeline persistence.
+- Asset upload/import/list endpoints.
+- Media discovery tool.
+- Real preview/render/export pipeline.
+- Render stop endpoint.
+- Export artifact listing/download.
+- Media approval endpoint.
+- UI integration with `/api/creator/projects`.
+- Creator activity stream from backend events.
+
+### Market Missing
+
+- Canonical skill execute/test behavior per target kernel.
+- Policy gate and risk classification before install/test/execute.
+- Market-specific permission boundaries.
+- Metadata migration for all legacy skills.
+- UI for uninstall, risk, permission review, and approval.
+- Cleanup or aliasing of Companion compatibility skill/app endpoints.
+
+### Persistence Missing
+
+The SSOT table targets are not implemented in `state_store.py`:
+
+- `kernel_sessions`
+- `activity_events`
+- `approval_requests`
+- `automation_policies`
+- `market_installs`
+- `creator_projects`
+- `creator_assets`
+- `creator_timelines`
+- `command_runs`
+- `kernel_events`
+- transaction/audit tables
+
+Currently only `config_store` exists in the canonical state store. Other SQLite usage exists, but is split across history/stats/local runtime.
+
+---
+
+## Priority Fix List from Fact-Check
+
+1. **Fix Market execution wiring.**
+   - Change `Market.tsx` execute calls from query-string `/api/skill/execute?skill_id=...` to a JSON body or create canonical `/api/market/skills/execute` with target kernel.
+   - Fix `market_router.py` test behavior: `kernel="market"` is not accepted by `SkillManager.is_skill_allowed_for_kernel()`.
+
+2. **Add Shell status backend.**
+   - Create endpoint for active kernel, provider health, pending approvals, running tasks.
+   - Wire `ShellStatusBar.tsx` to real data.
+   - Implement emergency stop semantics.
+
+3. **Wire Review Changes.**
+   - Fetch `/api/studio/tools/changed-files` and `/api/studio/tools/diff`.
+   - Add diff viewer and file list.
+   - Add real verification endpoint.
+
+4. **Harden Studio command lifecycle.**
+   - Store process handles.
+   - Implement terminate in `stop-command`.
+   - Persist command runs and stream command events.
+   - Add approval/risk gate.
+
+5. **Connect Creator UI to backend.**
+   - Add `useCreatorQueries`.
+   - Create/load project from `/api/creator/projects`.
+   - Persist assets/timeline.
+
+6. **Move from compatibility to canonical routers.**
+   - Market skill/app functions should move from Companion router to Market router or become explicit aliases.
+   - Crone automation should move from Studio router to Shell/Automation router or be scoped under Studio automation subtab.
+
+7. **Add SQLite migrations.**
+   - Extend `state_store.py` for SSOT tables or add migration manager.
+
+8. **Clean redundant frontend surfaces.**
+   - Decide fate of `/crone`, `/emotion`, `/iam-mia`, `ResilienceDashboard`, `StudioTopbar`, `ImpactModal`, `ExecutionVisualizer`.
+   - Remove `@monaco-editor/react` if build remains clean.
+
+9. **Governance implementation.**
+   - Build approval service/UI.
+   - Implement `Review First` / `Always Execute` policy store.
+   - Add audit log and dry-run flow.
+
+---
+
+## Verification Status
+
+| Check | Status | Result |
+|---|---|---|
+| Frontend production build | Selesai | `npm.cmd run build` succeeded after current frontend changes. |
+| Backend Python compile | Blocked | Local Python is unavailable: `py -0p` reports no installed Pythons and `.venv/pyvenv.cfg` points to missing `Python311\python.exe`. |
+| Manual route QA | Belum | Needs browser pass for `/companion`, `/studio`, `/llm`, `/creator`, `/market`. |
+| Market tab QA | Belum | Needs verify per-tab fetch and empty-state behavior. |
+| Studio tool QA | Belum | Needs verify tools endpoints and ReviewChanges integration after wiring. |
+| Creator API QA | Belum | Needs verify project CRUD and eventual UI integration. |
+
+---
+
+## Updated MVP Status
+
+| MVP | Status | What is complete | What remains |
+|---|---|---|---|
+| MVP 1 Shell Alignment | Partial, near complete | 5 routes, sidebar, switch event sender, ShellStatusBar component. | Real shell status data, emergency stop handling, provider health/tasks/approvals endpoints, consistent shell surfaces in Studio. |
+| MVP 2 Studio Cockpit | Partial | Activity/log renderer, composer, review surface, git status, graph/terminal, tools skeleton. | Real event taxonomy, ReviewChanges wiring, verification, command lifecycle, policy/approval, remove dummy task/chat scaffolding. |
+| MVP 3 Market Split | Partial | Market router, 3 UI tabs, market-filtered list, install/uninstall endpoints. | Execution bug, policy boundary, metadata migration, risk/approval, cleanup compatibility endpoints. |
+| MVP 4 Creator Skeleton | Partial | Creator cockpit UI skeleton, Creator router skeleton. | Backend integration, persistence, media tools, render/export engine, approval flow. |
+| MVP 5 Automation Governance | Belum | Crone daemon exists as legacy/recurring foundation. | Shell orchestrator, approval service, policy store, Always Execute UI, audit log, dry-run. |
+| MVP 6 Real-Life Integrations | Belum | None canonical. | Email/calendar, booking/shopping/selling, social publish, connector policies. |
+
+---
+
+## Canonical Direction After Fact-Check
+
+- `frontend/src/Market.tsx` is the canonical Market UI. Do not resurrect `SkillMarketplace.tsx` unless intentionally creating a compatibility wrapper.
+- `backend/api/market_router.py` is the canonical Market router, but it must absorb or alias the remaining Companion `/api/skills/*` and `/api/apps/*` flows.
+- `frontend/src/Creator.tsx` is the canonical Creator page for now; split into `frontend/src/creator/*` components only when state/backend integration grows.
+- `backend/api/creator_router.py` is the current Creator API shell; move business logic into `backend/creator/*` services before adding real media/render logic.
+- `StudioPage.tsx` should keep local IDE integration as optional support, but the primary Studio UX should become activity stream + composer + review/verification.
+- Shell governance must be implemented before adding real external actions, purchases, bookings, email send, publish/upload, or destructive PC automation.
 
-Audit cepat terhadap kondisi repo saat ini menunjukkan bahwa dokumen ini adalah arah target, belum kondisi implementasi penuh. Status di bawah ini harus dipakai sebagai daftar kerja prioritas agar kode benar-benar selaras dengan SSOT.
-
-### Sudah Ada / Sebagian Selaras
-
-- [x] **Backend micro-kernel sudah modular sebagian.**
-  `backend/main.py` sudah ringan dan hanya melakukan startup, middleware, static mount, dan mounting router: `llm_router`, `studio_router`, `companion_router`.
-
-- [x] **Kernel backend yang sudah ada: Companion, Studio, LLM.**
-  File yang sudah ada:
-  - `backend/api/companion_router.py`
-  - `backend/api/studio_router.py`
-  - `backend/api/llm_router.py`
-
-- [x] **Power-state switching Companion/Studio sudah ada sebagian.**
-  Frontend `App.tsx` mengirim `SWITCH_TO_STUDIO` saat masuk `/studio`, selain itu mengirim `SWITCH_TO_COMPANION`. Backend `companion_router.py` menangani dua event ini dan mengirim state `SLEEP` / `WAKE`.
-
-- [x] **Frontend lazy loading sudah ada.**
-  `frontend/src/App.tsx` sudah memakai `React.lazy()` untuk Companion, Studio, LLM, SkillMarketplace, Emotion, IamMia, Crone, dan Onboarding.
-
-- [x] **Frontend 5 kernel routes sudah dimulai.**
-  `frontend/src/App.tsx` sudah menambah route `/companion`, `/market`, `/creator`, dan alias `/skills` -> `/market`.
-
-- [x] **Creator theme wiring kini selaras dengan shared app theme.**
-  `frontend/src/Creator.tsx` sekarang menggunakan `useTheme()`, `config.appearance.theme_hue`, dan variabel CSS untuk styling preview card, bukan palet lokal terpisah. Creator tidak menawarkan pengaturan tema sendiri; mengikuti tema global Companion.
-
-- [x] **Validasi build frontend selesai.**
-  `npm run build` di `frontend` berhasil setelah memperbaiki variabel TS yang tidak terpakai di `Creator.tsx`.
-
-- [x] **UI Theme Governance rules sudah terdokumentasi.**
-  Bagian baru "UI Theme Governance" menjelaskan aturan tema global untuk setiap kernel dan pola implementasi yang wajib diikuti.
-
-- [ ] **Studio activity stream / review changes UI masih belum lengkap.**
-  `frontend/src/mia_studio/components/StudioPage.tsx` sudah punya prompt chat, run/stop, integrasi IDE, terminal, dan graph panel, tetapi belum ada panel event stream dan review changes surface seperti di dokumen.
-
-- [x] **Power-state switching kini mendukung Creator / Market / LLM route events.**
-  `frontend/src/App.tsx` mengirim `SWITCH_TO_CREATOR`, `SWITCH_TO_MARKET`, dan `SWITCH_TO_LLM` berdasarkan route.
-
-- [x] **Backend shell event handling kini mendukung 5 kernel.**
-  `backend/api/companion_router.py` sekarang menangani `SWITCH_TO_COMPANION`, `SWITCH_TO_STUDIO`, `SWITCH_TO_CREATOR`, `SWITCH_TO_MARKET`, dan `SWITCH_TO_LLM`.
-
-- [x] **Market dan Creator backend router skeleton sudah dibuat.**
-  `backend/api/market_router.py` dan `backend/api/creator_router.py` sudah tersedia sebagai awal pemisahan kernel.
-
-- [x] **Sidebar navigation sudah menampilkan 5 kernel.**
-  `frontend/src/Sidebar.tsx` sekarang menampilkan Companion, Studio, LLM Warehouse, Creator, dan Market.
-
-- [x] **Creator dan Market frontend skeleton ada.**
-  `frontend/src/Creator.tsx` dan `frontend/src/Market.tsx` sudah dibuat sebagai placeholder kernel.
-
-- [x] **Companion mode professional sudah ada sebagai toggle UI/config.**
-  `frontend/src/components/settings/CompanionSettings.tsx` punya toggle `is_professional_mode`. Ini selaras sebagian dengan konsep Companion `professional` mode, tetapi belum punya workflow assistant nyata.
-
-- [x] **Companion intimacy mode sudah ada.**
-  `frontend/src/Companion.tsx` punya toggle intimacy dan endpoint `/api/intimacy/toggle`, termasuk touch endpoint `/api/intimacy/touch`.
-
-- [x] **LLM Warehouse sudah ada sebagai halaman dan router.**
-  `frontend/src/LLMPage.tsx` dan `backend/api/llm_router.py` sudah menjadi basis untuk provider/model management.
-
-- [x] **Studio backend punya beberapa fondasi.**
-  `backend/studio/` sudah punya service untuk execution, file/versioning, git guard, IDE discovery, graph stream, locks, logs, dan tests. `backend/api/studio_router.py` sudah menyediakan endpoint Git status, IDE discovery, skills, dan websocket events.
-
-- [x] **Skill scoping Companion/Studio sudah ada sebagian.**
-  `backend/skill_manager.py` sudah memblokir skill berdasarkan `category`:
-  - Companion boleh `companion` dan `shared`
-  - Studio boleh `studio` dan `shared`
-
-- [x] **Skill manager sekarang mendukung Creator dan market metadata.**
-  `backend/skill_manager.py` kini mengenali `market`, `allowed_kernels`, dan `creator` kernel sebagai tambahan untuk kategori lama.
-
-- [x] **Marketplace lama sudah ada.**
-  `frontend/src/SkillMarketplace.tsx` dan endpoint `/api/skills/marketplace` sudah ada. Marketplace saat ini masih berbasis kategori lama, tetapi bisa menjadi fondasi Market Kernel.
-
-- [x] **Monaco belum terlihat dipakai di kode TSX.**
-  Dependency `@monaco-editor/react` masih ada di `frontend/package.json`, tetapi pencarian kode tidak menemukan import aktif. Ini berarti arah "tanpa Monaco" sudah relatif aman untuk dilanjutkan dengan cleanup dependency.
-
-### Belum Ada / Belum Selaras
-
-- **File lama sudah rename ke `docs/1App5Kernell.md`.**
-  Referensi langsung ke `1App4Kernell.md` di dokumen utama telah diarahkan ke `1App5Kernell.md`. Jika ada referensi baru muncul, perlakukan sebagai drift dokumentasi.
-
-- [x] **Routing final 5 kernel sudah ada di frontend.**
-  Target SSOT:
-  - `/companion`
-  - `/studio`
-  - `/llm`
-  - `/creator`
-  - `/market`
-
-  Kondisi sekarang:
-  - `/` redirect ke `/companion`
-  - `/companion` sudah ada
-  - `/studio` sudah ada
-  - `/llm` sudah ada
-  - `/creator` sudah ada sebagai frontend skeleton
-  - `/market` sudah ada sebagai frontend skeleton
-  - `/skills` alias ke `/market`
-  - backend routing dan orchestrator belum lengkap untuk Creator/Market
-
-- [x] **Sidebar menampilkan 5 kernel.**
-  `frontend/src/Sidebar.tsx` sudah menampilkan Companion, Studio, LLM Warehouse, Creator, dan Market.
-
-- [ ] **Creator Kernel belum lengkap.**
-  Frontend route skeleton sudah ada:
-  - `frontend/src/Creator.tsx`
-  - route `/creator`
-  Belum ditemukan:
-  - `backend/api/creator_router.py`
-  - `backend/creator/`
-  - `SWITCH_TO_CREATOR`
-  - media approval gate
-  - asset bin, timeline, preview player, render/export queue
-
-- [x] **Market Kernel sudah mulai memiliki router/domain mandiri.**
-  `backend/api/market_router.py` sudah dibuat untuk menampung endpoint Market Kernel, meskipun endpoint kompatibilitas lama masih bertahan di `companion_router.py`.
-
-- [ ] **Market belum sepenuhnya terbagi menjadi Companion / Studio / Creator.**
-  `SkillMarketplace.tsx` masih menggunakan kategori lama dan belum menyediakan tab Market yang terpisah untuk masing-masing domain.
-  - Companion Market
-  - Studio Market
-  - Creator Market
-  - metadata `market`
-  - `allowed_kernels`
-  - permission category untuk professional assistant dan creator media workflow
-
-- [x] **Skill metadata sekarang lebih mendekati SSOT.**
-  `backend/skill_manager.py` kini mendukung `market`, `allowed_kernels`, dan mendeteksi `creator` sebagai kernel tambahan. Namun, banyak skill legacy dan marketplace masih menggunakan metadata `category` lama.
-
-- [x] **Skill manager sekarang mengenal Creator.**
-  `is_skill_allowed_for_kernel()` kini mendukung `creator` dan `shared` skill, serta `market`/`allowed_kernels` metadata.
-
-- **Studio `/studio` belum menjadi activity-stream cockpit seperti target.**
-  `StudioPage.tsx` masih punya launcher, chat cockpit, terminal, IDE discovery, graph/resilience panels, dan simulasi pesan "kode ditulis". Belum ada activity event model resmi seperti:
-  - `Thought for Ns`
-  - `Analyzed <file> #Lx-Ly`
-  - `Searched <query>`
-  - `Edited N files`
-  - `Ran <command>`
-  - `Checked command status`
-  - `Waiting for command completion`
-  - changed-files summary
-  - `Review changes`
-
-- **Bottom composer `/studio` belum sesuai SSOT.**
-  Belum ada composer dengan kontrak lengkap: follow-up instruction, stop action, auto-review toggle, model/effort selector, pending approval state, changed-files summary, dan review button.
-
-- **Tools bawaan Studio belum dipublikasi sebagai API/tool contract.**
-  Backend punya beberapa service, tetapi belum ada tool layer eksplisit untuk:
-  - `list_files`
-  - `grep/search_text`
-  - `search_symbol`
-  - `read_file_range`
-  - `apply_patch`
-  - `generate_diff`
-  - `run_command`
-  - `check_command_status`
-  - `wait_for_command`
-  - `stop_command`
-  - `run_build`
-  - `run_tests`
-  - browser/local verification
-  - approval safety tools
-
-- **Action/Automation Orchestrator belum ada.**
-  Belum ada Shell-level orchestrator untuk routing email, calendar, booking, shopping, selling/listing, upload/publish, dan dev automation ke kernel yang tepat.
-
-- **`Review First` / `Always Execute` belum ada.**
-  Belum ditemukan policy store atau UI settings untuk:
-  - execution mode per workflow
-  - batas nominal per transaksi
-  - batas harian/bulanan
-  - rekening/kartu/e-wallet/payment source
-  - merchant/platform allowlist
-  - expiry
-  - emergency stop
-  - audit log real-life transaction
-
-- **Professional assistant skills belum ada.**
-  Belum ada implementation untuk email, calendar, booking, shopping, selling/listing, contact follow-up. Toggle `is_professional_mode` sudah ada, tetapi belum mengaktifkan assistant workflow nyata.
-
-- **Upload/publish content belum diarahkan ke Creator.**
-  Karena Creator belum ada, flow upload content, schedule post, publish social, caption workflow, dan render/export belum terimplementasi.
-
-- **Power-state switching belum mencakup 5 kernel.**
-  Saat ini hanya ada Companion vs Studio. Belum ada:
-  - `SWITCH_TO_LLM`
-  - `SWITCH_TO_CREATOR`
-  - `SWITCH_TO_MARKET`
-  - state management resource untuk render/export Creator
-  - state management untuk Market/LLM low-power mode
-
-- **Global status bar Shell belum ada sebagai surface tunggal.**
-  Belum ada status bar yang selalu menampilkan active kernel, websocket status, active model, provider health, power state, pending approval count, running task count, dan emergency stop.
-
-### Yang Salah / Drift terhadap SSOT
-
-- **Marketplace endpoints di Companion router masih menjadi compatibility layer.**
-  Arsitektur baru sudah mulai memisahkan kernel dengan `backend/api/market_router.py`, tetapi beberapa endpoint lama masih berada di `companion_router.py` untuk backward compatibility.
-
-- **Skill classification masih `category`, bukan `market`, pada banyak skill existing.**
-  Plan SSOT meminta Market terbagi Companion/Studio/Creator. Existing code masih memakai kategori `companion`, `studio`, `shared`, dan UI lama `Lifestyle & Chat`. Migrasi metadata masih diperlukan.
-
-- **`media_curator` dikategorikan berbeda antara installed dan marketplace.**
-  `backend/skills/media_curator.py` memakai legacy `metadata` dengan `"category": "Media"`, sementara `backend/marketplace_skills/media_curator.py` memakai `__skill_metadata__` dengan `"category": "shared"`. Ini bisa membuat filtering UI/backend tidak konsisten.
-
-- **`save_skill()` kini menambahkan `market` dan `allowed_kernels` secara eksplisit, tetapi masih default ke companion saat metadata tidak disediakan.**
-  Ini adalah perbaikan dibandingkan sebelumnya, namun idealnya user harus memilih domain secara eksplisit.
-
-- **Studio UI masih mengarah ke IDE/local editor workflow.**
-  SSOT memutuskan MIA bukan web IDE dan Studio adalah agent cockpit. Existing `StudioPage.tsx` masih punya IDE discovery/open IDE dan pesan "sinkronkan ke editor lokal Anda". Ini boleh tetap sebagai integrasi opsional, tetapi tidak boleh menjadi alur utama Studio.
-
-- **Monaco dependency masih ada.**
-  Walaupun tidak terlihat dipakai, `@monaco-editor/react` masih di dependency. Ini drift kecil terhadap keputusan "tanpa Monaco" dan perlu dihapus setelah dipastikan tidak ada import tersembunyi.
-
-- **Companion Professional belum dibatasi oleh policy nyata.**
-  Toggle mode profesional sudah ada, tetapi belum ada batas mode `normal/intimacy/professional` terhadap aksi email/booking/belanja. Ini risk gap jika nanti tools eksternal ditambahkan tanpa policy.
-
-### Perbaikan yang Disarankan
-
-1. **Jaga referensi dokumen tetap canonical.**
-   Semua rujukan arsitektur app-level harus mengarah ke `docs/1App5Kernell.md`. Dokumen module/historical boleh tetap ada, tetapi wajib menyatakan statusnya.
-
-2. **Tambah routing 5 kernel di frontend.**
-   - Tambah `/companion` sebagai route resmi.
-   - Jadikan `/` alias ke `/companion`.
-   - Tambah `/creator`.
-   - Tambah `/market`.
-   - Jadikan `/skills` alias ke `/market`.
-   - Pindahkan `/emotion` dan `/iam-mia` menjadi subtab Companion.
-   - Pindahkan `/crone` dan resilience menjadi subtab Studio.
-
-3. **Update Sidebar menjadi 5 kernel.**
-   Tampilkan Companion, Studio, LLM, Creator, Market. Jangan lagi memakai label Store lama sebagai route utama.
-
-4. **Buat Creator Kernel minimum.**
-   - `frontend/src/Creator.tsx`
-   - `backend/api/creator_router.py`
-   - `backend/creator/`
-   - route `/creator`
-   - `SWITCH_TO_CREATOR`
-   - skeleton UI: brief composer, asset bin, preview panel, timeline placeholder, render/export panel, activity stream media.
-
-5. **Ekstrak Market Kernel.**
-   - Buat `backend/api/market_router.py`.
-   - Pindahkan endpoint `/api/skills/*` dari Companion ke Market router atau alias-kan dulu.
-   - Tambah endpoint market-filtered: companion/studio/creator.
-
-6. **Migrasi skill metadata.**
-   Target metadata baru:
-   ```python
-   __skill_metadata__ = {
-       "name": "...",
-       "market": "companion|studio|creator|shared",
-       "category": "...",
-       "permissions": [],
-       "allowed_kernels": [],
-       "requires_mode": None,
-       "setup_required": False,
-       "enabled_by_default": False,
-   }
-   ```
-   `skill_manager.py` harus membaca `market`, bukan hanya `category`, dan harus mengenal kernel `creator`.
-
-7. **Perbaiki `save_skill()` agar domain eksplisit.**
-   Jangan default ke Companion. UI harus meminta target market/kernel saat membuat skill.
-
-8. **Bangun Studio Activity Stream contract.**
-   Buat model event standar:
-   - `thought`
-   - `analyzed_file`
-   - `searched`
-   - `edited`
-   - `ran_command`
-   - `command_status`
-   - `waiting`
-   - `verification_result`
-   - `changed_files`
-   - `blocked`
-
-9. **Bangun Review Changes surface.**
-   Tambah changed-files summary, diff read-only, additions/deletions, undo own changes, run verification, dan follow-up composer.
-
-10. **Bangun Studio built-in tools API.**
-    Buat layer tool eksplisit di backend untuk discovery, search, read, patch, command/process, verification, git inspection, browser verification, dan approval safety.
-
-11. **Tambahkan Action/Automation Orchestrator.**
-    Buat service Shell-level untuk routing:
-    - Companion Professional: email, calendar, booking, shopping, selling/listing.
-    - Creator: upload/publish content, render/export, caption workflow.
-    - Studio: command/file/Git/dev workflow.
-
-12. **Implement `Review First` / `Always Execute` policy store.**
-    Buat UI settings dan backend store untuk:
-    - workflow category
-    - nominal limit per transaction/day/month
-    - payment source/rekening/e-wallet
-    - merchant/platform allowlist
-    - allowed categories
-    - expiry
-    - notification channel
-    - emergency stop
-    - audit log
-
-13. **Tambah hard-block high-stakes actions.**
-    Walaupun `Always Execute` aktif, tetap paksa `Review First` untuk legal consent, loans, credit, insurance, investment, medical/legal/financial high-stakes, password/2FA/security changes, account deletion, dan transaksi di luar policy.
-
-14. **Hapus Monaco dependency jika aman.**
-    Setelah build lolos tanpa import Monaco, hapus `@monaco-editor/react` dari `frontend/package.json` dan lockfile.
-
-15. **Verifikasi bertahap.**
-    Setelah perubahan kode:
-    - jalankan backend check
-    - jalankan frontend build
-    - uji route `/companion`, `/studio`, `/llm`, `/creator`, `/market`
-    - uji websocket switching 5 kernel
-    - uji Market filtering
-    - uji Studio activity stream
-    - uji Always Execute policy dengan dry-run sebelum aksi nyata

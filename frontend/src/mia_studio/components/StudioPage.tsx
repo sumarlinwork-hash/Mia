@@ -4,14 +4,12 @@ import {
   Play, 
   Square, 
   EyeOff, 
-  Send, 
   Bot, 
   Monitor, 
   ChevronDown, 
   GitBranch,
   Settings,
   CheckSquare,
-  Brain,
   Sparkles
 } from 'lucide-react';
 import { useConfig } from '../../hooks/useConfig';
@@ -26,6 +24,8 @@ import { useFileStore } from '../context/FileStoreContext';
 import { StudioTerminal } from './StudioTerminal';
 import { GraphViewer } from './GraphViewer';
 import { StudioActivityStream } from './StudioActivityStream';
+import { StudioComposer } from './StudioComposer';
+import { ReviewChanges } from './ReviewChanges';
 
 import { ResilienceMonitor } from './ResilienceMonitor';
 import { GardenLauncher } from './GardenLauncher';
@@ -116,6 +116,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [autoSave, setAutoSave] = useState(true);
+  const [autoReview, setAutoReview] = useState(true);
   
   // Local IDE Discovery states
   const [ides, setIdes] = useState<{id: string, name: string}[]>([]);
@@ -548,19 +549,9 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                 )}
               </div>
 
-              {/* Chat Input Area */}
-              <div className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/5 relative">
+              {/* Model Dropdown Anchor */}
+              <div className="relative">
                 {/* Active Model Selector */}
-                <button
-                  onClick={() => setShowModelDropdown(!showModelDropdown)}
-                  className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[9px] font-mono font-bold text-primary hover:bg-white/10 transition-all flex items-center gap-1 shrink-0 pointer-events-auto"
-                  title="Active LLM Selector"
-                >
-                  <Brain size={12} />
-                  {activeModelName}
-                  <ChevronDown size={8} />
-                </button>
-                
                 {showModelDropdown && (
                   <div className="absolute bottom-full left-2 mb-2 w-52 rounded-xl bg-black/95 border border-white/10 shadow-2xl p-2 z-[200] space-y-1 pointer-events-auto">
                     <div className="text-[8px] uppercase font-bold text-white/30 px-2 py-1 font-mono tracking-widest border-b border-white/5 mb-1">SELECT INTEL</div>
@@ -592,23 +583,18 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                     ))}
                   </div>
                 )}
-
-                <input
-                  type="text"
+                <StudioComposer
                   value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleSendPrompt();
-                  }}
-                  placeholder="Kirim perintah revisi kode atau mintalah analisis arsitektur..."
-                  className="flex-1 bg-transparent border-none outline-none font-sans text-xs text-white placeholder:text-white/20"
+                  onChange={setInput}
+                  onSubmit={handleSendPrompt}
+                  onStop={() => currentProjectId && currentSessionId && execution.stopCode(currentProjectId, currentSessionId)}
+                  running={execution.state === 'RUNNING'}
+                  autoReview={autoReview}
+                  onAutoReviewChange={setAutoReview}
+                  modelName={activeModelName}
+                  onModelClick={() => setShowModelDropdown(!showModelDropdown)}
+                  changedFilesCount={gitDirtyCount}
                 />
-                <button 
-                  onClick={handleSendPrompt}
-                  className="w-7 h-7 rounded-lg bg-primary text-black hover:scale-105 active:scale-95 transition-all flex items-center justify-center shadow-lg shadow-primary/20"
-                >
-                  <Send size={12} fill="currentColor" />
-                </button>
               </div>
             </div>
             
@@ -624,6 +610,13 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
           <div className="flex-1 rounded-lg overflow-hidden panel-workspace">
             <GraphViewer events={stream.graphEvents} />
           </div>
+
+          {/* Resilience Monitor Section */}
+          <ReviewChanges
+            branch={gitBranch}
+            dirtyCount={gitDirtyCount}
+            onFollowUp={() => setInput('Review perubahan terakhir dan usulkan langkah berikutnya.')}
+          />
 
           {/* Resilience Monitor Section */}
           <ResilienceMonitor 
