@@ -1,28 +1,132 @@
-import { useState } from 'react';
-import { ArrowRight, Boxes, Clapperboard, Download, Film, ImageIcon, Play, Sparkles, Wand2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowRight, Boxes, Clapperboard, Download, Film, ImageIcon, Play, Sparkles, Wand2, Type, Subtitles, Palette, Wand, Clock, Settings2 } from 'lucide-react';
 import { useConfig } from './hooks/useConfig';
 import { normalizeThemeHue } from './design/theme';
 import { useTheme } from './hooks/useTheme';
 
-const assetCards = [
-  { name: 'Hero frame', kind: 'Image', state: 'Draft' },
-  { name: 'Voice bed', kind: 'Audio', state: 'Queued' },
-  { name: 'Motion pass', kind: 'Video', state: 'Idle' },
-];
+interface CreatorAsset {
+  id: string;
+  name: string;
+  kind: string;
+}
 
-const activity = [
-  'Brief synced with Creator kernel',
-  'Asset bin initialized',
-  'Timeline placeholder ready',
-];
+interface CreatorProject {
+  id: string;
+  name: string;
+  brief: string;
+  status: string;
+  script?: string;
+  subtitles?: { start: string; end: string; text: string }[];
+  brand_kit?: Record<string, unknown>;
+  assets: CreatorAsset[];
+  render?: { status: string; format?: string; quality?: string; progress?: number };
+  timeline?: { tracks: unknown[] };
+}
+
+type TabKey = 'overview' | 'scripting' | 'branding';
 
 export default function Creator() {
   const { config } = useConfig();
   const { hue } = useTheme();
-  const [brief, setBrief] = useState('A cinematic neon sunrise over a futuristic cityscape');
+  
+  const [project, setProject] = useState<CreatorProject | null>(null);
+  const [brief, setBrief] = useState('');
+  const [script, setScript] = useState('');
+  const [activity, setActivity] = useState<string[]>(['Brief synced with Creator kernel', 'Asset bin initialized']);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+
   const uiOpacity = config?.appearance?.ui_opacity ?? 0.65;
   const currentHue = normalizeThemeHue(config?.appearance?.theme_hue ?? hue);
   const surfaceStyle = { backgroundColor: `rgba(0, 0, 0, ${1 - uiOpacity})` };
+
+  const logActivity = (msg: string) => {
+    setActivity(prev => [msg, ...prev].slice(0, 10));
+  };
+
+  useEffect(() => {
+    const initProject = async () => {
+      try {
+        const res = await fetch('/api/creator/projects');
+        const data = await res.json();
+        if (data.projects && data.projects.length > 0) {
+          const active = data.projects[0];
+          setProject(active);
+          setBrief(active.brief || 'A cinematic neon sunrise over a futuristic cityscape');
+          setScript(active.script || '');
+          logActivity('Loaded existing Creator Project');
+        } else {
+          // Create new project
+          const createRes = await fetch('/api/creator/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'New Session', brief: 'A cinematic neon sunrise over a futuristic cityscape' })
+          });
+          const createData = await createRes.json();
+          setProject(createData.project);
+          setBrief(createData.project.brief);
+          setScript(createData.project.script || '');
+          logActivity('Created new Creator Project');
+        }
+      } catch (err) {
+        console.error("Failed to initialize creator project:", err);
+        logActivity('Failed to connect to Creator Kernel');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    initProject();
+  }, []);
+
+  const handleUpdateProjectFields = async (fields: Partial<CreatorProject>) => {
+    if (!project) return;
+    try {
+      const res = await fetch(`/api/creator/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields)
+      });
+      const data = await res.json();
+      setProject(data.project);
+      logActivity('Project saved and synced');
+    } catch (err) {
+      console.error(err);
+      logActivity('Failed to save project');
+    }
+  };
+
+  const handleQueueExport = async () => {
+    if (!project) return;
+    logActivity('Export queued...');
+    try {
+      const res = await fetch(`/api/creator/projects/${project.id}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format: 'mp4', quality: 'draft' })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setProject((prev: CreatorProject | null) => prev ? ({ ...prev, render: data.render }) : prev);
+        logActivity('Export started successfully');
+      }
+    } catch (err) {
+      console.error(err);
+      logActivity('Failed to queue export');
+    }
+  };
+
+  const mockGenerateScript = () => {
+    const generated = "SCENE 1\n[Visual]: Neon cityscape at sunrise.\n[Audio/V.O]: 'In the year 2077, data is the new water.'\n\nSCENE 2\n[Visual]: Close up of a neural interface.\n[Audio/V.O]: 'And we are dying of thirst.'";
+    setScript(generated);
+    handleUpdateProjectFields({ script: generated });
+    logActivity('Script generated by LLM');
+  };
+
+  const tabs: { id: TabKey, label: string, icon: React.ElementType }[] = [
+    { id: 'overview', label: 'Brief & Assets', icon: Boxes },
+    { id: 'scripting', label: 'Script & Subtitles', icon: Type },
+    { id: 'branding', label: 'Brand Kit', icon: Palette },
+  ];
 
   return (
     <div className="min-h-screen p-8 pb-20 text-white relative z-10" style={{ paddingLeft: '5rem' }}>
@@ -33,7 +137,7 @@ export default function Creator() {
               <Sparkles size={14} />
               Creator Kernel
             </div>
-            <h1 className="mt-4 text-3xl font-black tracking-tight">Creator Cockpit</h1>
+            <h1 className="mt-4 text-3xl font-black tracking-tight">{project ? project.name : 'Creator Cockpit'}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/55">
               Shape media briefs, collect generated assets, arrange timeline beats, preview drafts, and prepare exports from one kernel surface.
             </p>
@@ -48,120 +152,289 @@ export default function Creator() {
           </div>
         </header>
 
-        <section className="grid gap-6 xl:grid-cols-[1fr_380px]">
-          <div className="space-y-6">
-            <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Wand2 size={16} className="text-primary" />
-                  <h2 className="text-sm font-black uppercase tracking-[0.18em]">Brief Composer</h2>
-                </div>
-                <button className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-black">
-                  <ArrowRight size={13} />
-                  Submit
-                </button>
-              </div>
-              <textarea
-                value={brief}
-                onChange={(event) => setBrief(event.target.value)}
-                rows={5}
-                className="w-full resize-none rounded-lg border border-white/10 bg-black/25 p-4 text-sm text-white outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
-                <div className="mb-4 flex items-center gap-2">
-                  <Boxes size={16} className="text-primary" />
-                  <h2 className="text-sm font-black uppercase tracking-[0.18em]">Asset Bin</h2>
-                </div>
-                <div className="space-y-3">
-                  {assetCards.map((asset) => (
-                    <div key={asset.name} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="rounded-md bg-primary/10 p-2 text-primary">
-                          <ImageIcon size={15} />
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold text-white">{asset.name}</div>
-                          <div className="text-[10px] uppercase tracking-[0.16em] text-white/35">{asset.kind}</div>
-                        </div>
-                      </div>
-                      <span className="rounded-md bg-white/5 px-2 py-1 text-[10px] text-white/50">{asset.state}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
-                <div className="mb-4 flex items-center gap-2">
-                  <Clapperboard size={16} className="text-primary" />
-                  <h2 className="text-sm font-black uppercase tracking-[0.18em]">Timeline</h2>
-                </div>
-                <div className="space-y-4">
-                  {['Scene', 'Voice', 'Music'].map((track, index) => (
-                    <div key={track}>
-                      <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">{track}</div>
-                      <div className="h-9 rounded-md border border-white/10 bg-black/25 p-1">
-                        <div className="h-full rounded bg-primary/30" style={{ width: `${72 - index * 16}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <aside className="space-y-6">
-            <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Film size={16} className="text-primary" />
-                  <h2 className="text-sm font-black uppercase tracking-[0.18em]">Preview</h2>
-                </div>
-                <button className="inline-flex h-8 items-center gap-2 rounded-md bg-white/10 px-3 text-[10px] font-bold text-white">
-                  <Play size={12} fill="currentColor" />
-                  Play
-                </button>
-              </div>
-              <div className="aspect-video rounded-lg border border-white/10 bg-[linear-gradient(135deg,var(--color-primary)_0%,rgba(15,23,42,0.92)_100%)] p-4">
-                <div className="flex h-full items-center justify-center rounded-md bg-black/25 text-center font-mono text-xs text-white/75">
-                  Draft preview player
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
-              <div className="mb-4 flex items-center gap-2">
-                <Download size={16} className="text-primary" />
-                <h2 className="text-sm font-black uppercase tracking-[0.18em]">Render Export</h2>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
-                <div className="mb-2 flex items-center justify-between text-xs">
-                  <span className="text-white/60">MP4 draft</span>
-                  <span className="text-primary">Idle</span>
-                </div>
-                <div className="h-2 rounded-full bg-white/10">
-                  <div className="h-full w-[12%] rounded-full bg-primary" />
-                </div>
-              </div>
-              <button className="mt-4 w-full rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.16em] text-primary">
-                Queue Export
-              </button>
-            </div>
-
-            <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
-              <h2 className="mb-4 text-sm font-black uppercase tracking-[0.18em]">Activity</h2>
-              <div className="space-y-3">
-                {activity.map((item) => (
-                  <div key={item} className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/55">
-                    {item}
-                  </div>
+        {isLoading ? (
+          <div className="text-center py-20 text-white/50 text-sm tracking-widest uppercase">Initializing Cockpit...</div>
+        ) : (
+          <section className="grid gap-6 xl:grid-cols-[1fr_380px]">
+            <div className="space-y-6">
+              
+              {/* Tab Navigation */}
+              <div className="flex gap-2 border-b border-white/10 pb-4">
+                {tabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] transition-colors ${
+                      activeTab === tab.id 
+                        ? 'bg-primary text-black' 
+                        : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <tab.icon size={14} />
+                    {tab.label}
+                  </button>
                 ))}
               </div>
+
+              {/* Tab Content: OVERVIEW */}
+              {activeTab === 'overview' && (
+                <>
+                  <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Wand2 size={16} className="text-primary" />
+                        <h2 className="text-sm font-black uppercase tracking-[0.18em]">Brief Composer</h2>
+                      </div>
+                      <button 
+                        onClick={() => handleUpdateProjectFields({ brief })}
+                        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-black hover:bg-primary/90 transition-colors"
+                      >
+                        <ArrowRight size={13} />
+                        Save
+                      </button>
+                    </div>
+                    <textarea
+                      value={brief}
+                      onChange={(e) => setBrief(e.target.value)}
+                      rows={5}
+                      placeholder="Describe your creative vision..."
+                      className="w-full resize-none rounded-lg border border-white/10 bg-black/25 p-4 text-sm text-white outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
+                      <div className="mb-4 flex items-center gap-2">
+                        <Boxes size={16} className="text-primary" />
+                        <h2 className="text-sm font-black uppercase tracking-[0.18em]">Asset Bin</h2>
+                      </div>
+                      <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                        {(!project?.assets || project.assets.length === 0) ? (
+                          <div className="text-xs text-white/30 text-center py-4">No assets yet</div>
+                        ) : project.assets.map((asset: CreatorAsset) => (
+                          <div key={asset.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                            <div className="flex items-center gap-3">
+                              <div className="rounded-md bg-primary/10 p-2 text-primary">
+                                <ImageIcon size={15} />
+                              </div>
+                              <div>
+                                <div className="text-sm font-semibold text-white">{asset.name}</div>
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-white/35">{asset.kind}</div>
+                              </div>
+                            </div>
+                            <span className="rounded-md bg-white/5 px-2 py-1 text-[10px] text-white/50">Draft</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
+                      <div className="mb-4 flex items-center gap-2">
+                        <Clapperboard size={16} className="text-primary" />
+                        <h2 className="text-sm font-black uppercase tracking-[0.18em]">Timeline</h2>
+                      </div>
+                      <div className="space-y-4">
+                        {['Scene', 'Voice', 'Music'].map((track, index) => (
+                          <div key={track}>
+                            <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">{track}</div>
+                            <div className="h-9 rounded-md border border-white/10 bg-black/25 p-1">
+                              <div className="h-full rounded bg-primary/30" style={{ width: `${72 - index * 16}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Tab Content: SCRIPTING */}
+              {activeTab === 'scripting' && (
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Type size={16} className="text-primary" />
+                        <h2 className="text-sm font-black uppercase tracking-[0.18em]">Script</h2>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={mockGenerateScript}
+                          className="inline-flex items-center gap-2 rounded-md bg-primary/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-primary hover:bg-primary/30 transition-colors"
+                        >
+                          <Wand size={13} />
+                          Auto
+                        </button>
+                        <button 
+                          onClick={() => handleUpdateProjectFields({ script })}
+                          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-black hover:bg-primary/90 transition-colors"
+                        >
+                          <ArrowRight size={13} />
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      value={script}
+                      onChange={(e) => setScript(e.target.value)}
+                      rows={12}
+                      placeholder="Write your script or prompt the LLM..."
+                      className="w-full resize-none rounded-lg border border-white/10 bg-black/25 p-4 text-sm text-white outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
+                    <div className="mb-4 flex items-center gap-2">
+                      <Subtitles size={16} className="text-primary" />
+                      <h2 className="text-sm font-black uppercase tracking-[0.18em]">Captions / Subtitles</h2>
+                    </div>
+                    <div className="space-y-3">
+                      {project?.subtitles && project.subtitles.length > 0 ? (
+                        project.subtitles.map((sub, i) => (
+                          <div key={i} className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm">
+                            <div className="text-[10px] text-primary mb-1 flex items-center gap-1 font-mono">
+                              <Clock size={10} />
+                              {sub.start} - {sub.end}
+                            </div>
+                            <div className="text-white/80">{sub.text}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-white/10 p-8 text-center">
+                          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/5">
+                            <Subtitles size={16} className="text-white/40" />
+                          </div>
+                          <p className="text-xs text-white/40">No subtitles generated yet.</p>
+                          <button className="mt-4 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80">
+                            Auto Generate
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Content: BRANDING */}
+              {activeTab === 'branding' && (
+                <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
+                  <div className="mb-6 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Palette size={16} className="text-primary" />
+                      <h2 className="text-sm font-black uppercase tracking-[0.18em]">Brand Kit</h2>
+                    </div>
+                    <button 
+                      className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-black hover:bg-primary/90 transition-colors"
+                    >
+                      <Settings2 size={13} />
+                      Manage Presets
+                    </button>
+                  </div>
+                  
+                  <div className="grid gap-6 md:grid-cols-3">
+                    {/* Colors */}
+                    <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+                      <h3 className="mb-4 text-[10px] font-bold uppercase tracking-widest text-white/50">Brand Colors</h3>
+                      <div className="flex gap-3">
+                        <div className="h-10 w-10 rounded-full bg-[#FF4500] ring-2 ring-white/10" title="Primary"></div>
+                        <div className="h-10 w-10 rounded-full bg-[#1A1A1A] ring-2 ring-white/10" title="Secondary"></div>
+                        <div className="h-10 w-10 rounded-full bg-[#FAFAFA] ring-2 ring-white/10" title="Accent"></div>
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-white/20 text-white/30 cursor-pointer hover:bg-white/5">+</div>
+                      </div>
+                    </div>
+
+                    {/* Typography */}
+                    <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+                      <h3 className="mb-4 text-[10px] font-bold uppercase tracking-widest text-white/50">Typography</h3>
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-[10px] text-white/30 mb-1">Heading (Inter)</div>
+                          <div className="text-xl font-black">Brand Heading</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-white/30 mb-1">Body (Roboto)</div>
+                          <div className="text-sm text-white/80">The quick brown fox jumps over the lazy dog.</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Logos */}
+                    <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+                      <h3 className="mb-4 text-[10px] font-bold uppercase tracking-widest text-white/50">Watermarks / Logos</h3>
+                      <div className="flex gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/5 border border-white/10">
+                          <ImageIcon size={16} className="text-white/40" />
+                        </div>
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/5 border border-dashed border-white/20 text-white/30 cursor-pointer hover:bg-white/10">+</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
-          </aside>
-        </section>
+
+            {/* Right Sidebar */}
+            <aside className="space-y-6">
+              <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Film size={16} className="text-primary" />
+                    <h2 className="text-sm font-black uppercase tracking-[0.18em]">Preview</h2>
+                  </div>
+                  <button className="inline-flex h-8 items-center gap-2 rounded-md bg-white/10 px-3 text-[10px] font-bold text-white hover:bg-white/20 transition-colors">
+                    <Play size={12} fill="currentColor" />
+                    Play
+                  </button>
+                </div>
+                <div className="aspect-video rounded-lg border border-white/10 bg-[linear-gradient(135deg,var(--color-primary)_0%,rgba(15,23,42,0.92)_100%)] p-4">
+                  <div className="flex h-full items-center justify-center rounded-md bg-black/25 text-center font-mono text-xs text-white/75">
+                    Draft preview player
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
+                <div className="mb-4 flex items-center gap-2">
+                  <Download size={16} className="text-primary" />
+                  <h2 className="text-sm font-black uppercase tracking-[0.18em]">Render Export</h2>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+                  <div className="mb-2 flex items-center justify-between text-xs">
+                    <span className="text-white/60">
+                      {project?.render?.format?.toUpperCase() || 'MP4'} {project?.render?.quality || 'draft'}
+                    </span>
+                    <span className="text-primary capitalize">{project?.render?.status || 'idle'}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                    <div 
+                      className={`h-full bg-primary transition-all duration-1000 ${project?.render?.status === 'queued' ? 'w-full animate-pulse' : 'w-0'}`} 
+                      style={project?.render?.status === 'idle' ? { width: '12%' } : {}}
+                    />
+                  </div>
+                </div>
+                <button 
+                  onClick={handleQueueExport}
+                  disabled={project?.render?.status === 'queued'}
+                  className="mt-4 w-full rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.16em] text-primary hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {project?.render?.status === 'queued' ? 'Rendering...' : 'Queue Export'}
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-white/10 p-5 backdrop-blur-3xl" style={surfaceStyle}>
+                <h2 className="mb-4 text-sm font-black uppercase tracking-[0.18em]">Activity</h2>
+                <div className="space-y-3">
+                  {activity.map((item, i) => (
+                    <div key={i} className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/55">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </section>
+        )}
       </div>
     </div>
   );

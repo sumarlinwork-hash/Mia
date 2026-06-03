@@ -1,4 +1,4 @@
-﻿# SSOT: 1 Shell, 5 Independent Kernels
+# SSOT: 1 Shell, 5 Independent Kernels
 
 Dokumen ini adalah Single Source of Truth untuk arah flagship MIA setelah perubahan paradigma terbaru:
 
@@ -1562,7 +1562,7 @@ Frontend yang sudah ada dan harus dipakai sebagai fondasi:
 - `frontend/src/Companion.tsx`: Companion UI, chat, intimacy, active model selector.
 - `frontend/src/LLMPage.tsx`: LLM Warehouse UI.
 - `frontend/src/Market.tsx`: Market Kernel UI aktif. File `SkillMarketplace.tsx` tidak ada lagi di repo saat audit terbaru; route `/market` memakai `Market.tsx`.
-- `frontend/src/Creator.tsx`: Creator Kernel cockpit aktif, sudah berisi brief composer, asset bin, timeline placeholder, preview, render/export mock, dan activity list.
+- `frontend/src/Creator.tsx`: Creator Kernel cockpit aktif, terintegrasi dengan backend SQLite (`creator_store.py`) untuk menyimpan state project (brief, asset, timeline, status render, script, subtitles, brand kit). Menggunakan sistem Tab UI untuk Overview, Scripting, dan Branding.
 - `frontend/src/shell/ShellStatusBar.tsx`: global Shell status bar aktif.
 - `frontend/src/mia_studio/components/StudioPage.tsx`: Studio UI utama.
 - `frontend/src/mia_studio/components/StudioActivityStream.tsx`: activity/log stream renderer awal.
@@ -1584,12 +1584,13 @@ Tambahan backend:
 ```txt
 backend/
   api/
-    creator_router.py          (EXISTS, skeleton; needs persistence/render/media approval)
+    creator_router.py          (EXISTS, terintegrasi dengan SQLite persistence; needs render/media approval)
     market_router.py           (EXISTS, partial; needs policy gate/approval)
     shell_router.py            (NEW, optional but recommended)
     automation_router.py       (NEW)
     approval_router.py         (NEW)
   core/
+    creator_store.py           (EXISTS, SQLite persistence untuk Creator projects)
     shell_state.py             (NEW)
     approval_service.py        (NEW)
     automation_orchestrator.py (NEW)
