@@ -3,6 +3,7 @@ import sys
 import json
 import sqlite3
 import asyncio
+import time
 from typing import Optional, Any
 import logging
 
@@ -39,6 +40,24 @@ class StateStore:
             cursor = conn.cursor()
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS config_store (key TEXT PRIMARY KEY, value TEXT)"
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS command_runs (
+                    id TEXT PRIMARY KEY,
+                    command TEXT NOT NULL,
+                    cwd TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    pid INTEGER,
+                    returncode INTEGER,
+                    stdout TEXT,
+                    stderr TEXT,
+                    created_at REAL NOT NULL,
+                    started_at REAL,
+                    finished_at REAL,
+                    updated_at REAL NOT NULL
+                )
+                """
             )
             conn.commit()
         finally:
@@ -117,6 +136,62 @@ class StateStore:
             await event_bus.publish("CONFIG_CHANGED", config)
         except Exception as e:
             logger.error(f"Failed to publish CONFIG_CHANGED event: {e}")
+
+    async def upsert_command_run(self, run: dict) -> None:
+        now = time.time()
+        await self._execute(
+            """
+            INSERT INTO command_runs (
+                id, command, cwd, status, pid, returncode, stdout, stderr,
+                created_at, started_at, finished_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                command = excluded.command,
+                cwd = excluded.cwd,
+                status = excluded.status,
+                pid = excluded.pid,
+                returncode = excluded.returncode,
+                stdout = excluded.stdout,
+                stderr = excluded.stderr,
+                created_at = excluded.created_at,
+                started_at = excluded.started_at,
+                finished_at = excluded.finished_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                run.get("id"),
+                run.get("command", ""),
+                run.get("cwd", ""),
+                run.get("status", "unknown"),
+                run.get("pid"),
+                run.get("returncode"),
+                run.get("stdout", ""),
+                run.get("stderr", ""),
+                run.get("created_at") or now,
+                run.get("started_at"),
+                run.get("finished_at"),
+                run.get("updated_at") or now,
+            ),
+        )
+
+    async def list_command_runs(self, limit: int = 20) -> list[dict]:
+        safe_limit = max(1, min(limit, 100))
+        rows = await self._execute(
+            """
+            SELECT id, command, cwd, status, pid, returncode, stdout, stderr,
+                   created_at, started_at, finished_at, updated_at
+            FROM command_runs
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        )
+        keys = [
+            "id", "command", "cwd", "status", "pid", "returncode", "stdout", "stderr",
+            "created_at", "started_at", "finished_at", "updated_at",
+        ]
+        return [dict(zip(keys, row)) for row in rows]
 
     def get_config_sync(self) -> MIAConfig:
         """
@@ -200,4 +275,3 @@ class StateStore:
 
 # Global shared instance
 state_store = StateStore()
-

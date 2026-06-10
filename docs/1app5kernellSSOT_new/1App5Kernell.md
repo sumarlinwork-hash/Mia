@@ -1546,7 +1546,7 @@ Backend yang sudah ada dan harus dipakai sebagai fondasi:
 - `backend/api/companion_router.py`: base Companion API dan websocket chat/heartbeat.
 - `backend/api/studio_router.py`: base Studio API, websocket events, skill execution, Git status, IDE discovery.
 - `backend/api/llm_router.py`: base LLM Warehouse API.
-- `backend/core/state_store.py`: SQLite transactional store. Saat ini baru menyimpan `config_store`; perlu diperluas untuk table Shell/Automation/Market/Creator.
+- `backend/core/state_store.py`: SQLite transactional store. Saat ini menyimpan `config_store` dan `command_runs`; perlu diperluas untuk table Shell/Automation/Market/Creator/approval lainnya.
 - `backend/core/event_bus.py`: in-memory pub/sub. Pakai untuk kernel switch, approval events, automation status, creator render status, dan market updates.
 - `backend/core/policy_engine.py`: deterministic policy gate. Perlu rule baru untuk kernel/action risk.
 - `backend/core/permission_manager.py`: permission grant/check sederhana. Perlu diperluas atau dibungkus oleh approval policy service.
@@ -1810,13 +1810,14 @@ POST /api/creator/projects/{id}/stop-render
 Studio built-in tools:
 
 ```txt
-GET  /api/studio/tools                         (TARGET, not implemented yet)
+GET  /api/studio/tools                         (EXISTS, registry skeleton)
 POST /api/studio/tools/search                  (EXISTS, skeleton)
 POST /api/studio/tools/read-file               (EXISTS, skeleton)
 POST /api/studio/tools/apply-patch             (EXISTS, approval placeholder)
 POST /api/studio/tools/run-command             (EXISTS, skeleton command runner)
 GET  /api/studio/tools/command-status/{id}     (EXISTS)
-POST /api/studio/tools/stop-command/{id}       (EXISTS, stop request only; does not terminate process yet)
+GET  /api/studio/tools/command-runs            (EXISTS, persisted command audit list)
+POST /api/studio/tools/stop-command/{id}       (EXISTS, terminates tracked process)
 POST /api/studio/tools/run-verification        (EXISTS, frontend build verification)
 GET  /api/studio/tools/changed-files           (EXISTS)
 GET  /api/studio/tools/diff                    (EXISTS)
@@ -1954,8 +1955,8 @@ MVP 2: Studio Cockpit
 
 - activity stream - partial: basic `StudioActivityStream.tsx` exists, but taxonomy/expand/file/command details are not complete.
 - Studio composer - partial: `StudioComposer.tsx` exists; effort selector and real approval banner still missing.
-- built-in tools API skeleton - partial: search/read/apply-patch/run-command/status/stop/changed-files/diff/run-verification exist; registry, real stop, and policy gate are missing.
-- changed-files summary - partial: composer strip exists; Review Changes does not fetch real data yet.
+- built-in tools API skeleton - partial: registry/search/read/apply-patch/run-command/status/stop/command-runs/changed-files/diff/run-verification exist; policy gate, safe patch, and richer audit/event streaming are missing.
+- changed-files summary - partial: composer strip exists; Review Changes now fetches changed-files/diff data.
 - Review Changes - partial: `ReviewChanges.tsx` fetches changed files and diff, and can trigger frontend verification; undo is still a placeholder.
 
 MVP 3: Market Split
@@ -2039,8 +2040,8 @@ Audit ini membandingkan kode aktual dengan kontrak di SSOT untuk backend, fronte
 | Frontend Creator | Partial | Creator Cockpit skeleton ada; belum consume backend Creator API. |
 | Backend Creator | Partial | Endpoint project/assets/timeline/preview/export/render-status ada, tetapi state in-memory, tanpa SQLite, upload, renderer, artifact, approval. |
 | Frontend Studio cockpit | Partial | `StudioActivityStream`, `StudioComposer`, `ReviewChanges` ada dan terpasang; chat dummy, task planner hardcoded, IDE workflow lama masih ada. |
-| Backend Studio tools | Partial | Search/read-file/apply-patch/run-command/status/stop/changed-files/diff/run-verification ada; registry, safe patch, real process stop, policy gate belum. |
-| Persistence SSOT | Partial | `state_store.py` hanya membuat `config_store`; history/stats/local runtime memakai SQLite terpisah; table approvals/tasks/creator/market/kernels belum ada. |
+| Backend Studio tools | Partial | Registry/search/read-file/apply-patch/run-command/status/stop/command-runs/changed-files/diff/run-verification ada; safe patch, event streaming, and policy gate belum. |
+| Persistence SSOT | Partial | `state_store.py` membuat `config_store` dan `command_runs`; history/stats/local runtime memakai SQLite terpisah; table approvals/tasks/creator/market/kernels belum ada. |
 | Approval / Always Execute | Belum | Tidak ada approval router/service/UI, policy store, approval center, dry-run governance. |
 | Automation Orchestrator | Belum | Crone daemon ada sebagai recurring jobs, tetapi Shell Action/Automation Orchestrator belum ada. |
 | Real-life integrations | Belum | Email/calendar/booking/shopping/selling/social publish belum ada sebagai governed workflows. |
@@ -2090,11 +2091,11 @@ Audit ini membandingkan kode aktual dengan kontrak di SSOT untuk backend, fronte
 | Studio skill endpoints | Partial | `/api/studio/skills/installed`, marketplace, test, execute. | Skill scoping exists but not full approval/policy gate. |
 | Studio tools search/read | Partial | `/api/studio/tools/search`, `/read-file`. | Skeleton direct filesystem scan/read under workspace. |
 | Studio tools apply-patch | Partial | `/api/studio/tools/apply-patch`. | Returns `pending_approval`; does not apply patch. |
-| Studio tools run-command/status | Partial | `/api/studio/tools/run-command`, `/command-status/{id}`. | Async shell command skeleton; no approval, no command allowlist, no persisted audit. |
-| Studio tools stop-command | Partial/Drift | `/api/studio/tools/stop-command/{id}`. | Only sets `stop_requested`; does not terminate process. |
-| Studio changed files/diff | Partial | `/api/studio/tools/changed-files`, `/diff`. | Uses git; frontend not yet wired to ReviewChanges. |
-| Studio tools registry | Belum | `GET /api/studio/tools` absent. | SSOT requires explicit tool registry. |
-| Verification endpoint | Belum | `POST /api/studio/tools/run-verification` absent. | Needed for Review Changes and auto-review. |
+| Studio tools run-command/status | Partial | `/api/studio/tools/run-command`, `/command-status/{id}`, `/command-runs`. | Async shell command skeleton with SQLite command run persistence; no approval or command allowlist yet. |
+| Studio tools stop-command | Partial | `/api/studio/tools/stop-command/{id}`. | Terminates tracked process and persists final status; still lacks process-tree cleanup. |
+| Studio changed files/diff | Partial | `/api/studio/tools/changed-files`, `/diff`. | Uses git; frontend ReviewChanges now consumes both. |
+| Studio tools registry | Partial | `GET /api/studio/tools`. | Registry skeleton exists; not policy-backed yet. |
+| Verification endpoint | Partial | `POST /api/studio/tools/run-verification`. | Runs frontend build verification; not generalized to all scopes yet. |
 | Approval endpoints | Belum | No `/api/studio/approvals`. | Needed for pending approvals in composer/status bar. |
 | Browser/local app verification | Belum | No Studio browser verification endpoint. | SSOT target not implemented. |
 | Crone endpoints in Studio router | Duplikat/Compatibility | `/api/crone/status`, pause/resume/trigger live in `studio_router.py`. | Crone belongs to Shell/Automation or Studio subtab, but route is mounted globally. |
@@ -2139,7 +2140,7 @@ Audit ini membandingkan kode aktual dengan kontrak di SSOT untuk backend, fronte
 
 | Item | Status | Evidence | Catatan |
 |---|---|---|---|
-| Main SQLite state store | Partial | `backend/core/state_store.py` only creates `config_store`. | SSOT tables missing. |
+| Main SQLite state store | Partial | `backend/core/state_store.py` creates `config_store` and `command_runs`. | Most SSOT tables still missing. |
 | Chat history DB | Separate/Partial | `mia_comm/history_manager.py` uses SQLite `messages`. | Not unified with `state_store.db`. |
 | Provider stats DB | Separate/Partial | `backend/core/stats_manager.py` uses SQLite `provider_stats`. | Not integrated with Shell status. |
 | Local runtime state | Separate/Partial | `backend/core/local_runtime.py` creates generic `state`. | Separate local runtime store. |
@@ -2214,7 +2215,7 @@ Audit ini membandingkan kode aktual dengan kontrak di SSOT untuk backend, fronte
 | Studio graph stream | Selesai/Partial | `useStudioStream`, `GraphViewer`. | Execution graph available, not full activity taxonomy. |
 | Studio activity stream | Partial | `StudioActivityStream` renders JSON events/logs. | No expand/collapse, typed events, file/command detail. |
 | Studio composer | Partial | `StudioComposer`. | Stop/auto-review/model trigger exists; effort selector/approval state real data missing. |
-| Review Changes | Partial | `ReviewChanges`. | Shows branch/dirty count only; no changed-file list/diff fetch. |
+| Review Changes | Partial | `ReviewChanges`. | Shows changed-file list, selected diff excerpt, and can trigger frontend verification. Undo remains placeholder. |
 | Git status polling | Selesai | `StudioPage` polls `/api/studio/git/status`. | Feeds dirty count and branch. |
 | IDE discovery/open | Selesai/Optional | Fetches `/api/studio/ide/list`, `/ide/open`. | Optional/secondary per SSOT, but still central in UI. |
 | Terminal/log viewer | Selesai/Partial | `StudioTerminal` receives stream logs. | Fine as read-only logs. |
@@ -2314,14 +2315,14 @@ Audit ini membandingkan kode aktual dengan kontrak di SSOT untuk backend, fronte
 
 ### Studio Missing
 
-- `GET /api/studio/tools` registry.
-- `POST /api/studio/tools/run-verification`.
+- Policy-backed `GET /api/studio/tools` registry metadata.
+- Generalized `POST /api/studio/tools/run-verification` beyond frontend build.
 - `POST /api/studio/tools/revert-own-change`.
-- Real process termination for command stop.
+- Process-tree cleanup for command stop.
 - Safe patch application with ownership tracking.
 - Browser/local app verification tool.
 - Activity event taxonomy persisted/emitted consistently.
-- ReviewChanges data wiring to changed-files/diff.
+- Full ReviewChanges UX: additions/deletions summary, larger diff viewer, and undo own changes.
 - Approval policy for write/command/network/destructive/credential actions.
 
 ### Creator Missing
@@ -2358,11 +2359,11 @@ The SSOT table targets are not implemented in `state_store.py`:
 - `creator_projects`
 - `creator_assets`
 - `creator_timelines`
-- `command_runs`
+- `command_runs` (implemented as initial Studio command audit table)
 - `kernel_events`
 - transaction/audit tables
 
-Currently only `config_store` exists in the canonical state store. Other SQLite usage exists, but is split across history/stats/local runtime.
+Currently `config_store` and an initial `command_runs` table exist in the canonical state store. Other SQLite usage exists, but is split across history/stats/local runtime.
 
 ---
 
@@ -2377,15 +2378,15 @@ Currently only `config_store` exists in the canonical state store. Other SQLite 
    - Wire `ShellStatusBar.tsx` to real data.
    - Implement emergency stop semantics.
 
-3. **Wire Review Changes.**
-   - Fetch `/api/studio/tools/changed-files` and `/api/studio/tools/diff`.
-   - Add diff viewer and file list.
-   - Add real verification endpoint.
+3. **Finish Review Changes.**
+   - Add additions/deletions summary.
+   - Add larger diff viewer and per-file loading/error state.
+   - Add undo own changes.
 
 4. **Harden Studio command lifecycle.**
-   - Store process handles.
-   - Implement terminate in `stop-command`.
-   - Persist command runs and stream command events.
+   - Persist command runs.
+   - Add process-tree cleanup for child processes.
+   - Stream command events into Studio Activity Stream.
    - Add approval/risk gate.
 
 5. **Connect Creator UI to backend.**
@@ -2397,8 +2398,8 @@ Currently only `config_store` exists in the canonical state store. Other SQLite 
    - Market skill/app functions should move from Companion router to Market router or become explicit aliases.
    - Crone automation should move from Studio router to Shell/Automation router or be scoped under Studio automation subtab.
 
-7. **Add SQLite migrations.**
-   - Extend `state_store.py` for SSOT tables or add migration manager.
+7. **Add remaining SQLite migrations.**
+   - Extend `state_store.py` for approvals, tasks, creator projects/assets/timelines, market installs, kernel events, and audit tables, or add a migration manager.
 
 8. **Clean redundant frontend surfaces.**
    - Decide fate of `/crone`, `/emotion`, `/iam-mia`, `ResilienceDashboard`, `StudioTopbar`, `ImpactModal`, `ExecutionVisualizer`.
@@ -2429,7 +2430,7 @@ Currently only `config_store` exists in the canonical state store. Other SQLite 
 | MVP | Status | What is complete | What remains |
 |---|---|---|---|
 | MVP 1 Shell Alignment | Partial, near complete | 5 routes, sidebar, switch event sender, ShellStatusBar component. | Real shell status data, emergency stop handling, provider health/tasks/approvals endpoints, consistent shell surfaces in Studio. |
-| MVP 2 Studio Cockpit | Partial | Activity/log renderer, composer, review surface, git status, graph/terminal, tools skeleton. | Real event taxonomy, ReviewChanges wiring, verification, command lifecycle, policy/approval, remove dummy task/chat scaffolding. |
+| MVP 2 Studio Cockpit | Partial | Activity/log renderer, composer, review surface with changed-files/diff, git status, graph/terminal, tools registry, verification, command stop, persisted command run table. | Real event taxonomy, undo, command event streaming, policy/approval, remove dummy task/chat scaffolding. |
 | MVP 3 Market Split | Partial | Market router, 3 UI tabs, market-filtered list, install/uninstall endpoints. | Execution bug, policy boundary, metadata migration, risk/approval, cleanup compatibility endpoints. |
 | MVP 4 Creator Skeleton | Partial | Creator cockpit UI skeleton, Creator router skeleton. | Backend integration, persistence, media tools, render/export engine, approval flow. |
 | MVP 5 Automation Governance | Belum | Crone daemon exists as legacy/recurring foundation. | Shell orchestrator, approval service, policy store, Always Execute UI, audit log, dry-run. |

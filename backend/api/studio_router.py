@@ -20,6 +20,7 @@ from studio import (
 from studio.metrics_service import studio_metrics
 from crone_daemon import crone_daemon
 from skill_manager import skill_manager
+from core.state_store import state_store
 
 STUDIO_SKILL_CATEGORIES = ("studio", "shared")
 
@@ -93,7 +94,73 @@ class StudioToolRunCommandRequest(BaseModel):
 class StudioVerificationRequest(BaseModel):
     scope: str = "frontend"
 
+STUDIO_TOOL_REGISTRY = [
+    {
+        "id": "search",
+        "method": "POST",
+        "path": "/api/studio/tools/search",
+        "risk": "read",
+        "description": "Search file names and relative paths inside the workspace.",
+    },
+    {
+        "id": "read-file",
+        "method": "POST",
+        "path": "/api/studio/tools/read-file",
+        "risk": "read",
+        "description": "Read a bounded text excerpt from a workspace file.",
+    },
+    {
+        "id": "apply-patch",
+        "method": "POST",
+        "path": "/api/studio/tools/apply-patch",
+        "risk": "write",
+        "description": "Submit a patch preview for approval-controlled application.",
+    },
+    {
+        "id": "run-command",
+        "method": "POST",
+        "path": "/api/studio/tools/run-command",
+        "risk": "command",
+        "description": "Run a local workspace command and track its lifecycle.",
+    },
+    {
+        "id": "command-runs",
+        "method": "GET",
+        "path": "/api/studio/tools/command-runs",
+        "risk": "read",
+        "description": "List persisted command runs for audit and review.",
+    },
+    {
+        "id": "run-verification",
+        "method": "POST",
+        "path": "/api/studio/tools/run-verification",
+        "risk": "command",
+        "description": "Run the configured verification flow for the selected scope.",
+    },
+    {
+        "id": "changed-files",
+        "method": "GET",
+        "path": "/api/studio/tools/changed-files",
+        "risk": "read",
+        "description": "List changed files from the Git working tree.",
+    },
+    {
+        "id": "diff",
+        "method": "GET",
+        "path": "/api/studio/tools/diff",
+        "risk": "read",
+        "description": "Read a Git diff for the workspace or selected path.",
+    },
+]
+
 studio_tool_commands = {}
+studio_tool_processes = {}
+
+async def _persist_studio_command(entry: dict):
+    try:
+        await state_store.upsert_command_run(entry)
+    except Exception as exc:
+        print(f"[Studio Tools] Failed to persist command run: {exc}")
 
 def _workspace_path(path: str = ".") -> str:
     base = os.path.abspath(os.getcwd())
@@ -111,8 +178,12 @@ async def _run_studio_tool_command(command_id: str, command: str, cwd: str):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+        studio_tool_processes[command_id] = process
         entry["pid"] = process.pid
         entry["status"] = "running"
+        entry["started_at"] = time.time()
+        entry["updated_at"] = time.time()
+        await _persist_studio_command(entry)
         stdout, stderr = await process.communicate()
         entry.update({
             "status": "completed" if process.returncode == 0 else "failed",
@@ -120,11 +191,20 @@ async def _run_studio_tool_command(command_id: str, command: str, cwd: str):
             "stdout": stdout.decode(errors="replace")[-12000:],
             "stderr": stderr.decode(errors="replace")[-12000:],
             "finished_at": time.time(),
+            "updated_at": time.time(),
         })
+        await _persist_studio_command(entry)
     except Exception as exc:
-        entry.update({"status": "failed", "stderr": str(exc), "finished_at": time.time()})
+        entry.update({"status": "failed", "stderr": str(exc), "finished_at": time.time(), "updated_at": time.time()})
+        await _persist_studio_command(entry)
+    finally:
+        studio_tool_processes.pop(command_id, None)
 
 # --- ROUTER ENDPOINTS ---
+
+@studio_router.get("/api/studio/tools")
+async def studio_tool_registry():
+    return {"status": "success", "tools": STUDIO_TOOL_REGISTRY}
 
 @studio_router.post("/api/studio/auth/handshake")
 async def studio_handshake(req: StudioHandshakeRequest):
@@ -180,7 +260,9 @@ async def studio_tool_run_command(req: StudioToolRunCommandRequest):
             "cwd": cwd,
             "status": "queued",
             "created_at": time.time(),
+            "updated_at": time.time(),
         }
+        await _persist_studio_command(studio_tool_commands[command_id])
         asyncio.create_task(_run_studio_tool_command(command_id, req.command, cwd))
         return {"status": "success", "command_id": command_id}
     except Exception as e:
@@ -193,13 +275,52 @@ async def studio_tool_command_status(command_id: str):
         return {"status": "error", "message": "Command not found"}
     return {"status": "success", "command": entry}
 
+@studio_router.get("/api/studio/tools/command-runs")
+async def studio_tool_command_runs(limit: int = 20):
+    try:
+        runs = await state_store.list_command_runs(limit)
+        return {"status": "success", "commands": runs}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "commands": list(studio_tool_commands.values())[-limit:]}
+
 @studio_router.post("/api/studio/tools/stop-command/{command_id}")
 async def studio_tool_stop_command(command_id: str):
     entry = studio_tool_commands.get(command_id)
     if not entry:
         return {"status": "error", "message": "Command not found"}
-    entry["status"] = "stop_requested"
-    return {"status": "success", "message": "Stop requested"}
+    process = studio_tool_processes.get(command_id)
+    if not process or process.returncode is not None:
+        entry["status"] = entry.get("status", "completed")
+        entry["updated_at"] = time.time()
+        await _persist_studio_command(entry)
+        return {"status": "success", "message": "Command is not running.", "command": entry}
+
+    entry["status"] = "terminating"
+    entry["updated_at"] = time.time()
+    await _persist_studio_command(entry)
+    try:
+        process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+        entry.update({
+            "status": "stopped",
+            "returncode": process.returncode,
+            "finished_at": time.time(),
+            "updated_at": time.time(),
+        })
+        await _persist_studio_command(entry)
+        return {"status": "success", "message": "Command stopped.", "command": entry}
+    except ProcessLookupError:
+        entry.update({"status": "stopped", "finished_at": time.time(), "updated_at": time.time()})
+        await _persist_studio_command(entry)
+        return {"status": "success", "message": "Command already stopped.", "command": entry}
+    except Exception as e:
+        entry.update({"status": "stop_failed", "stderr": str(e), "finished_at": time.time(), "updated_at": time.time()})
+        await _persist_studio_command(entry)
+        return {"status": "error", "message": str(e), "command": entry}
 
 @studio_router.get("/api/studio/tools/changed-files")
 async def studio_tool_changed_files():
