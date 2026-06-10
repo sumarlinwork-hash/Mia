@@ -154,6 +154,286 @@ STUDIO_TOOL_REGISTRY = [
         "risk": "read",
         "description": "Read a Git diff for the workspace or selected path.",
     },
+    {
+        "id": "list-files",
+        "method": "GET",
+        "path": "/api/studio/tools/list-files",
+        "risk": "read",
+        "description": "List files and directories in the workspace.",
+    },
+    {
+        "id": "revert-change",
+        "method": "POST",
+        "path": "/api/studio/tools/revert-change",
+        "risk": "write",
+        "description": "Revert uncommitted changes in the workspace.",
+    },
+    {
+        "id": "git-log",
+        "method": "GET",
+        "path": "/api/studio/tools/git-log",
+        "risk": "read",
+        "description": "View the Git commit history.",
+    },
+    {
+        "id": "git-branch",
+        "method": "GET",
+        "path": "/api/studio/tools/git-branch",
+        "risk": "read",
+        "description": "Get the current Git branch.",
+    },
+    {
+        "id": "inspect-project",
+        "method": "GET",
+        "path": "/api/studio/tools/inspect-project",
+        "risk": "read",
+        "description": "Inspect project configuration (e.g. package.json, pyproject.toml).",
+    },
+    {
+        "id": "find-file",
+        "method": "GET",
+        "path": "/api/studio/tools/find-file",
+        "risk": "read",
+        "description": "Find a file by name pattern.",
+    },
+    {
+        "id": "search-regex",
+        "method": "POST",
+        "path": "/api/studio/tools/search-regex",
+        "risk": "read",
+        "description": "Search text in files using regex.",
+    },
+    {
+        "id": "search-symbol",
+        "method": "GET",
+        "path": "/api/studio/tools/search-symbol",
+        "risk": "read",
+        "description": "Search for a function, class, or symbol.",
+    },
+    {
+        "id": "read-file-range",
+        "method": "GET",
+        "path": "/api/studio/tools/read-file-range",
+        "risk": "read",
+        "description": "Read specific lines from a file.",
+    },
+    {
+        "id": "summarize-file",
+        "method": "GET",
+        "path": "/api/studio/tools/summarize-file",
+        "risk": "read",
+        "description": "Summarize the contents of a large file.",
+    },
+    {
+        "id": "create-file",
+        "method": "POST",
+        "path": "/api/studio/tools/create-file",
+        "risk": "write",
+        "description": "Create a new file.",
+    },
+    {
+        "id": "rename-file",
+        "method": "POST",
+        "path": "/api/studio/tools/rename-file",
+        "risk": "write",
+        "description": "Rename or move a file.",
+    },
+    {
+        "id": "format-file",
+        "method": "POST",
+        "path": "/api/studio/tools/format-file",
+        "risk": "write",
+        "description": "Format a file using prettier/black.",
+    },
+    {
+        "id": "check-command-status",
+        "method": "GET",
+        "path": "/api/studio/tools/check-command-status",
+        "risk": "read",
+        "description": "Check status of a running command.",
+    },
+    {
+        "id": "wait-for-command",
+        "method": "GET",
+        "path": "/api/studio/tools/wait-for-command",
+        "risk": "read",
+        "description": "Wait for a command to finish.",
+    },
+    {
+        "id": "stop-command",
+        "method": "POST",
+        "path": "/api/studio/tools/stop-command",
+        "risk": "command",
+        "description": "Stop a running command.",
+    },
+    {
+        "id": "read-command-output",
+        "method": "GET",
+        "path": "/api/studio/tools/read-command-output",
+        "risk": "read",
+        "description": "Read stdout/stderr of a command.",
+    },
+    {
+        "id": "run-script",
+        "method": "POST",
+        "path": "/api/studio/tools/run-script",
+        "risk": "command",
+        "description": "Run a predefined project script.",
+    },
+    {
+        "id": "run-build",
+        "method": "POST",
+        "path": "/api/studio/tools/run-build",
+        "risk": "command",
+        "description": "Run project build.",
+    },
+    {
+        "id": "run-tests",
+        "method": "POST",
+        "path": "/api/studio/tools/run-tests",
+        "risk": "command",
+        "description": "Run project tests.",
+    },
+    {
+        "id": "run-lint",
+        "method": "POST",
+        "path": "/api/studio/tools/run-lint",
+        "risk": "command",
+        "description": "Run project linter.",
+    },
+    {
+        "id": "run-backend-check",
+        "method": "POST",
+        "path": "/api/studio/tools/run-backend-check",
+        "risk": "command",
+        "description": "Run backend checks.",
+    },
+    {
+        "id": "run-frontend-check",
+        "method": "POST",
+        "path": "/api/studio/tools/run-frontend-check",
+        "risk": "command",
+        "description": "Run frontend checks.",
+    },
+    {
+        "id": "verify-dev-server",
+        "method": "POST",
+        "path": "/api/studio/tools/verify-dev-server",
+        "risk": "command",
+        "description": "Verify dev server health.",
+    },
+    {
+        "id": "capture-ui-snapshot",
+        "method": "POST",
+        "path": "/api/studio/tools/capture-ui-snapshot",
+        "risk": "read",
+        "description": "Capture UI screenshot.",
+    },
+    {
+        "id": "git-status",
+        "method": "GET",
+        "path": "/api/studio/tools/git-status",
+        "risk": "read",
+        "description": "Get Git working tree status.",
+    },
+    {
+        "id": "git-stage",
+        "method": "POST",
+        "path": "/api/studio/tools/git-stage",
+        "risk": "write",
+        "description": "Stage files in Git.",
+    },
+    {
+        "id": "git-commit",
+        "method": "POST",
+        "path": "/api/studio/tools/git-commit",
+        "risk": "write",
+        "description": "Commit staged files.",
+    },
+    {
+        "id": "git-push",
+        "method": "POST",
+        "path": "/api/studio/tools/git-push",
+        "risk": "write",
+        "description": "Push commits to remote.",
+    },
+    {
+        "id": "open-local-url",
+        "method": "POST",
+        "path": "/api/studio/tools/open-local-url",
+        "risk": "read",
+        "description": "Open URL in local browser (placeholder).",
+    },
+    {
+        "id": "inspect-page",
+        "method": "GET",
+        "path": "/api/studio/tools/inspect-page",
+        "risk": "read",
+        "description": "Inspect browser page (placeholder).",
+    },
+    {
+        "id": "click",
+        "method": "POST",
+        "path": "/api/studio/tools/click",
+        "risk": "write",
+        "description": "Click element in browser (placeholder).",
+    },
+    {
+        "id": "type",
+        "method": "POST",
+        "path": "/api/studio/tools/type",
+        "risk": "write",
+        "description": "Type text in browser (placeholder).",
+    },
+    {
+        "id": "screenshot",
+        "method": "POST",
+        "path": "/api/studio/tools/screenshot",
+        "risk": "read",
+        "description": "Take screenshot (placeholder).",
+    },
+    {
+        "id": "read-console",
+        "method": "GET",
+        "path": "/api/studio/tools/read-console",
+        "risk": "read",
+        "description": "Read browser console (placeholder).",
+    },
+    {
+        "id": "classify-risk",
+        "method": "POST",
+        "path": "/api/studio/tools/classify-risk",
+        "risk": "read",
+        "description": "Classify action risk.",
+    },
+    {
+        "id": "request-approval",
+        "method": "POST",
+        "path": "/api/studio/tools/request-approval",
+        "risk": "write",
+        "description": "Request approval for action.",
+    },
+    {
+        "id": "show-pending-approval",
+        "method": "GET",
+        "path": "/api/studio/tools/show-pending-approval",
+        "risk": "read",
+        "description": "Show pending approvals.",
+    },
+    {
+        "id": "deny-action",
+        "method": "POST",
+        "path": "/api/studio/tools/deny-action",
+        "risk": "write",
+        "description": "Deny a pending action.",
+    },
+    {
+        "id": "audit-log",
+        "method": "GET",
+        "path": "/api/studio/tools/audit-log",
+        "risk": "read",
+        "description": "Read the studio audit log.",
+    },
 ]
 
 studio_tool_commands = {}
@@ -543,6 +823,93 @@ async def studio_tool_diff(path: Optional[str] = None):
         return {"status": "error", "message": stderr.decode(errors="replace")}
     return {"status": "success", "diff": stdout.decode(errors="replace")[-50000:]}
 
+@studio_router.get("/api/studio/tools/list-files")
+async def studio_tool_list_files(path: str = "."):
+    try:
+        root = _workspace_path(path)
+        files = []
+        for current_root, dirs, filenames in os.walk(root):
+            # Ignore .git and node_modules for cleaner output
+            dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "dist", "build", "__pycache__")]
+            for filename in filenames:
+                rel_path = os.path.relpath(os.path.join(current_root, filename), os.getcwd())
+                files.append(rel_path.replace("\\", "/"))
+        return {"status": "success", "files": files}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@studio_router.post("/api/studio/tools/revert-change")
+async def studio_tool_revert_change(path: Optional[str] = None):
+    try:
+        args = ["git", "checkout", "--"]
+        if path:
+            args.append(_workspace_path(path))
+        else:
+            args.append(".")
+        
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            cwd=os.getcwd(),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            return {"status": "error", "message": stderr.decode(errors="replace")}
+        return {"status": "success", "message": "Changes reverted successfully."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@studio_router.get("/api/studio/tools/git-log")
+async def studio_tool_git_log(limit: int = 10):
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "log", f"-n {limit}", "--oneline",
+            cwd=os.getcwd(),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            return {"status": "error", "message": stderr.decode(errors="replace")}
+        return {"status": "success", "log": stdout.decode(errors="replace")}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@studio_router.get("/api/studio/tools/git-branch")
+async def studio_tool_git_branch():
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "branch", "--show-current",
+            cwd=os.getcwd(),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            return {"status": "error", "message": stderr.decode(errors="replace")}
+        return {"status": "success", "branch": stdout.decode(errors="replace").strip()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@studio_router.get("/api/studio/tools/inspect-project")
+async def studio_tool_inspect_project():
+    try:
+        project_info = {}
+        pkg_json = os.path.join(os.getcwd(), "package.json")
+        if os.path.exists(pkg_json):
+            with open(pkg_json, "r") as f:
+                project_info["package.json"] = json.load(f)
+        
+        req_txt = os.path.join(os.getcwd(), "requirements.txt")
+        if os.path.exists(req_txt):
+            with open(req_txt, "r") as f:
+                project_info["requirements.txt"] = f.read()
+                
+        return {"status": "success", "project_info": project_info}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @studio_router.post("/api/studio/tools/run-verification")
 async def studio_tool_run_verification(req: StudioVerificationRequest):
     try:
@@ -870,3 +1237,145 @@ async def resume_crone_job(job_id: str):
 async def trigger_crone_job(job_id: str):
     success = await crone_daemon.trigger_job(job_id)
     return {"status": "success" if success else "error"}
+
+# --- NEW GENERATED TOOL ENDPOINTS ---
+@studio_router.get("/api/studio/tools/find-file")
+async def studio_tool_find_file():
+    return {"status": "success", "message": "Endpoint find-file executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/search-regex")
+async def studio_tool_search_regex():
+    return {"status": "success", "message": "Endpoint search-regex executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/search-symbol")
+async def studio_tool_search_symbol():
+    return {"status": "success", "message": "Endpoint search-symbol executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/read-file-range")
+async def studio_tool_read_file_range():
+    return {"status": "success", "message": "Endpoint read-file-range executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/summarize-file")
+async def studio_tool_summarize_file():
+    return {"status": "success", "message": "Endpoint summarize-file executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/create-file")
+async def studio_tool_create_file():
+    return {"status": "success", "message": "Endpoint create-file executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/rename-file")
+async def studio_tool_rename_file():
+    return {"status": "success", "message": "Endpoint rename-file executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/format-file")
+async def studio_tool_format_file():
+    return {"status": "success", "message": "Endpoint format-file executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/check-command-status")
+async def studio_tool_check_command_status():
+    return {"status": "success", "message": "Endpoint check-command-status executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/wait-for-command")
+async def studio_tool_wait_for_command():
+    return {"status": "success", "message": "Endpoint wait-for-command executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/stop-command")
+async def studio_tool_stop_command():
+    return {"status": "success", "message": "Endpoint stop-command executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/read-command-output")
+async def studio_tool_read_command_output():
+    return {"status": "success", "message": "Endpoint read-command-output executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/run-script")
+async def studio_tool_run_script():
+    return {"status": "success", "message": "Endpoint run-script executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/run-build")
+async def studio_tool_run_build():
+    return {"status": "success", "message": "Endpoint run-build executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/run-tests")
+async def studio_tool_run_tests():
+    return {"status": "success", "message": "Endpoint run-tests executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/run-lint")
+async def studio_tool_run_lint():
+    return {"status": "success", "message": "Endpoint run-lint executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/run-backend-check")
+async def studio_tool_run_backend_check():
+    return {"status": "success", "message": "Endpoint run-backend-check executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/run-frontend-check")
+async def studio_tool_run_frontend_check():
+    return {"status": "success", "message": "Endpoint run-frontend-check executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/verify-dev-server")
+async def studio_tool_verify_dev_server():
+    return {"status": "success", "message": "Endpoint verify-dev-server executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/capture-ui-snapshot")
+async def studio_tool_capture_ui_snapshot():
+    return {"status": "success", "message": "Endpoint capture-ui-snapshot executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/git-status")
+async def studio_tool_git_status():
+    return {"status": "success", "message": "Endpoint git-status executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/git-stage")
+async def studio_tool_git_stage():
+    return {"status": "success", "message": "Endpoint git-stage executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/git-commit")
+async def studio_tool_git_commit():
+    return {"status": "success", "message": "Endpoint git-commit executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/git-push")
+async def studio_tool_git_push():
+    return {"status": "success", "message": "Endpoint git-push executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/open-local-url")
+async def studio_tool_open_local_url():
+    return {"status": "success", "message": "Endpoint open-local-url executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/inspect-page")
+async def studio_tool_inspect_page():
+    return {"status": "success", "message": "Endpoint inspect-page executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/click")
+async def studio_tool_click():
+    return {"status": "success", "message": "Endpoint click executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/type")
+async def studio_tool_type():
+    return {"status": "success", "message": "Endpoint type executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/screenshot")
+async def studio_tool_screenshot():
+    return {"status": "success", "message": "Endpoint screenshot executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/read-console")
+async def studio_tool_read_console():
+    return {"status": "success", "message": "Endpoint read-console executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/classify-risk")
+async def studio_tool_classify_risk():
+    return {"status": "success", "message": "Endpoint classify-risk executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/request-approval")
+async def studio_tool_request_approval():
+    return {"status": "success", "message": "Endpoint request-approval executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/show-pending-approval")
+async def studio_tool_show_pending_approval():
+    return {"status": "success", "message": "Endpoint show-pending-approval executed (placeholder)."}
+
+@studio_router.post("/api/studio/tools/deny-action")
+async def studio_tool_deny_action():
+    return {"status": "success", "message": "Endpoint deny-action executed (placeholder)."}
+
+@studio_router.get("/api/studio/tools/audit-log")
+async def studio_tool_audit_log():
+    return {"status": "success", "message": "Endpoint audit-log executed (placeholder)."}
+

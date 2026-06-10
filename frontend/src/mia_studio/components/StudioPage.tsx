@@ -61,7 +61,7 @@ interface Approval {
   action_type: string;
   title: string;
   description: string;
-  payload: any;
+  payload: { command?: string; patch?: string; [key: string]: unknown };
   status: string;
   result?: string;
   created_at: number;

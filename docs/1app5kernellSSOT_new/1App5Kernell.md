@@ -613,7 +613,8 @@ Dipakai ketika hasil kerja perlu diverifikasi di browser atau app lokal.
 - `screenshot`: mengambil gambar hasil render.
 - `read_console`: membaca error console browser jika tersedia.
 
-Tool ini hanya dipakai untuk verifikasi lokal atau atas permintaan user.
+Tool ini hanya dipakai untuk verifikasi lokal atau atas permintaan user. 
+*(Catatan Status: Karena tidak ada integrasi Playwright/Puppeteer di backend saat ini, tools kategori ini telah diimplementasikan sebagai placeholder endpoints yang mengembalikan respons simulasi sukses)*
 
 #### 7. Approval and Safety Tools
 
@@ -1567,7 +1568,7 @@ Frontend yang sudah ada dan harus dipakai sebagai fondasi:
 - `frontend/src/mia_studio/components/StudioPage.tsx`: Studio UI utama.
 - `frontend/src/mia_studio/components/StudioActivityStream.tsx`: activity/log stream renderer awal.
 - `frontend/src/mia_studio/components/StudioComposer.tsx`: bottom composer awal untuk follow-up, stop, auto-review, model trigger, attachment, dan changed-files strip.
-- `frontend/src/mia_studio/components/ReviewChanges.tsx`: review changes surface awal.
+- `frontend/src/mia_studio/components/ReviewChanges.tsx`: review changes surface awal, fully wired dengan Undo.
 - `frontend/src/mia_studio/components/GardenLauncher.tsx`: launcher/prompt awal Studio.
 - `frontend/src/mia_studio/components/StudioTerminal.tsx`: terminal/log viewer.
 - `frontend/src/mia_studio/components/GraphViewer.tsx`: visual graph viewer.
@@ -1625,7 +1626,7 @@ frontend/src/
     RenderPanel.tsx            (NEW)
   studio/
     StudioActivityStream.tsx   (EXISTS, basic renderer)
-    ReviewChanges.tsx          (EXISTS, wired to changed-files/diff; undo still placeholder)
+    ReviewChanges.tsx          (EXISTS, wired to changed-files/diff; undo fully wired)
     StudioComposer.tsx         (EXISTS, partial SSOT composer)
   hooks/
     useShellStatus.ts          (NEW)

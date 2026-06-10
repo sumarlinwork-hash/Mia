@@ -70,6 +70,29 @@ export function ReviewChanges({ branch, dirtyCount, onFollowUp }: ReviewChangesP
     }
   };
 
+  const handleUndo = async () => {
+    if (!confirm('Are you sure you want to revert uncommitted changes? This action cannot be undone.')) {
+      return;
+    }
+    setVerifyStatus('Reverting changes...');
+    try {
+      const res = await fetch('/api/studio/tools/revert-change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedPath || null }), // if we want to revert a specific file or all files. But let's revert all files for now if no specific path, wait, let's just pass nothing to revert all. Actually, let's send path if selected.
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setVerifyStatus('Changes reverted successfully.');
+        loadChanges();
+      } else {
+        setVerifyStatus(`Revert failed: ${data.message}`);
+      }
+    } catch {
+      setVerifyStatus('Revert request failed.');
+    }
+  };
+
   return (
     <div className="rounded-lg border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -128,8 +151,9 @@ export function ReviewChanges({ branch, dirtyCount, onFollowUp }: ReviewChangesP
 
       <div className="mt-3 grid grid-cols-3 gap-2">
         <button
-          className="inline-flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-2 text-[10px] font-bold text-white/40"
-          title="Undo is not wired yet"
+          onClick={handleUndo}
+          className="inline-flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-2 text-[10px] font-bold text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+          title="Revert selected or all uncommitted changes"
         >
           <RotateCcw size={12} />
           Undo

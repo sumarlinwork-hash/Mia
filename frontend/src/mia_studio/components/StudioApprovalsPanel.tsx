@@ -1,13 +1,12 @@
 import React from 'react';
 import { X, Check, ShieldAlert, MessageSquare } from 'lucide-react';
-import clsx from 'clsx';
 
 interface Approval {
   id: string;
   action_type: string;
   title: string;
   description: string;
-  payload: any;
+  payload: { command?: string; patch?: string; [key: string]: unknown };
   status: string;
   result?: string;
   created_at: number;
