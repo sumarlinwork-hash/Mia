@@ -59,6 +59,21 @@ class StateStore:
                 )
                 """
             )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS approvals (
+                    id TEXT PRIMARY KEY,
+                    action_type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    result TEXT,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                )
+                """
+            )
             conn.commit()
         finally:
             conn.close()
@@ -192,6 +207,79 @@ class StateStore:
             "created_at", "started_at", "finished_at", "updated_at",
         ]
         return [dict(zip(keys, row)) for row in rows]
+
+    async def create_approval(self, approval: dict) -> None:
+        now = time.time()
+        await self._execute(
+            """
+            INSERT INTO approvals (
+                id, action_type, title, description, payload, status, result,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                action_type = excluded.action_type,
+                title = excluded.title,
+                description = excluded.description,
+                payload = excluded.payload,
+                status = excluded.status,
+                result = excluded.result,
+                updated_at = excluded.updated_at
+            """,
+            (
+                approval.get("id"),
+                approval.get("action_type", "unknown"),
+                approval.get("title", "Approval Required"),
+                approval.get("description", ""),
+                json.dumps(approval.get("payload", {}), ensure_ascii=False),
+                approval.get("status", "pending"),
+                approval.get("result"),
+                approval.get("created_at") or now,
+                approval.get("updated_at") or now,
+            ),
+        )
+
+    async def get_approval(self, approval_id: str) -> Optional[dict]:
+        rows = await self._execute(
+            "SELECT id, action_type, title, description, payload, status, result, created_at, updated_at FROM approvals WHERE id = ?",
+            (approval_id,)
+        )
+        if not rows:
+            return None
+        keys = ["id", "action_type", "title", "description", "payload", "status", "result", "created_at", "updated_at"]
+        approval = dict(zip(keys, rows[0]))
+        try:
+            approval["payload"] = json.loads(approval["payload"])
+        except Exception:
+            approval["payload"] = {}
+        return approval
+
+    async def list_approvals(self, status: str | None = None, limit: int = 50) -> list[dict]:
+        safe_limit = max(1, min(limit, 200))
+        if status:
+            rows = await self._execute(
+                "SELECT id, action_type, title, description, payload, status, result, created_at, updated_at FROM approvals WHERE status = ? ORDER BY updated_at DESC LIMIT ?",
+                (status, safe_limit)
+            )
+        else:
+            rows = await self._execute(
+                "SELECT id, action_type, title, description, payload, status, result, created_at, updated_at FROM approvals ORDER BY updated_at DESC LIMIT ?",
+                (safe_limit,)
+            )
+        keys = ["id", "action_type", "title", "description", "payload", "status", "result", "created_at", "updated_at"]
+        approvals = [dict(zip(keys, row)) for row in rows]
+        for approval in approvals:
+            try:
+                approval["payload"] = json.loads(approval["payload"])
+            except Exception:
+                approval["payload"] = {}
+        return approvals
+
+    async def resolve_approval(self, approval_id: str, status: str, result: str | None = None) -> None:
+        now = time.time()
+        await self._execute(
+            "UPDATE approvals SET status = ?, result = ?, updated_at = ? WHERE id = ?",
+            (status, result, now, approval_id),
+        )
 
     def get_config_sync(self) -> MIAConfig:
         """

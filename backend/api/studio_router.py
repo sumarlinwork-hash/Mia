@@ -3,6 +3,9 @@ import sys
 import asyncio
 import time
 import uuid
+import json
+import re
+import tempfile
 from typing import Optional, List
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Response, HTTPException, Body
 from pydantic import BaseModel
@@ -200,6 +203,56 @@ async def _run_studio_tool_command(command_id: str, command: str, cwd: str):
     finally:
         studio_tool_processes.pop(command_id, None)
 
+def _serialize_payload(payload: dict) -> str:
+    return json.dumps(payload, ensure_ascii=False)
+
+def _command_requires_approval(command: str) -> bool:
+    dangerous_patterns = [
+        r"\brm\b",
+        r"\bdel\b",
+        r"\bshutdown\b",
+        r"\breboot\b",
+        r"\bpoweroff\b",
+        r"\bgit\s+push\b",
+        r"\bgit\s+commit\b",
+        r"\bpip\s+install\b",
+        r"\bnpm\s+install\b",
+        r"\bnpm\s+update\b",
+        r"\byarn\b",
+        r"\bdocker\b",
+        r"\bcurl\b",
+        r"\bwget\b",
+        r"\bchmod\b",
+        r"\bchown\b",
+        r"\bscp\b",
+        r"\bdel\s+/",
+    ]
+    normalized = command.lower()
+    return any(re.search(pattern, normalized) for pattern in dangerous_patterns)
+
+async def _apply_patch_file(patch: str) -> None:
+    if ".." in patch.replace('\\', '/'):
+        raise ValueError("Patch contains path traversal segments")
+    with tempfile.NamedTemporaryFile('w', suffix='.patch', delete=False, encoding='utf-8') as temp_patch:
+        temp_patch.write(patch)
+        temp_path = temp_patch.name
+    proc = await asyncio.create_subprocess_exec(
+        "git", "apply", "--whitespace=nowarn", temp_path,
+        cwd=os.getcwd(),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    try:
+        os.unlink(temp_path)
+    except Exception:
+        pass
+    if proc.returncode != 0:
+        raise RuntimeError(stderr.decode(errors="replace") or stdout.decode(errors="replace"))
+
+async def _execute_approved_command(command_id: str, command: str, cwd: str):
+    await _run_studio_tool_command(command_id, command, cwd)
+
 # --- ROUTER ENDPOINTS ---
 
 @studio_router.get("/api/studio/tools")
@@ -243,17 +296,54 @@ async def studio_tool_read_file(req: StudioToolReadFileRequest):
 
 @studio_router.post("/api/studio/tools/apply-patch")
 async def studio_tool_apply_patch(req: StudioToolPatchRequest):
-    return {
-        "status": "pending_approval",
-        "message": "Patch application is exposed as a skeleton endpoint; execution remains controlled by the local agent.",
-        "patch_preview": req.patch[:2000],
-    }
+    try:
+        approval_id = str(uuid.uuid4())
+        approval = {
+            "id": approval_id,
+            "action_type": "studio_patch",
+            "title": "Apply workspace patch",
+            "description": "Apply a backend-approved patch to workspace files. Requires explicit user approval.",
+            "payload": {"patch": req.patch},
+            "status": "pending",
+            "result": None,
+            "created_at": time.time(),
+            "updated_at": time.time(),
+        }
+        await state_store.create_approval(approval)
+        return {
+            "status": "pending_approval",
+            "approval_id": approval_id,
+            "message": "Patch application is pending user approval.",
+            "patch_preview": req.patch[:2000],
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @studio_router.post("/api/studio/tools/run-command")
 async def studio_tool_run_command(req: StudioToolRunCommandRequest):
     try:
-        command_id = str(uuid.uuid4())
         cwd = _workspace_path(req.cwd)
+        if _command_requires_approval(req.command):
+            approval_id = str(uuid.uuid4())
+            approval = {
+                "id": approval_id,
+                "action_type": "studio_command",
+                "title": "Run high-risk workspace command",
+                "description": f"Command requires explicit approval before execution: {req.command}",
+                "payload": {"command": req.command, "cwd": cwd},
+                "status": "pending",
+                "result": None,
+                "created_at": time.time(),
+                "updated_at": time.time(),
+            }
+            await state_store.create_approval(approval)
+            return {
+                "status": "pending_approval",
+                "approval_id": approval_id,
+                "message": "Command is pending user approval before execution.",
+            }
+
+        command_id = str(uuid.uuid4())
         studio_tool_commands[command_id] = {
             "id": command_id,
             "command": req.command,
@@ -282,6 +372,107 @@ async def studio_tool_command_runs(limit: int = 20):
         return {"status": "success", "commands": runs}
     except Exception as e:
         return {"status": "error", "message": str(e), "commands": list(studio_tool_commands.values())[-limit:]}
+
+@studio_router.get("/api/studio/approvals")
+async def studio_list_approvals(status: Optional[str] = None, limit: int = 50):
+    try:
+        approvals = await state_store.list_approvals(status, limit)
+        return {"status": "success", "approvals": approvals}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "approvals": []}
+
+@studio_router.get("/api/approvals/pending")
+async def approvals_pending(limit: int = 100):
+    return await studio_list_approvals(status="pending", limit=limit)
+
+@studio_router.post("/api/approvals/{approval_id}/approve")
+async def studio_approve_request(approval_id: str):
+    approval = await state_store.get_approval(approval_id)
+    if not approval:
+        return {"status": "error", "message": "Approval request not found."}
+    if approval["status"] != "pending":
+        return {"status": "error", "message": "Approval request is not pending."}
+
+    try:
+        if approval["action_type"] == "studio_patch":
+            await _apply_patch_file(approval["payload"].get("patch", ""))
+            await state_store.resolve_approval(approval_id, "approved", "Patch applied")
+            return {"status": "success", "message": "Patch applied successfully."}
+
+        if approval["action_type"] == "studio_command":
+            command = approval["payload"].get("command", "")
+            cwd = approval["payload"].get("cwd", os.getcwd())
+            command_id = str(uuid.uuid4())
+            studio_tool_commands[command_id] = {
+                "id": command_id,
+                "command": command,
+                "cwd": cwd,
+                "status": "queued",
+                "created_at": time.time(),
+                "updated_at": time.time(),
+            }
+            await _persist_studio_command(studio_tool_commands[command_id])
+            asyncio.create_task(_execute_approved_command(command_id, command, cwd))
+            await state_store.resolve_approval(approval_id, "approved", f"Command queued: {command_id}")
+            return {"status": "success", "command_id": command_id}
+
+        await state_store.resolve_approval(approval_id, "failed", "Unsupported approval action type.")
+        return {"status": "error", "message": "Unsupported approval action type."}
+    except Exception as e:
+        await state_store.resolve_approval(approval_id, "failed", str(e))
+        return {"status": "error", "message": str(e)}
+
+@studio_router.post("/api/approvals/{approval_id}/approve-once")
+async def studio_approve_once_request(approval_id: str):
+    approval = await state_store.get_approval(approval_id)
+    if not approval:
+        return {"status": "error", "message": "Approval request not found."}
+    if approval["status"] != "pending":
+        return {"status": "error", "message": "Approval request is not pending."}
+
+    try:
+        if approval["action_type"] == "studio_patch":
+            await _apply_patch_file(approval["payload"].get("patch", ""))
+            await state_store.resolve_approval(approval_id, "approved_once", "Patch applied once")
+            return {"status": "success", "message": "Patch applied successfully."}
+
+        if approval["action_type"] == "studio_command":
+            command = approval["payload"].get("command", "")
+            cwd = approval["payload"].get("cwd", os.getcwd())
+            command_id = str(uuid.uuid4())
+            studio_tool_commands[command_id] = {
+                "id": command_id,
+                "command": command,
+                "cwd": cwd,
+                "status": "queued",
+                "created_at": time.time(),
+                "updated_at": time.time(),
+            }
+            await _persist_studio_command(studio_tool_commands[command_id])
+            asyncio.create_task(_execute_approved_command(command_id, command, cwd))
+            await state_store.resolve_approval(approval_id, "approved_once", f"Command queued once: {command_id}")
+            return {"status": "success", "command_id": command_id}
+
+        await state_store.resolve_approval(approval_id, "failed", "Unsupported approval action type.")
+        return {"status": "error", "message": "Unsupported approval action type."}
+    except Exception as e:
+        await state_store.resolve_approval(approval_id, "failed", str(e))
+        return {"status": "error", "message": str(e)}
+
+@studio_router.post("/api/approvals/{approval_id}/deny")
+async def approvals_deny_request(approval_id: str):
+    approval = await state_store.get_approval(approval_id)
+    if not approval:
+        return {"status": "error", "message": "Approval request not found."}
+    if approval["status"] != "pending":
+        return {"status": "error", "message": "Approval request is not pending."}
+
+    await state_store.resolve_approval(approval_id, "rejected", "User rejected the request.")
+    return {"status": "success", "message": "Approval request rejected."}
+
+@studio_router.post("/api/studio/approvals/{approval_id}/reject")
+async def studio_reject_request(approval_id: str):
+    return await approvals_deny_request(approval_id)
 
 @studio_router.post("/api/studio/tools/stop-command/{command_id}")
 async def studio_tool_stop_command(command_id: str):

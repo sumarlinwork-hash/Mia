@@ -12,6 +12,7 @@ interface StudioComposerProps {
   modelName: string;
   onModelClick: () => void;
   changedFilesCount: number;
+  pendingApprovalsCount: number;
 }
 
 export function StudioComposer({
@@ -25,12 +26,15 @@ export function StudioComposer({
   modelName,
   onModelClick,
   changedFilesCount,
+  pendingApprovalsCount,
 }: StudioComposerProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] text-white/50">
         <span className="font-mono uppercase tracking-[0.18em]">{changedFilesCount} changed files</span>
-        <span className="font-mono uppercase tracking-[0.18em]">approval queue clear</span>
+        <span className={`font-mono uppercase tracking-[0.18em] ${pendingApprovalsCount > 0 ? 'text-red-300' : 'text-white/50'}`}>
+          {pendingApprovalsCount > 0 ? `${pendingApprovalsCount} pending approval${pendingApprovalsCount > 1 ? 's' : ''}` : 'approval queue clear'}
+        </span>
       </div>
 
       <div className="rounded-xl border border-white/10 bg-black/35 p-2">

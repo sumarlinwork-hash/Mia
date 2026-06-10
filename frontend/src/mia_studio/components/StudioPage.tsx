@@ -30,6 +30,7 @@ import { ReviewChanges } from './ReviewChanges';
 import { ResilienceMonitor } from './ResilienceMonitor';
 import { GardenLauncher } from './GardenLauncher';
 import { StudioBottomBar } from './StudioBottomBar';
+import { StudioApprovalsPanel } from './StudioApprovalsPanel';
 import clsx from 'clsx';
 
 interface ShadTelemetryPayload {
@@ -53,6 +54,18 @@ interface ShadTelemetryPayload {
 interface Message {
   role: 'user' | 'mia';
   content: string;
+}
+
+interface Approval {
+  id: string;
+  action_type: string;
+  title: string;
+  description: string;
+  payload: any;
+  status: string;
+  result?: string;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface StudioPageProps {
@@ -117,6 +130,9 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [autoSave, setAutoSave] = useState(true);
   const [autoReview, setAutoReview] = useState(true);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [pendingApprovals, setPendingApprovals] = useState<Approval[]>([]);
+  const [showApprovalsPanel, setShowApprovalsPanel] = useState(false);
   
   // Local IDE Discovery states
   const [ides, setIdes] = useState<{id: string, name: string}[]>([]);
@@ -148,6 +164,58 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
     const interval = setInterval(fetchGitStatus, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchPendingApprovals = async () => {
+    try {
+      const res = await fetch('/api/approvals/pending');
+      const data = await res.json();
+      if (data.status === 'success') {
+        const approvals = Array.isArray(data.approvals) ? data.approvals : [];
+        setPendingApprovalsCount(approvals.length);
+        setPendingApprovals(approvals);
+      }
+    } catch (e) {
+      console.error('Failed to fetch pending approvals:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingApprovals();
+    const interval = window.setInterval(fetchPendingApprovals, 10000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const handleApproveApproval = async (approvalId: string) => {
+    try {
+      const res = await fetch(`/api/approvals/${encodeURIComponent(approvalId)}/approve`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        await fetchPendingApprovals();
+      } else {
+        console.error('Approval failed:', data.message || data);
+      }
+    } catch (e) {
+      console.error('Failed to approve request:', e);
+    }
+  };
+
+  const handleRejectApproval = async (approvalId: string) => {
+    try {
+      const res = await fetch(`/api/approvals/${encodeURIComponent(approvalId)}/deny`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        await fetchPendingApprovals();
+      } else {
+        console.error('Rejection failed:', data.message || data);
+      }
+    } catch (e) {
+      console.error('Failed to reject request:', e);
+    }
+  };
 
   const project = useProject(currentProjectId);
   const execution = useExecution();
@@ -430,6 +498,21 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
             )}
           </div>
 
+          <button
+            onClick={() => setShowApprovalsPanel((value) => !value)}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all duration-300 ${
+              pendingApprovalsCount > 0
+                ? 'bg-red-500/10 border border-red-500/20 text-red-300'
+                : 'bg-white/5 border border-white/5 text-white/60'
+            }`}
+            title={pendingApprovalsCount > 0 ? 'Open approval queue' : 'No pending approvals'}
+          >
+            <span>approvals:</span>
+            <span className={pendingApprovalsCount > 0 ? 'text-red-300' : 'text-white'}>
+              {pendingApprovalsCount > 0 ? `${pendingApprovalsCount} pending` : 'clear'}
+            </span>
+          </button>
+
           <button 
             onClick={() => onToggleZen?.()}
             className="p-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white/60 hover:text-primary transition-all duration-300"
@@ -594,6 +677,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                   modelName={activeModelName}
                   onModelClick={() => setShowModelDropdown(!showModelDropdown)}
                   changedFilesCount={gitDirtyCount}
+                  pendingApprovalsCount={pendingApprovalsCount}
                 />
               </div>
             </div>
@@ -611,7 +695,16 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
             <GraphViewer events={stream.graphEvents} />
           </div>
 
-          {/* Resilience Monitor Section */}
+          {/* Pending approval panel */}
+          {showApprovalsPanel && (
+            <StudioApprovalsPanel
+              approvals={pendingApprovals}
+              onApprove={handleApproveApproval}
+              onReject={handleRejectApproval}
+              onClose={() => setShowApprovalsPanel(false)}
+            />
+          )}
+
           <ReviewChanges
             branch={gitBranch}
             dirtyCount={gitDirtyCount}

@@ -1954,7 +1954,7 @@ MVP 1: Shell Alignment
 MVP 2: Studio Cockpit
 
 - activity stream - partial: basic `StudioActivityStream.tsx` exists, but taxonomy/expand/file/command details are not complete.
-- Studio composer - partial: `StudioComposer.tsx` exists; effort selector and real approval banner still missing.
+- Studio composer - partial: `StudioComposer.tsx` exists; effort selector is present, pending-approval count is now surfaced, and a full approval decision panel is still missing.
 - built-in tools API skeleton - partial: registry/search/read/apply-patch/run-command/status/stop/command-runs/changed-files/diff/run-verification exist; policy gate, safe patch, and richer audit/event streaming are missing.
 - changed-files summary - partial: composer strip exists; Review Changes now fetches changed-files/diff data.
 - Review Changes - partial: `ReviewChanges.tsx` fetches changed files and diff, and can trigger frontend verification; undo is still a placeholder.
@@ -2040,9 +2040,9 @@ Audit ini membandingkan kode aktual dengan kontrak di SSOT untuk backend, fronte
 | Frontend Creator | Partial | Creator Cockpit skeleton ada; belum consume backend Creator API. |
 | Backend Creator | Partial | Endpoint project/assets/timeline/preview/export/render-status ada, tetapi state in-memory, tanpa SQLite, upload, renderer, artifact, approval. |
 | Frontend Studio cockpit | Partial | `StudioActivityStream`, `StudioComposer`, `ReviewChanges` ada dan terpasang; chat dummy, task planner hardcoded, IDE workflow lama masih ada. |
-| Backend Studio tools | Partial | Registry/search/read-file/apply-patch/run-command/status/stop/command-runs/changed-files/diff/run-verification ada; safe patch, event streaming, and policy gate belum. |
-| Persistence SSOT | Partial | `state_store.py` membuat `config_store` dan `command_runs`; history/stats/local runtime memakai SQLite terpisah; table approvals/tasks/creator/market/kernels belum ada. |
-| Approval / Always Execute | Belum | Tidak ada approval router/service/UI, policy store, approval center, dry-run governance. |
+| Backend Studio tools | Partial | Registry/search/read-file/apply-patch/run-command/status/stop/command-runs/changed-files/diff/run-verification ada; high-risk command approval and patch approval queue now present. |
+| Persistence SSOT | Partial | `state_store.py` membuat `config_store`, `command_runs`, dan `approvals`; history/stats/local runtime memakai SQLite terpisah; table tasks/creator/market/kernels belum ada. |
+| Approval / Always Execute | Partial | Studio approval router/UI now exists for Studio tool gating; pending-approval panel added, generic `/api/approvals` endpoints implemented, full policy engine still pending. |
 | Automation Orchestrator | Belum | Crone daemon ada sebagai recurring jobs, tetapi Shell Action/Automation Orchestrator belum ada. |
 | Real-life integrations | Belum | Email/calendar/booking/shopping/selling/social publish belum ada sebagai governed workflows. |
 | Monaco/no web IDE decision | Drift | `@monaco-editor/react` masih ada di package dan lockfile, tidak ditemukan import aktif di `frontend/src`. |
@@ -2090,13 +2090,13 @@ Audit ini membandingkan kode aktual dengan kontrak di SSOT untuk backend, fronte
 | Graph/event websockets | Selesai/Partial | `/ws/studio/events/{project_id}`, `/ws/studio/graph/{execution_id}`. | Existing graph/events; not unified cross-kernel activity stream. |
 | Studio skill endpoints | Partial | `/api/studio/skills/installed`, marketplace, test, execute. | Skill scoping exists but not full approval/policy gate. |
 | Studio tools search/read | Partial | `/api/studio/tools/search`, `/read-file`. | Skeleton direct filesystem scan/read under workspace. |
-| Studio tools apply-patch | Partial | `/api/studio/tools/apply-patch`. | Returns `pending_approval`; does not apply patch. |
-| Studio tools run-command/status | Partial | `/api/studio/tools/run-command`, `/command-status/{id}`, `/command-runs`. | Async shell command skeleton with SQLite command run persistence; no approval or command allowlist yet. |
+| Studio tools apply-patch | Partial | `/api/studio/tools/apply-patch`. | Creates approval request and can apply patch after explicit user approval. |
+| Studio tools run-command/status | Partial | `/api/studio/tools/run-command`, `/command-status/{id}`, `/command-runs`. | Async shell command support with SQLite persistence; high-risk commands now gate to approval. |
 | Studio tools stop-command | Partial | `/api/studio/tools/stop-command/{id}`. | Terminates tracked process and persists final status; still lacks process-tree cleanup. |
 | Studio changed files/diff | Partial | `/api/studio/tools/changed-files`, `/diff`. | Uses git; frontend ReviewChanges now consumes both. |
 | Studio tools registry | Partial | `GET /api/studio/tools`. | Registry skeleton exists; not policy-backed yet. |
 | Verification endpoint | Partial | `POST /api/studio/tools/run-verification`. | Runs frontend build verification; not generalized to all scopes yet. |
-| Approval endpoints | Belum | No `/api/studio/approvals`. | Needed for pending approvals in composer/status bar. |
+| Approval endpoints | Partial | `GET /api/studio/approvals`, `POST /api/studio/approvals/{id}/approve`, `POST /api/studio/approvals/{id}/reject`. | Added approval queue endpoints for Studio actions, now surfaced in composer UI. |
 | Browser/local app verification | Belum | No Studio browser verification endpoint. | SSOT target not implemented. |
 | Crone endpoints in Studio router | Duplikat/Compatibility | `/api/crone/status`, pause/resume/trigger live in `studio_router.py`. | Crone belongs to Shell/Automation or Studio subtab, but route is mounted globally. |
 | Metrics endpoint | Drift | `GET /metrics` in studio router without `/api/studio` prefix. | Could be intentional Prometheus endpoint; note as global. |
