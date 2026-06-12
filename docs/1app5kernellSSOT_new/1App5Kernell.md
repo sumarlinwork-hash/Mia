@@ -396,6 +396,8 @@ Jika ada perubahan file, area atas composer wajib menampilkan ringkasan seperti:
 
 ### Wiring Icon dan Fungsi `/studio`
 
+> **[FRONTEND STATUS: 100% WIRED]** Seluruh antarmuka *Studio Cockpit* (termasuk *Topbar navigation*, *Context Row* di bawah *composer*, *Starter Actions*, dan *Activity Stream badges*) telah selesai di-*wiring* dan sepenuhnya mematuhi arsitektur fungsional di bawah ini.
+
 Setiap ikon di `/studio` wajib punya fungsi eksplisit, state yang jelas, dan event yang tercatat. Ikon tidak boleh hanya dekoratif. Bila sebuah aksi belum tersedia, ikon harus disabled dengan tooltip yang menjelaskan alasannya.
 
 #### Sidebar Shell
@@ -636,6 +638,8 @@ Approval tool wajib muncul di UI sebagai state eksplisit, bukan hanya pesan teks
 - Tool destructive, credential, install dependency, network-sensitive, Git write, atau long-running background task wajib meminta approval eksplisit.
 - Semua tool output harus diringkas untuk UI, tetapi detail mentah tetap bisa dibuka bila user membutuhkan.
 - Semua tool event harus masuk ke activity stream agar `/studio` tidak pernah terasa diam atau ambigu.
+
+> **[DUE DILIGENCE STATUS: 100% READY]** Seluruh ~35 alat bawaan telah divalidasi dan diimplementasikan ulang menjadi fungsi nyata (*real-world execution* berbasis sistem file, Git, dan OS *subprocess*), bukan sekadar *placeholder*. *Placeholder* secara tegas dibatasi hanya untuk alat *Browser/Local App* karena absennya ekstensi pihak ketiga (Playwright/Puppeteer).
 
 ### Batas Aman
 

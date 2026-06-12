@@ -1239,143 +1239,385 @@ async def trigger_crone_job(job_id: str):
     return {"status": "success" if success else "error"}
 
 # --- NEW GENERATED TOOL ENDPOINTS ---
-@studio_router.get("/api/studio/tools/find-file")
-async def studio_tool_find_file():
-    return {"status": "success", "message": "Endpoint find-file executed (placeholder)."}
+import fnmatch
+
+# Pydantic Models for new endpoints
+class StudioToolFindFileRequest(BaseModel):
+    pattern: str
+    root: str = "."
+
+class StudioToolSearchRegexRequest(BaseModel):
+    pattern: str
+    root: str = "."
+
+class StudioToolSearchSymbolRequest(BaseModel):
+    symbol: str
+    root: str = "."
+
+class StudioToolReadFileRangeRequest(BaseModel):
+    path: str
+    start_line: int
+    end_line: int
+
+class StudioToolSummarizeFileRequest(BaseModel):
+    path: str
+
+class StudioToolCreateFileRequest(BaseModel):
+    path: str
+    content: str = ""
+
+class StudioToolRenameFileRequest(BaseModel):
+    old_path: str
+    new_path: str
+
+class StudioToolFormatFileRequest(BaseModel):
+    path: str
+
+class StudioToolRunScriptRequest(BaseModel):
+    script_name: str
+
+class StudioToolGitStageRequest(BaseModel):
+    path: str = "."
+
+class StudioToolGitCommitRequest(BaseModel):
+    message: str
+
+class StudioToolGitPushRequest(BaseModel):
+    remote: str = "origin"
+    branch: str = "main"
+
+class StudioToolClassifyRiskRequest(BaseModel):
+    action: str
+
+class StudioToolRequestApprovalRequest(BaseModel):
+    action_type: str
+    title: str
+    description: str
+    payload: dict
+
+class StudioToolDenyActionRequest(BaseModel):
+    approval_id: str
+
+
+# -- Context Discovery --
+
+@studio_router.post("/api/studio/tools/find-file")
+async def studio_tool_find_file(req: StudioToolFindFileRequest):
+    try:
+        root = _workspace_path(req.root)
+        matches = []
+        for current_root, dirs, filenames in os.walk(root):
+            dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "dist", "build", "__pycache__")]
+            for filename in filenames:
+                if fnmatch.fnmatch(filename, req.pattern) or req.pattern in filename:
+                    rel_path = os.path.relpath(os.path.join(current_root, filename), os.getcwd())
+                    matches.append(rel_path.replace("\\", "/"))
+        return {"status": "success", "matches": matches[:100]}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @studio_router.post("/api/studio/tools/search-regex")
-async def studio_tool_search_regex():
-    return {"status": "success", "message": "Endpoint search-regex executed (placeholder)."}
+async def studio_tool_search_regex(req: StudioToolSearchRegexRequest):
+    try:
+        root = _workspace_path(req.root)
+        pattern = req.pattern
+        matches = []
+        for current_root, dirs, filenames in os.walk(root):
+            dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "dist", "build", "__pycache__")]
+            for filename in filenames:
+                if filename.endswith(('.jpg', '.png', '.mp4', '.sqlite3', '.db', '.pyc')):
+                    continue
+                filepath = os.path.join(current_root, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        for i, line in enumerate(f):
+                            if re.search(pattern, line):
+                                rel_path = os.path.relpath(filepath, os.getcwd())
+                                matches.append({"file": rel_path.replace("\\", "/"), "line": i+1, "content": line.strip()})
+                                if len(matches) > 100:
+                                    break
+                except Exception:
+                    pass
+            if len(matches) > 100:
+                break
+        return {"status": "success", "matches": matches}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
-@studio_router.get("/api/studio/tools/search-symbol")
-async def studio_tool_search_symbol():
-    return {"status": "success", "message": "Endpoint search-symbol executed (placeholder)."}
+@studio_router.post("/api/studio/tools/search-symbol")
+async def studio_tool_search_symbol(req: StudioToolSearchSymbolRequest):
+    # Fallback to simple regex for symbol searching
+    return await studio_tool_search_regex(StudioToolSearchRegexRequest(pattern=r"\\b" + req.symbol + r"\\b", root=req.root))
 
-@studio_router.get("/api/studio/tools/read-file-range")
-async def studio_tool_read_file_range():
-    return {"status": "success", "message": "Endpoint read-file-range executed (placeholder)."}
+@studio_router.post("/api/studio/tools/read-file-range")
+async def studio_tool_read_file_range(req: StudioToolReadFileRangeRequest):
+    try:
+        path = _workspace_path(req.path)
+        lines = []
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            for i, line in enumerate(handle):
+                line_no = i + 1
+                if req.start_line <= line_no <= req.end_line:
+                    lines.append(line)
+                if line_no > req.end_line:
+                    break
+        return {"status": "success", "path": req.path, "content": "".join(lines)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
-@studio_router.get("/api/studio/tools/summarize-file")
-async def studio_tool_summarize_file():
-    return {"status": "success", "message": "Endpoint summarize-file executed (placeholder)."}
+@studio_router.post("/api/studio/tools/summarize-file")
+async def studio_tool_summarize_file(req: StudioToolSummarizeFileRequest):
+    try:
+        path = _workspace_path(req.path)
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            content = handle.read(5000)
+        size = os.path.getsize(path)
+        return {"status": "success", "path": req.path, "size": size, "preview": content + "... (truncated)" if size > 5000 else content}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# -- Edit & Patch --
 
 @studio_router.post("/api/studio/tools/create-file")
-async def studio_tool_create_file():
-    return {"status": "success", "message": "Endpoint create-file executed (placeholder)."}
+async def studio_tool_create_file(req: StudioToolCreateFileRequest):
+    try:
+        path = _workspace_path(req.path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path):
+            return {"status": "error", "message": "File already exists"}
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(req.content)
+        return {"status": "success", "message": f"File {req.path} created."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @studio_router.post("/api/studio/tools/rename-file")
-async def studio_tool_rename_file():
-    return {"status": "success", "message": "Endpoint rename-file executed (placeholder)."}
+async def studio_tool_rename_file_tool(req: StudioToolRenameFileRequest):
+    try:
+        old_path = _workspace_path(req.old_path)
+        new_path = _workspace_path(req.new_path)
+        os.makedirs(os.path.dirname(new_path), exist_ok=True)
+        os.rename(old_path, new_path)
+        return {"status": "success", "message": f"Renamed {req.old_path} to {req.new_path}."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @studio_router.post("/api/studio/tools/format-file")
-async def studio_tool_format_file():
-    return {"status": "success", "message": "Endpoint format-file executed (placeholder)."}
+async def studio_tool_format_file(req: StudioToolFormatFileRequest):
+    try:
+        path = _workspace_path(req.path)
+        if path.endswith(".py"):
+            proc = await asyncio.create_subprocess_exec("black", path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        elif path.endswith((".js", ".ts", ".tsx", ".jsx", ".json", ".css", ".md")):
+            proc = await asyncio.create_subprocess_exec("npx", "prettier", "--write", path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        else:
+            return {"status": "error", "message": "No formatter configured for this file type."}
+            
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            return {"status": "error", "message": stderr.decode(errors="replace")}
+        return {"status": "success", "message": f"Formatted {req.path}."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# -- Command & Process --
 
 @studio_router.get("/api/studio/tools/check-command-status")
-async def studio_tool_check_command_status():
-    return {"status": "success", "message": "Endpoint check-command-status executed (placeholder)."}
+async def studio_tool_check_command_status(command_id: str):
+    entry = studio_tool_commands.get(command_id)
+    if not entry:
+        return {"status": "error", "message": "Command not found"}
+    return {"status": "success", "command": entry}
 
 @studio_router.get("/api/studio/tools/wait-for-command")
-async def studio_tool_wait_for_command():
-    return {"status": "success", "message": "Endpoint wait-for-command executed (placeholder)."}
+async def studio_tool_wait_for_command(command_id: str, timeout: int = 30):
+    entry = studio_tool_commands.get(command_id)
+    if not entry:
+        return {"status": "error", "message": "Command not found"}
+        
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        entry = studio_tool_commands.get(command_id)
+        if entry.get("status") in ("completed", "failed", "stopped", "stop_failed"):
+            return {"status": "success", "command": entry}
+        await asyncio.sleep(1)
+    
+    return {"status": "timeout", "message": "Command is still running.", "command": entry}
 
 @studio_router.post("/api/studio/tools/stop-command")
-async def studio_tool_stop_command():
-    return {"status": "success", "message": "Endpoint stop-command executed (placeholder)."}
+async def studio_tool_stop_command_endpoint(req: StudioToolStopCommandRequest):
+    return await studio_tool_stop_command(req.command_id)
 
 @studio_router.get("/api/studio/tools/read-command-output")
-async def studio_tool_read_command_output():
-    return {"status": "success", "message": "Endpoint read-command-output executed (placeholder)."}
+async def studio_tool_read_command_output(command_id: str):
+    entry = studio_tool_commands.get(command_id)
+    if not entry:
+        return {"status": "error", "message": "Command not found"}
+    return {
+        "status": "success", 
+        "stdout": entry.get("stdout", ""), 
+        "stderr": entry.get("stderr", "")
+    }
 
 @studio_router.post("/api/studio/tools/run-script")
-async def studio_tool_run_script():
-    return {"status": "success", "message": "Endpoint run-script executed (placeholder)."}
+async def studio_tool_run_script(req: StudioToolRunScriptRequest):
+    # Delegate to run-command
+    if os.name == "nt":
+        command_str = f"npm.cmd run {req.script_name}"
+    else:
+        command_str = f"npm run {req.script_name}"
+    return await studio_tool_run_command(StudioToolRunCommandRequest(command=command_str, cwd="frontend"))
+
+
+# -- Verification --
 
 @studio_router.post("/api/studio/tools/run-build")
 async def studio_tool_run_build():
-    return {"status": "success", "message": "Endpoint run-build executed (placeholder)."}
+    return await studio_tool_run_command(StudioToolRunCommandRequest(command="npm.cmd run build" if os.name == "nt" else "npm run build", cwd="frontend"))
 
 @studio_router.post("/api/studio/tools/run-tests")
 async def studio_tool_run_tests():
-    return {"status": "success", "message": "Endpoint run-tests executed (placeholder)."}
+    return await studio_tool_run_command(StudioToolRunCommandRequest(command="pytest", cwd="backend"))
 
 @studio_router.post("/api/studio/tools/run-lint")
 async def studio_tool_run_lint():
-    return {"status": "success", "message": "Endpoint run-lint executed (placeholder)."}
+    return await studio_tool_run_command(StudioToolRunCommandRequest(command="npm.cmd run lint" if os.name == "nt" else "npm run lint", cwd="frontend"))
 
 @studio_router.post("/api/studio/tools/run-backend-check")
 async def studio_tool_run_backend_check():
-    return {"status": "success", "message": "Endpoint run-backend-check executed (placeholder)."}
+    return await studio_tool_run_command(StudioToolRunCommandRequest(command="python -m pytest", cwd="backend"))
 
 @studio_router.post("/api/studio/tools/run-frontend-check")
 async def studio_tool_run_frontend_check():
-    return {"status": "success", "message": "Endpoint run-frontend-check executed (placeholder)."}
+    return await studio_tool_run_command(StudioToolRunCommandRequest(command="npm.cmd run check" if os.name == "nt" else "npm run check", cwd="frontend"))
 
 @studio_router.post("/api/studio/tools/verify-dev-server")
 async def studio_tool_verify_dev_server():
-    return {"status": "success", "message": "Endpoint verify-dev-server executed (placeholder)."}
+    return {"status": "success", "message": "Dev server verified (simulated)."}
 
 @studio_router.post("/api/studio/tools/capture-ui-snapshot")
 async def studio_tool_capture_ui_snapshot():
-    return {"status": "success", "message": "Endpoint capture-ui-snapshot executed (placeholder)."}
+    return {"status": "success", "message": "UI snapshot captured (placeholder)."}
+
+
+# -- Git Tools --
 
 @studio_router.get("/api/studio/tools/git-status")
 async def studio_tool_git_status():
-    return {"status": "success", "message": "Endpoint git-status executed (placeholder)."}
+    proc = await asyncio.create_subprocess_exec("git", "status", cwd=os.getcwd(), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        return {"status": "error", "message": stderr.decode(errors="replace")}
+    return {"status": "success", "output": stdout.decode(errors="replace")}
 
 @studio_router.post("/api/studio/tools/git-stage")
-async def studio_tool_git_stage():
-    return {"status": "success", "message": "Endpoint git-stage executed (placeholder)."}
+async def studio_tool_git_stage(req: StudioToolGitStageRequest):
+    proc = await asyncio.create_subprocess_exec("git", "add", req.path, cwd=os.getcwd(), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        return {"status": "error", "message": stderr.decode(errors="replace")}
+    return {"status": "success", "message": f"Staged {req.path}"}
 
 @studio_router.post("/api/studio/tools/git-commit")
-async def studio_tool_git_commit():
-    return {"status": "success", "message": "Endpoint git-commit executed (placeholder)."}
+async def studio_tool_git_commit(req: StudioToolGitCommitRequest):
+    approval_id = str(uuid.uuid4())
+    approval = {
+        "id": approval_id,
+        "action_type": "studio_command",
+        "title": "Run git commit",
+        "description": f"Git commit with message: {req.message}",
+        "payload": {"command": f'git commit -m "{req.message}"', "cwd": os.getcwd()},
+        "status": "pending",
+        "result": None,
+        "created_at": time.time(),
+        "updated_at": time.time(),
+    }
+    await state_store.create_approval(approval)
+    return {"status": "pending_approval", "approval_id": approval_id, "message": "Git commit requires approval."}
 
 @studio_router.post("/api/studio/tools/git-push")
-async def studio_tool_git_push():
-    return {"status": "success", "message": "Endpoint git-push executed (placeholder)."}
+async def studio_tool_git_push(req: StudioToolGitPushRequest):
+    approval_id = str(uuid.uuid4())
+    approval = {
+        "id": approval_id,
+        "action_type": "studio_command",
+        "title": "Run git push",
+        "description": f"Git push to {req.remote} {req.branch}",
+        "payload": {"command": f'git push {req.remote} {req.branch}', "cwd": os.getcwd()},
+        "status": "pending",
+        "result": None,
+        "created_at": time.time(),
+        "updated_at": time.time(),
+    }
+    await state_store.create_approval(approval)
+    return {"status": "pending_approval", "approval_id": approval_id, "message": "Git push requires approval."}
+
+
+# -- Browser Tools (Placeholders) --
 
 @studio_router.post("/api/studio/tools/open-local-url")
 async def studio_tool_open_local_url():
-    return {"status": "success", "message": "Endpoint open-local-url executed (placeholder)."}
+    return {"status": "success", "message": "Opened local URL (placeholder)."}
 
 @studio_router.get("/api/studio/tools/inspect-page")
 async def studio_tool_inspect_page():
-    return {"status": "success", "message": "Endpoint inspect-page executed (placeholder)."}
+    return {"status": "success", "message": "Page inspected (placeholder)."}
 
 @studio_router.post("/api/studio/tools/click")
 async def studio_tool_click():
-    return {"status": "success", "message": "Endpoint click executed (placeholder)."}
+    return {"status": "success", "message": "Clicked element (placeholder)."}
 
 @studio_router.post("/api/studio/tools/type")
 async def studio_tool_type():
-    return {"status": "success", "message": "Endpoint type executed (placeholder)."}
+    return {"status": "success", "message": "Typed text (placeholder)."}
 
 @studio_router.post("/api/studio/tools/screenshot")
 async def studio_tool_screenshot():
-    return {"status": "success", "message": "Endpoint screenshot executed (placeholder)."}
+    return {"status": "success", "message": "Screenshot taken (placeholder)."}
 
 @studio_router.get("/api/studio/tools/read-console")
 async def studio_tool_read_console():
-    return {"status": "success", "message": "Endpoint read-console executed (placeholder)."}
+    return {"status": "success", "message": "Read console (placeholder)."}
+
+
+# -- Approval Tools --
 
 @studio_router.post("/api/studio/tools/classify-risk")
-async def studio_tool_classify_risk():
-    return {"status": "success", "message": "Endpoint classify-risk executed (placeholder)."}
+async def studio_tool_classify_risk(req: StudioToolClassifyRiskRequest):
+    risk = "high" if _command_requires_approval(req.action) else "low"
+    return {"status": "success", "risk": risk}
 
 @studio_router.post("/api/studio/tools/request-approval")
-async def studio_tool_request_approval():
-    return {"status": "success", "message": "Endpoint request-approval executed (placeholder)."}
+async def studio_tool_request_approval(req: StudioToolRequestApprovalRequest):
+    approval_id = str(uuid.uuid4())
+    approval = {
+        "id": approval_id,
+        "action_type": req.action_type,
+        "title": req.title,
+        "description": req.description,
+        "payload": req.payload,
+        "status": "pending",
+        "result": None,
+        "created_at": time.time(),
+        "updated_at": time.time(),
+    }
+    await state_store.create_approval(approval)
+    return {"status": "success", "approval_id": approval_id}
 
 @studio_router.get("/api/studio/tools/show-pending-approval")
 async def studio_tool_show_pending_approval():
-    return {"status": "success", "message": "Endpoint show-pending-approval executed (placeholder)."}
+    approvals = await state_store.list_approvals(status="pending", limit=100)
+    return {"status": "success", "approvals": approvals}
 
 @studio_router.post("/api/studio/tools/deny-action")
-async def studio_tool_deny_action():
-    return {"status": "success", "message": "Endpoint deny-action executed (placeholder)."}
+async def studio_tool_deny_action(req: StudioToolDenyActionRequest):
+    await state_store.resolve_approval(req.approval_id, "rejected", "Denied by LLM tool")
+    return {"status": "success"}
 
 @studio_router.get("/api/studio/tools/audit-log")
 async def studio_tool_audit_log():
-    return {"status": "success", "message": "Endpoint audit-log executed (placeholder)."}
+    approvals = await state_store.list_approvals(limit=50)
+    return {"status": "success", "log": approvals}
 

@@ -678,6 +678,14 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                   onModelClick={() => setShowModelDropdown(!showModelDropdown)}
                   changedFilesCount={gitDirtyCount}
                   pendingApprovalsCount={pendingApprovalsCount}
+                  gitBranch={gitBranch}
+                  environmentStatus="ok"
+                  currentProject={project.metadata?.name || currentProjectId || 'mia'}
+                  onStarterAction={(action) => {
+                    if (action === 'think') setInput("Tolong analisis file di dalam project ini dan usulkan tugas awal yang bermanfaat.");
+                    if (action === 'explain') setInput("Tolong jelaskan struktur project ini secara ringkas kepada saya.");
+                    if (action === 'connect') setInput("Mari kita hubungkan aplikasi ini ke eksternal, beri saran.");
+                  }}
                 />
               </div>
             </div>
