@@ -68,59 +68,31 @@ if not exist ".venv" (
 
 echo.
 echo [STEP 3/4] Menginstal Dependensi Python (requirements.txt)...
-if exist ".venv\Scripts\activate.bat" (
-    echo Mengaktifkan Lingkungan Virtual...
-    call .venv\Scripts\activate
-    
-    set "SKIP_PIP=0"
-    if exist ".venv\.last_install" (
-        powershell -Command "$req = Get-Item 'requirements.txt'; $last = Get-Item '.venv\.last_install'; if ^($req.LastWriteTime -le $last.LastWriteTime^) { exit 0 } else { exit 1 }" >nul 2>&1
-        if !errorlevel! == 0 set "SKIP_PIP=1"
-    )
-
-    if "!SKIP_PIP!" == "1" (
-        echo [SMART] requirements.txt tidak berubah sejak instalasi terakhir. Melewati...
-    ) else (
-        echo Mengupdate pip ke versi terbaru...
-        python -m pip install --upgrade pip --quiet
-        
-        if exist "requirements.txt" (
-            echo Memasang paket dari requirements.txt (Ini mungkin butuh waktu)...
-            pip install -r requirements.txt --progress-bar off
-            if !errorlevel! == 0 (
-                echo. > ".venv\.last_install"
-                echo [SUCCESS] Dependensi berhasil dipasang/diperbarui.
-            )
-        ) else (
-            echo [WARNING] requirements.txt tidak ditemukan!
-        )
-    )
-) else (
+if not exist ".venv\Scripts\activate.bat" (
     echo [ERROR] .venv tidak ditemukan. Pastikan Python terpasang dan ulangi script ini.
+    goto :end
 )
+
+echo Mengaktifkan Lingkungan Virtual...
+call .venv\Scripts\activate.bat
+echo Mengupdate pip ke versi terbaru...
+python -m pip install --upgrade pip --quiet
+echo Memasang paket dari requirements.txt (Ini mungkin butuh waktu)...
+pip install -r requirements.txt
+echo [SUCCESS] Dependensi berhasil dipasang/diperbarui.
 
 echo.
 echo [STEP 4/4] Menginstal Dependensi Frontend (npm)...
-if exist "frontend\package.json" (
-    cd frontend
-    
-    set "SKIP_NPM=0"
-    if exist "node_modules\.last_install" (
-        powershell -Command "$pkg = Get-Item 'package.json'; $last = Get-Item 'node_modules\.last_install'; if ^($pkg.LastWriteTime -le $last.LastWriteTime^) { exit 0 } else { exit 1 }" >nul 2>&1
-        if !errorlevel! == 0 set "SKIP_NPM=1"
-    )
-
-    if "!SKIP_NPM!" == "1" (
-        echo [SMART] package.json tidak berubah. Melewati npm install...
-    ) else (
-        echo Menjalankan npm install di folder frontend...
-        call npm install --no-audit --no-fund
-        if !errorlevel! == 0 echo. > "node_modules\.last_install"
-    )
-    cd ..
-) else (
-    echo [SKIP] Folder frontend atau package.json tidak ditemukan.
+if not exist "frontend\package.json" (
+    echo [WARNING] frontend/package.json tidak ditemukan!
+    goto :end
 )
+
+cd frontend
+echo Menjalankan npm install di folder frontend...
+call npm install --no-audit --no-fund
+echo [SUCCESS] Frontend dependencies dipasang.
+cd ..
 
 echo.
 echo [FINAL STEP] Memeriksa Konfigurasi Lingkungan (.env)...

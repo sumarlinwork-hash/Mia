@@ -113,7 +113,7 @@ export const ResilienceMonitor: React.FC<ResilienceMonitorProps> = ({ health, mo
             <div key={i} className="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg space-y-2">
                <div className="text-[10px] font-bold text-yellow-500">{fix.label}</div>
                <div className="text-[9px] text-white/50 leading-relaxed">{fix.description}</div>
-               <button 
+               <button type="button" 
                 onClick={() => handleFix(fix.id)}
                 className="w-full py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black text-[9px] font-black uppercase rounded transition-colors"
                >

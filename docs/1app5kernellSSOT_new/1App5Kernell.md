@@ -615,8 +615,8 @@ Dipakai ketika hasil kerja perlu diverifikasi di browser atau app lokal.
 - `screenshot`: mengambil gambar hasil render.
 - `read_console`: membaca error console browser jika tersedia.
 
-Tool ini hanya dipakai untuk verifikasi lokal atau atas permintaan user. 
-*(Catatan Status: Karena tidak ada integrasi Playwright/Puppeteer di backend saat ini, tools kategori ini telah diimplementasikan sebagai placeholder endpoints yang mengembalikan respons simulasi sukses)*
+Tool ini hanya dipakai untuk verifikasi lokal atau atas permintaan user.
+*(Catatan Status: Browser dan Local App Tools kini didukung oleh integrasi Playwright backend yang nyata. `read_console()` telah diimplementasikan dan `install_tools.bat` yang mengotomatiskan setup environment berhasil diperbaiki dan diverifikasi.)*
 
 #### 7. Approval and Safety Tools
 
@@ -639,7 +639,7 @@ Approval tool wajib muncul di UI sebagai state eksplisit, bukan hanya pesan teks
 - Semua tool output harus diringkas untuk UI, tetapi detail mentah tetap bisa dibuka bila user membutuhkan.
 - Semua tool event harus masuk ke activity stream agar `/studio` tidak pernah terasa diam atau ambigu.
 
-> **[DUE DILIGENCE STATUS: 100% READY]** Seluruh ~35 alat bawaan telah divalidasi dan diimplementasikan ulang menjadi fungsi nyata (*real-world execution* berbasis sistem file, Git, dan OS *subprocess*), bukan sekadar *placeholder*. *Placeholder* secara tegas dibatasi hanya untuk alat *Browser/Local App* karena absennya ekstensi pihak ketiga (Playwright/Puppeteer).
+> **[DUE DILIGENCE STATUS: 100% READY]** Seluruh ~35 alat bawaan telah divalidasi dan diimplementasikan ulang menjadi fungsi nyata (*real-world execution* berbasis sistem file, Git, dan OS *subprocess*), bukan sekadar *placeholder*. Browser/Local App Tools kini didukung oleh Playwright backend nyata, dan `read_console()` sudah diimplementasikan untuk menangkap konsol browser lokal secara langsung.
 
 ### Batas Aman
 
@@ -678,6 +678,72 @@ Studio menggunakan komponen ringan:
 Monaco boleh dihapus dari dependency bila tidak ada komponen lain yang masih memakainya. Jika preview kode tetap diperlukan, gunakan renderer ringan seperti syntax highlighter read-only.
 
 ---
+
+### Orchestrator: Composer → Brain (Studio) Wiring
+
+Purpose: wire `composer` to the brain orchestrator (kernel=`studio`) so Studio runs a real agent loop (LLM + tools) instead of a dummy timeout. The orchestrator owns tool invocation, retries, approval gates, persistence, and event provenance; `composer` is a UI submitter and stream consumer.
+
+Event envelope (canonical):
+
+```
+{
+  "event_type": "string",
+  "event_id": "uuid",
+  "timestamp": "ISO8601",
+  "activity_id": "uuid",
+  "session_id": "string",
+  "source": "composer|orchestrator|tool|brain",
+  "payload": { ... }
+}
+```
+
+Minimal events (must appear in activity stream):
+- `activity.start`, `activity.update`, `activity.complete`, `activity.cancel`
+- `plan.request`, `plan.response`
+- `tool.invoke`, `tool.progress`, `tool.result`, `tool.error`
+- `user.input`, `system.error`, `system.heartbeat`
+
+Flow (short):
+1. `composer` submits `activity.start` (intent, context, available_tools).
+2. Orchestrator issues `plan.request` to brain (kernel=studio).
+3. Brain returns `plan.response` (ordered steps, metadata).
+4. Orchestrator executes steps: emits `execute.step` / `tool.invoke` to tools; collects `tool.*` events.
+5. Orchestrator streams merged `activity.update` events to `composer` for UI consumption.
+6. On finish/or error, orchestrator emits `activity.complete`/`activity.error` with provenance.
+
+Routing & rules:
+- Only orchestrator may invoke tools; composer must not call tools directly.
+- All events persisted append-only per `activity_id` for replay and audit.
+- Idempotency guaranteed by `activity_id` + `event_id` checks.
+- Approval gates enforced at orchestrator before write/command/destructive actions.
+
+Tool invocation payload (example):
+
+```
+{
+  "invocation_id": "uuid",
+  "tool_id": "run_command",
+  "args": ["npm","run","build"],
+  "requested_by": "orchestrator",
+  "policy": { "retry": 1, "timeout_s": 600 }
+}
+```
+
+Observability & replay:
+- Persist envelopes (compact metadata + optional redacted payload) per activity.
+- Tool events include provenance: tool version, start/end timestamps, exit code.
+
+Security:
+- Tools declare allowed callers; orchestrator enforces caller identity and risk policy.
+- Redact sensitive fields before persisting; keep raw logs in ephemeral store if needed.
+
+Error handling:
+- Tool errors produce `tool.error`; orchestrator applies retry/backoff per policy and emits `activity.update` with error state.
+- For LLM failures orchestrator may re-request planning or escalate to `Blocked` state requiring user approval.
+
+Implementation notes:
+- Start with an in-process adapter (or local pubsub) for events; persist to existing event store if present.
+- Keep envelope small for UI; include full raw details as expandable artifacts.
 
 ## Kernel 3: LLM Warehouse
 

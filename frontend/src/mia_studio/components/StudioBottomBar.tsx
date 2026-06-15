@@ -26,12 +26,12 @@ export const StudioBottomBar: React.FC<StudioBottomBarProps> = ({
     <div className="h-6 surface-navigation border-t border-primary/20 flex items-center justify-between px-3 z-30 select-none text-[10px] font-medium text-white/70">
       {/* Left Section */}
       <div className="flex items-center gap-4 h-full">
-        <button className="flex items-center gap-1.5 hover:bg-white/10 px-2 h-full motion-micro">
+        <button type="button" className="flex items-center gap-1.5 hover:bg-white/10 px-2 h-full motion-micro">
           <GitBranch size={12} />
           <span>{branch}</span>
         </button>
 
-        <button className="flex items-center gap-3 hover:bg-white/10 px-2 h-full motion-micro">
+        <button type="button" className="flex items-center gap-3 hover:bg-white/10 px-2 h-full motion-micro">
           <div className="flex items-center gap-1">
             <AlertCircle size={12} />
             <span>{errors}</span>

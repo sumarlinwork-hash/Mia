@@ -32,10 +32,10 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
         
         {/* Back / Forward Nav */}
         <div className="flex items-center gap-1">
-          <button className="p-1 rounded text-white/30 hover:text-white/80 hover:bg-white/5 transition-colors">
+          <button type="button" className="p-1 rounded text-white/30 hover:text-white/80 hover:bg-white/5 transition-colors">
             <ChevronLeft size={16} />
           </button>
-          <button className="p-1 rounded text-white/30 hover:text-white/80 hover:bg-white/5 transition-colors">
+          <button type="button" className="p-1 rounded text-white/30 hover:text-white/80 hover:bg-white/5 transition-colors">
             <ChevronRight size={16} />
           </button>
         </div>
@@ -45,7 +45,7 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
         {/* Desktop Menus */}
         <div className="hidden lg:flex items-center gap-1">
           {['File', 'Edit', 'View', 'Window', 'Help'].map((menu) => (
-            <button key={menu} className="px-2.5 py-1 text-[11px] font-medium text-white/60 hover:text-white hover:bg-white/5 rounded transition-colors">
+            <button type="button" key={menu} className="px-2.5 py-1 text-[11px] font-medium text-white/60 hover:text-white hover:bg-white/5 rounded transition-colors">
               {menu}
             </button>
           ))}
@@ -54,7 +54,7 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
         <div className="h-4 w-px bg-white/10 mx-1" />
 
         {/* Project Name */}
-        <button className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 transition-colors group">
+        <button type="button" className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 transition-colors group">
           <span className="text-xs font-semibold text-white/80 group-hover:text-white">{projectName}</span>
           <ChevronDown size={14} className="text-white/30" />
         </button>
@@ -82,10 +82,10 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
         
         {/* Layout & Terminal Toggles */}
         <div className="flex items-center gap-1 bg-black/30 p-0.5 rounded-lg border border-white/5">
-          <button onClick={onToggleSidebar} className="p-1.5 rounded text-white/50 hover:text-white hover:bg-white/10 transition-colors" title="Toggle Sidebar">
+          <button type="button" onClick={onToggleSidebar} className="p-1.5 rounded text-white/50 hover:text-white hover:bg-white/10 transition-colors" title="Toggle Sidebar">
             <PanelLeftClose size={14} />
           </button>
-          <button onClick={onToggleTerminal} className="p-1.5 rounded text-white/50 hover:text-white hover:bg-white/10 transition-colors" title="Toggle Terminal">
+          <button type="button" onClick={onToggleTerminal} className="p-1.5 rounded text-white/50 hover:text-white hover:bg-white/10 transition-colors" title="Toggle Terminal">
             <Terminal size={14} />
           </button>
         </div>
@@ -109,7 +109,7 @@ export const StudioTopbar: React.FC<StudioTopbarProps> = ({ projectName, systemS
         </div>
 
         <div className="flex items-center gap-3 pl-2">
-          <button className="text-white/40 hover:text-white transition-colors relative">
+          <button type="button" className="text-white/40 hover:text-white transition-colors relative">
             <Bell size={18} />
             <div className="absolute top-0 right-0 w-2 h-2 bg-primary rounded-full border-2 border-[#0a0a0a]" />
           </button>

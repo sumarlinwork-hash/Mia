@@ -99,7 +99,7 @@ const ActivityEventItem = ({ event, isLast }: { event: unknown, isLast: boolean 
         className="flex items-center gap-2 px-2 py-1.5 cursor-pointer select-none"
         onClick={() => setExpanded(!expanded)}
       >
-        <button className="text-white/30 hover:text-white/70 transition-colors p-0.5">
+        <button type="button" className="text-white/30 hover:text-white/70 transition-colors p-0.5">
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
         

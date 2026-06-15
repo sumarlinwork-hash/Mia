@@ -13,12 +13,14 @@ pyaudio==0.2.14
 
 # Senses - Mulut (Local TTS CPU)
 edge-tts==6.1.9
-piper-tts==1.2.0
 
 # Senses - Mata & Tangan (Vision & Automation)
 pyautogui==0.9.54
 opencv-python==4.9.0.80
 pillow==10.2.0
+
+# Browser Automation
+playwright==1.60.0
 
 # FastAPI Backend & System
 fastapi==0.110.0

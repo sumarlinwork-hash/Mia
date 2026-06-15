@@ -36,7 +36,7 @@ export const StudioApprovalsPanel: React.FC<StudioApprovalsPanelProps> = ({
             <p className="text-[10px] text-white/40">Approve or deny pending workspace actions.</p>
           </div>
         </div>
-        <button
+        <button type="button"
           onClick={onClose}
           className="inline-flex h-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-[10px] text-white/60 hover:bg-white/10 hover:text-white"
         >
@@ -69,14 +69,14 @@ export const StudioApprovalsPanel: React.FC<StudioApprovalsPanelProps> = ({
                 {approval.payload?.command ? `Command: ${approval.payload.command}` : approval.payload?.patch ? approval.payload.patch.slice(0, 320) + (approval.payload.patch.length > 320 ? '...' : '') : 'No payload preview available.'}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button
+                <button type="button"
                   onClick={() => onApprove(approval.id)}
                   className="inline-flex items-center gap-2 rounded-lg bg-green-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-green-300 hover:bg-green-500/20"
                 >
                   <Check size={12} />
                   Approve
                 </button>
-                <button
+                <button type="button"
                   onClick={() => onReject(approval.id)}
                   className="inline-flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-red-300 hover:bg-red-500/20"
                 >

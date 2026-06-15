@@ -164,13 +164,14 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
         <aside className="hidden md:flex w-[300px] shrink-0 flex-col panel-toolbar">
           <div className="h-9 flex items-center gap-4 px-4 text-white/70">
             <button 
+              type="button"
               onClick={() => navigate(-1)} 
               className="p-1 rounded hover:bg-white/10 motion-micro" 
               aria-label="Back"
             >
               <ArrowLeft size={16} />
             </button>
-            <button className="p-1 rounded hover:bg-white/10 motion-micro" aria-label="Forward">
+            <button type="button" className="p-1 rounded hover:bg-white/10 motion-micro" aria-label="Forward">
               <ArrowRight size={16} />
             </button>
           </div>
@@ -184,7 +185,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
 
           <div className="px-4 pt-6">
             <GardenSectionTitle>Pinned</GardenSectionTitle>
-            <button className="w-full h-9 flex items-center justify-between rounded-md px-1 text-left text-[13px] font-semibold hover:bg-white/5 transition-colors">
+            <button type="button" className="w-full h-9 flex items-center justify-between rounded-md px-1 text-left text-[13px] font-semibold hover:bg-white/5 transition-colors">
               <span className="flex min-w-0 items-center gap-2">
                 <Workflow size={15} className="text-white/85 shrink-0" />
                 <span className="truncate">Explain and fix</span>
@@ -195,7 +196,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
 
           <div className="px-4 pt-6">
             <GardenSectionTitle>Projects</GardenSectionTitle>
-            <button className="w-full h-9 flex items-center gap-2 rounded-md px-1 text-left text-[13px] font-semibold hover:bg-white/5 transition-colors">
+            <button type="button" className="w-full h-9 flex items-center gap-2 rounded-md px-1 text-left text-[13px] font-semibold hover:bg-white/5 transition-colors">
               <FolderTree size={15} className="text-white/85 shrink-0" />
               <span className="truncate">{pinnedLabel}</span>
             </button>
@@ -213,11 +214,11 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
           </div>
 
           <div className="mt-auto flex items-center justify-between px-4 pb-4">
-            <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 text-[13px] font-semibold text-white hover:text-white/80 transition-colors">
+            <button type="button" onClick={() => setShowSettings(true)} className="flex items-center gap-2 text-[13px] font-semibold text-white hover:text-white/80 transition-colors">
               <Settings size={16} />
               Settings
             </button>
-            <button className="rounded-lg border border-white/20 bg-[#242424] px-3 py-1.5 text-[12px] font-semibold text-white shadow-inner hover:bg-[#303030] transition-colors">
+            <button type="button" className="rounded-lg border border-white/20 bg-[#242424] px-3 py-1.5 text-[12px] font-semibold text-white shadow-inner hover:bg-[#303030] transition-colors">
               Upgrade
             </button>
           </div>
@@ -230,13 +231,14 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
           }}
         >
           <div className="absolute left-4 right-4 top-4 z-10 flex items-center justify-between md:left-5 md:right-5">
-            <button className="inline-flex h-7 items-center gap-1 rounded-full bg-primary/20 px-3 text-label text-primary font-bold hover:bg-primary/30 motion-micro">
+            <button type="button" className="inline-flex h-7 items-center gap-1 rounded-full bg-primary/20 px-3 text-label text-primary font-bold hover:bg-primary/30 motion-micro">
               <Sparkles size={13} fill="currentColor" />
               Get Plus
             </button>
 
             <div className="flex items-center gap-2 text-white/80">
               <button 
+                type="button"
                 onClick={() => onToggleZen?.()}
                 className="h-7 w-7 rounded-lg border border-white/15 bg-[#171717] grid place-items-center hover:bg-[#222] transition-colors" 
                 title="Zen Mode (Ctrl+Shift+Z)"
@@ -246,6 +248,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
               
               <div className="relative" ref={dropdownRef}>
                 <button 
+                  type="button"
                   onClick={() => setShowIdeDropdown(!showIdeDropdown)}
                   className="flex h-7 items-center gap-2 rounded-lg border border-white/15 bg-[#171717] px-2.5 text-xs text-white hover:bg-[#222] transition-colors" 
                   title="Open in Local IDE"
@@ -264,7 +267,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
                     ) : (
                       <div className="py-1 border-b border-white/10">
                         {ides.map(ide => (
-                          <button
+                          <button type="button"
                             key={ide.id}
                             onClick={() => openLocalIde(ide.id)}
                             className="w-full text-left px-3 py-2 text-[13px] text-white hover:bg-white/10 transition-colors flex items-center gap-2"
@@ -276,7 +279,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
                       </div>
                     )}
                     <div className="py-1 bg-black/20">
-                      <button
+                      <button type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           refreshIdeScan();
@@ -291,10 +294,10 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
                 )}
               </div>
 
-              <button className="h-7 w-7 rounded-lg border border-white/15 bg-[#171717] grid place-items-center hover:bg-[#222] transition-colors" aria-label="Terminal">
+              <button type="button" className="h-7 w-7 rounded-lg border border-white/15 bg-[#171717] grid place-items-center hover:bg-[#222] transition-colors" aria-label="Terminal">
                 <TerminalSquare size={15} />
               </button>
-              <button className="h-7 w-7 rounded-lg border border-white/15 bg-[#171717] grid place-items-center hover:bg-[#222] transition-colors" aria-label="Layout">
+              <button type="button" className="h-7 w-7 rounded-lg border border-white/15 bg-[#171717] grid place-items-center hover:bg-[#222] transition-colors" aria-label="Layout">
                 <LayoutGrid size={14} />
               </button>
             </div>
@@ -324,10 +327,16 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
 
                 <div className="flex min-h-[40px] items-center justify-between px-3 pb-2 text-white">
                   <div className="flex items-center gap-4">
-                    <button className="grid h-7 w-7 place-items-center rounded-md text-white hover:bg-white/10 transition-colors" aria-label="Add">
+                    <button type="button"
+                      type="button"
+                      onClick={submitPrompt}
+                      disabled={!trimmedPrompt}
+                      className="grid h-7 w-7 place-items-center rounded-md text-white hover:bg-white/10 transition-colors"
+                      aria-label="Add"
+                    >
                       <Plus size={20} />
                     </button>
-                    <button className="flex h-7 items-center gap-1.5 rounded-md text-[13px] font-semibold text-primary-soft hover:bg-white/10 motion-micro">
+                    <button type="button" className="flex h-7 items-center gap-1.5 rounded-md text-[13px] font-semibold text-primary-soft hover:bg-white/10 motion-micro">
                       <Bot size={15} />
                       Auto-review
                       <ChevronDown size={14} />
@@ -335,14 +344,14 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
                   </div>
 
                   <div className="flex items-center gap-4">
-                    <button className="flex items-center gap-1 text-[13px] font-semibold text-white hover:text-white/80 transition-colors">
+                    <button type="button" className="flex items-center gap-1 text-[13px] font-semibold text-white hover:text-white/80 transition-colors">
                       5.5 Medium
                       <ChevronDown size={13} />
                     </button>
-                    <button className="grid h-7 w-7 place-items-center rounded-md hover:bg-white/10 transition-colors" aria-label="Voice">
+                    <button type="button" className="grid h-7 w-7 place-items-center rounded-md hover:bg-white/10 transition-colors" aria-label="Voice">
                       <Mic size={15} />
                     </button>
-                    <button
+                    <button type="button"
                       onClick={submitPrompt}
                       disabled={!trimmedPrompt}
                       className="grid h-8 w-8 place-items-center rounded-full bg-primary text-black transition-all enabled:hover:scale-105 disabled:bg-white/10 disabled:text-white/40 motion-hover"
@@ -354,17 +363,17 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
                 </div>
 
                 <div className="flex min-h-[43px] items-center gap-6 bg-black/40 px-4 text-[13px] font-semibold text-white">
-                  <button className="flex items-center gap-1.5 hover:text-white/80 motion-micro">
+                  <button type="button" className="flex items-center gap-1.5 hover:text-white/80 motion-micro">
                     <FolderTree size={15} />
                     mia
                     <ChevronDown size={13} />
                   </button>
-                  <button className="flex items-center gap-1.5 hover:text-white/80 transition-colors">
+                  <button type="button" className="flex items-center gap-1.5 hover:text-white/80 transition-colors">
                     <TerminalSquare size={15} />
                     Work locally
                     <ChevronDown size={13} />
                   </button>
-                  <button className="flex min-w-0 items-center gap-1.5 hover:text-white/80 transition-colors">
+                  <button type="button" className="flex min-w-0 items-center gap-1.5 hover:text-white/80 transition-colors">
                     <Workflow size={15} />
                     <span className="truncate">rebuild-from-v1.2</span>
                     <ChevronDown size={13} />
@@ -374,7 +383,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
 
               <div className="mt-5 divide-y divide-white/[0.08] border-b border-white/[0.08]">
                 {suggestions.map((item, index) => (
-                  <button
+                  <button type="button"
                     key={item}
                     onClick={() => chooseSuggestion(item)}
                     className="flex h-[41px] w-full items-center gap-3 px-4 text-left text-[13px] font-semibold text-white hover:bg-white/[0.035] transition-colors"
@@ -397,7 +406,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0a0a0a]/95 backdrop-blur px-6 py-4">
               <h2 className="text-xl font-bold text-white">Studio Settings</h2>
               <button
-                onClick={() => setShowSettings(false)}
+                type="button" onClick={() => setShowSettings(false)}
                 className="p-1 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white"
               >
                 <X size={20} />
@@ -416,7 +425,7 @@ export const GardenLauncher: React.FC<GardenLauncherProps> = ({ projectName, onS
 };
 
 const GardenNavItem = ({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) => (
-  <button onClick={onClick} className="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-white hover:bg-white/5 transition-colors">
+  <button type="button" onClick={onClick} className="flex h-8 w-full items-center gap-2 rounded-md px-1 text-left text-white hover:bg-white/5 transition-colors">
     <span className="text-white/90">{icon}</span>
     <span>{label}</span>
   </button>

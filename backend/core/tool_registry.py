@@ -21,8 +21,17 @@ class OSControlAdapter(ToolAdapter):
         elif self._method_name == "terminal":
             return agent_tools.run_command(args.get("command", ""))
         elif self._method_name == "screenshot":
-            # For graph engine, we might want to return the b64 or just success
-            return "Screenshot captured."
+            # Return filepath for screenshot saved to temp_screens
+            try:
+                return agent_tools.take_screenshot_file()
+            except Exception:
+                return "Screenshot capture failed"
+        elif self._method_name == "open_local_url":
+            return agent_tools.open_local_url(args.get("url", ""))
+        elif self._method_name == "inspect_page":
+            return agent_tools.inspect_page(args.get("url", ""))
+        elif self._method_name == "read_console":
+            return agent_tools.read_console(args.get("url", None))
         return f"Method {self._method_name} not implemented in adapter."
 
 class ToolRegistry:
@@ -32,7 +41,7 @@ class ToolRegistry:
 
     def _init_standard_tools(self):
         # Register core OS control tools
-        for method in ["click", "type", "press", "terminal", "screenshot"]:
+        for method in ["click", "type", "press", "terminal", "screenshot", "open_local_url", "inspect_page", "read_console"]:
             self._tools[method] = OSControlAdapter(method)
 
     def register(self, name: str, tool: ToolAdapter):

@@ -26,6 +26,7 @@ import { GraphViewer } from './GraphViewer';
 import { StudioActivityStream } from './StudioActivityStream';
 import { StudioComposer } from './StudioComposer';
 import { ReviewChanges } from './ReviewChanges';
+import { StudioToolsPanel } from './StudioToolsPanel';
 
 import { ResilienceMonitor } from './ResilienceMonitor';
 import { GardenLauncher } from './GardenLauncher';
@@ -432,6 +433,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
         <div className="flex items-center gap-3" ref={ideDropdownRef}>
           <div className="relative">
             <button 
+              type="button"
               onClick={() => setShowIdeDropdown(!showIdeDropdown)}
               className="flex h-8 items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/80 hover:bg-white/10 transition-colors" 
               title="Select Local IDE"
@@ -450,7 +452,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                 ) : (
                   <div className="py-1 border-b border-white/10">
                     {ides.map(ide => (
-                      <button
+                      <button type="button"
                         key={ide.id}
                         onClick={() => {
                           setSelectedIde(ide.id);
@@ -465,7 +467,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                   </div>
                 )}
                 <div className="py-1 bg-black/20">
-                  <button
+                  <button type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       refreshIdeScan();
@@ -498,7 +500,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
             )}
           </div>
 
-          <button
+          <button type="button"
             onClick={() => setShowApprovalsPanel((value) => !value)}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all duration-300 ${
               pendingApprovalsCount > 0
@@ -514,7 +516,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
           </button>
 
           <button 
-            onClick={() => onToggleZen?.()}
+            type="button" onClick={() => onToggleZen?.()}
             className="p-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white/60 hover:text-primary transition-all duration-300"
             title="Zen Mode (Ctrl+Shift+Z)"
           >
@@ -529,7 +531,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
           
           {/* Top Panel Actions */}
           <div className="h-10 flex items-center px-3 gap-4 panel-toolbar rounded-lg relative z-10 shrink-0">
-            <button
+            <button type="button"
               onClick={() => setStudioMode('launcher')}
               className="flex items-center gap-2 px-3 py-1 rounded-md transition-all duration-300 text-xs font-bold uppercase tracking-tight bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
             >
@@ -540,7 +542,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
             <div className="w-px h-4 bg-white/10" />
 
             <button 
-              onClick={handleRun}
+              type="button" onClick={handleRun}
               disabled={execution.state === 'RUNNING' || execution.state === 'STARTING'}
               className={clsx(
                 "flex items-center gap-2 px-3 py-1 rounded-md transition-all duration-300 text-xs font-bold uppercase tracking-tight",
@@ -552,7 +554,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
             </button>
 
             <button 
-              onClick={() => currentProjectId && currentSessionId && execution.stopCode(currentProjectId, currentSessionId)}
+              type="button" onClick={() => currentProjectId && currentSessionId && execution.stopCode(currentProjectId, currentSessionId)}
               disabled={execution.state !== 'RUNNING'}
               className={clsx(
                 "flex items-center gap-2 px-3 py-1 rounded-md transition-all duration-300 text-xs font-bold uppercase tracking-tight",
@@ -569,7 +571,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
             <div className="flex items-center gap-2 ml-auto text-xs text-white/50">
               <span className="uppercase tracking-tight font-bold text-[10px]">Auto-Save:</span>
               <button 
-                onClick={() => setAutoSave(!autoSave)} 
+                type="button" onClick={() => setAutoSave(!autoSave)} 
                 className={clsx(
                   "px-2.5 py-0.5 rounded text-[10px] font-black uppercase transition-all duration-300",
                   autoSave ? "bg-primary/20 text-primary border border-primary/20" : "bg-white/5 text-white/30 border border-white/10"
@@ -592,7 +594,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] text-white/40 font-mono">Workspace: {currentProjectId}</span>
                   <button 
-                    onClick={() => setShowWorkspaceSettings(true)}
+                    type="button" onClick={() => setShowWorkspaceSettings(true)}
                     className="p-1 hover:bg-white/10 rounded transition-colors text-white/60 hover:text-primary pointer-events-auto"
                     title="Workspace Settings"
                   >
@@ -638,7 +640,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                 {showModelDropdown && (
                   <div className="absolute bottom-full left-2 mb-2 w-52 rounded-xl bg-black/95 border border-white/10 shadow-2xl p-2 z-[200] space-y-1 pointer-events-auto">
                     <div className="text-[8px] uppercase font-bold text-white/30 px-2 py-1 font-mono tracking-widest border-b border-white/5 mb-1">SELECT INTEL</div>
-                    <button
+                    <button type="button"
                       onClick={() => handleSelectOverrideModel('auto')}
                       className={`w-full text-left px-2 py-1.5 rounded-lg text-[9px] font-mono transition-all flex items-center justify-between ${
                         activeOverride === 'auto'
@@ -649,7 +651,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
                       <span>🤖 DYNAMIC ROUTING</span>
                     </button>
                     {Object.entries(config?.providers ?? {}).map(([name, p]: [string, ProviderConfig]) => (
-                      <button
+                      <button type="button"
                         key={name}
                         onClick={() => handleSelectOverrideModel(name)}
                         className={`w-full text-left px-2 py-1.5 rounded-lg text-[9px] font-mono transition-all flex items-center justify-between ${
@@ -718,6 +720,8 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
             dirtyCount={gitDirtyCount}
             onFollowUp={() => setInput('Review perubahan terakhir dan usulkan langkah berikutnya.')}
           />
+
+          <StudioToolsPanel projectId={currentProjectId} />
 
           {/* Resilience Monitor Section */}
           <ResilienceMonitor 
@@ -803,7 +807,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ onToggleZen }) => {
               Setelan Workspace
             </h2>
             <button 
-              onClick={() => setShowWorkspaceSettings(false)}
+              type="button" onClick={() => setShowWorkspaceSettings(false)}
               className="px-3 py-1 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-[10px] font-mono font-bold text-white transition-colors"
             >
               TUTUP

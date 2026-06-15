@@ -94,8 +94,31 @@ class StudioToolRunCommandRequest(BaseModel):
     command: str
     cwd: str = "."
 
+class StudioToolStopCommandRequest(BaseModel):
+    command_id: str
+
 class StudioVerificationRequest(BaseModel):
     scope: str = "frontend"
+
+class StudioToolOpenLocalUrlRequest(BaseModel):
+    url: str
+    project_id: Optional[str] = ""
+
+class StudioToolClickRequest(BaseModel):
+    x: int = 0
+    y: int = 0
+    project_id: Optional[str] = ""
+
+class StudioToolTypeRequest(BaseModel):
+    text: str
+    project_id: Optional[str] = ""
+
+class StudioToolScreenshotRequest(BaseModel):
+    project_id: Optional[str] = ""
+
+class StudioToolReadConsoleRequest(BaseModel):
+    url: Optional[str] = None
+    project_id: Optional[str] = ""
 
 STUDIO_TOOL_REGISTRY = [
     {
@@ -362,42 +385,42 @@ STUDIO_TOOL_REGISTRY = [
         "method": "POST",
         "path": "/api/studio/tools/open-local-url",
         "risk": "read",
-        "description": "Open URL in local browser (placeholder).",
+        "description": "Open a local browser URL for verification and smoke tests.",
     },
     {
         "id": "inspect-page",
         "method": "GET",
         "path": "/api/studio/tools/inspect-page",
         "risk": "read",
-        "description": "Inspect browser page (placeholder).",
+        "description": "Inspect a local page and return status, title, and snippet.",
     },
     {
         "id": "click",
         "method": "POST",
         "path": "/api/studio/tools/click",
         "risk": "write",
-        "description": "Click element in browser (placeholder).",
+        "description": "Perform a click action on the local OS at coordinates.",
     },
     {
         "id": "type",
         "method": "POST",
         "path": "/api/studio/tools/type",
         "risk": "write",
-        "description": "Type text in browser (placeholder).",
+        "description": "Type text into the focused local input field.",
     },
     {
         "id": "screenshot",
         "method": "POST",
         "path": "/api/studio/tools/screenshot",
         "risk": "read",
-        "description": "Take screenshot (placeholder).",
+        "description": "Capture a local screenshot and return the saved file path.",
     },
     {
         "id": "read-console",
         "method": "GET",
         "path": "/api/studio/tools/read-console",
         "risk": "read",
-        "description": "Read browser console (placeholder).",
+        "description": "Attempt to read browser console output if browser automation is available.",
     },
     {
         "id": "classify-risk",
@@ -1558,28 +1581,88 @@ async def studio_tool_git_push(req: StudioToolGitPushRequest):
 # -- Browser Tools (Placeholders) --
 
 @studio_router.post("/api/studio/tools/open-local-url")
-async def studio_tool_open_local_url():
-    return {"status": "success", "message": "Opened local URL (placeholder)."}
+async def studio_tool_open_local_url(req: StudioToolOpenLocalUrlRequest):
+    try:
+        result = await asyncio.to_thread(agent_tools.open_local_url, req.url)
+        if req.project_id:
+            studio_graph_streamer.push_system_event(req.project_id, "TOOL_INVOKE", {
+                "tool": "open_local_url",
+                "url": req.url,
+                "result": result,
+            })
+        return {"status": "success", "message": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @studio_router.get("/api/studio/tools/inspect-page")
-async def studio_tool_inspect_page():
-    return {"status": "success", "message": "Page inspected (placeholder)."}
+async def studio_tool_inspect_page(url: str, project_id: str = ""):
+    try:
+        result = await asyncio.to_thread(agent_tools.inspect_page, url)
+        if project_id:
+            studio_graph_streamer.push_system_event(project_id, "TOOL_INVOKE", {
+                "tool": "inspect_page",
+                "url": url,
+                "result": result,
+            })
+        return {"status": "success", "result": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @studio_router.post("/api/studio/tools/click")
-async def studio_tool_click():
-    return {"status": "success", "message": "Clicked element (placeholder)."}
+async def studio_tool_click(req: StudioToolClickRequest):
+    try:
+        result = await asyncio.to_thread(agent_tools.click, req.x, req.y)
+        if req.project_id:
+            studio_graph_streamer.push_system_event(req.project_id, "TOOL_INVOKE", {
+                "tool": "click",
+                "x": req.x,
+                "y": req.y,
+                "result": result,
+            })
+        return {"status": "success", "message": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @studio_router.post("/api/studio/tools/type")
-async def studio_tool_type():
-    return {"status": "success", "message": "Typed text (placeholder)."}
+async def studio_tool_type(req: StudioToolTypeRequest):
+    try:
+        result = await asyncio.to_thread(agent_tools.type_text, req.text)
+        if req.project_id:
+            studio_graph_streamer.push_system_event(req.project_id, "TOOL_INVOKE", {
+                "tool": "type",
+                "text": req.text,
+                "result": result,
+            })
+        return {"status": "success", "message": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @studio_router.post("/api/studio/tools/screenshot")
-async def studio_tool_screenshot():
-    return {"status": "success", "message": "Screenshot taken (placeholder)."}
+async def studio_tool_screenshot(req: StudioToolScreenshotRequest):
+    try:
+        result = await asyncio.to_thread(agent_tools.take_screenshot_file)
+        if req.project_id:
+            studio_graph_streamer.push_system_event(req.project_id, "TOOL_INVOKE", {
+                "tool": "screenshot",
+                "file_path": result,
+            })
+        return {"status": "success", "file": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @studio_router.get("/api/studio/tools/read-console")
-async def studio_tool_read_console():
-    return {"status": "success", "message": "Read console (placeholder)."}
+async def studio_tool_read_console(url: Optional[str] = None, project_id: str = ""):
+    try:
+        result = await asyncio.to_thread(agent_tools.read_console, url)
+        if project_id:
+            studio_graph_streamer.push_system_event(project_id, "TOOL_INVOKE", {
+                "tool": "read_console",
+                "url": url,
+                "result": result,
+            })
+        return {"status": "success", "result": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 # -- Approval Tools --

@@ -65,7 +65,7 @@ export function StudioComposer({
       {showStarterActions && (
         <div className="flex flex-wrap gap-2 mb-2">
           {starterActions.map((action) => (
-            <button
+            <button type="button"
               key={action.id}
               onClick={() => onStarterAction?.(action.id)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/5 bg-white/[0.02] text-[11px] text-white/50 hover:bg-white/[0.06] hover:text-white/90 hover:border-white/20 transition-all group"
@@ -95,13 +95,13 @@ export function StudioComposer({
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-2">
           <div className="flex items-center gap-2">
-            <button
+            <button type="button"
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
               title="Attach context or file"
             >
               <Paperclip size={14} />
             </button>
-            <button
+            <button type="button"
               onClick={() => setIsRecording(!isRecording)}
               className={clsx(
                 "inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all",
@@ -113,7 +113,7 @@ export function StudioComposer({
             >
               <Mic size={14} />
             </button>
-            <button
+            <button type="button"
               onClick={onModelClick}
               className="h-8 rounded-lg border border-white/10 bg-white/5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-primary transition-colors hover:bg-white/10"
               title="Select Execution Model"
@@ -132,7 +132,7 @@ export function StudioComposer({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
+            <button type="button"
               onClick={onStop}
               disabled={!running}
               className={clsx(
@@ -143,7 +143,7 @@ export function StudioComposer({
               <Square size={12} className={running ? "animate-pulse" : ""} />
               Stop
             </button>
-            <button
+            <button type="button"
               onClick={onSubmit}
               disabled={!value.trim() && !running}
               className={clsx(
